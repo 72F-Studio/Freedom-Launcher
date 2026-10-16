@@ -59,6 +59,7 @@ public final class EngineChecks extends Instrumentation {
         reject(()->BackupStore.validate(new JSONObject().put("favorites","[\"0:a/b\",\"0:a/b\"]")));
         reject(()->BackupStore.validate(new JSONObject().put("merges","{\"music\":\"video\",\"video\":\"music\"}")));
         reject(()->BackupStore.validate(new JSONObject().put("unknown","x")));
+        reject(()->BackupStore.validate(new JSONObject().put("legibility","loud")));BackupStore.validate(new JSONObject().put("legibility","strong"));yes(true);
         reject(()->BackupStore.validate(new JSONObject().put("contexts","[{\"id\":\"a\",\"name\":\"x\",\"widgets\":[\"script:1\"]}]")));
         reject(()->BackupStore.validate(new JSONObject().put("contexts","[{\"id\":\"a\",\"name\":\"x\"},{\"id\":\"a\",\"name\":\"y\"}]")));
         reject(()->BackupStore.validate(new JSONObject().put("contexts","[{\"id\":\"a\",\"name\":\"x\",\"start\":5000}]")));

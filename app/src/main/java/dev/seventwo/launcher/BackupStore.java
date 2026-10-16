@@ -9,7 +9,7 @@ import java.util.zip.ZipOutputStream;
 
 /** Portable, bounded backups. Assets are staged before a single preference commit. */
 final class BackupStore {
-    static final String[] KEYS={"favorites","custom","disabled","assignments","merges","categories","header","left","media","icons","iconPack","wallpaperMode","wallpaperDim","theme","seeded","introduced","contexts"};
+    static final String[] KEYS={"favorites","custom","disabled","assignments","merges","categories","header","left","media","icons","iconPack","wallpaperMode","wallpaperDim","theme","seeded","introduced","contexts","legibility"};
     static final class Pending {
         final File directory;final JSONObject preferences;final ThemeEngine theme;
         Pending(File d,JSONObject p,ThemeEngine t){directory=d;preferences=p;theme=t;}
@@ -89,6 +89,7 @@ final class BackupStore {
         }
         new JSONObject(p.optString("theme","{}"));
         if(p.has("contexts"))ContextStore.parse(p.getString("contexts"));
+        if(!Arrays.asList(Legibility.MODES).contains(p.optString("legibility","auto")))throw new IOException("Invalid text legibility");
     }
     static void apply(Context context,SharedPreferences prefs,Pending pending)throws Exception {
         // Files already reside in a unique immutable directory; readers switch via one commit.

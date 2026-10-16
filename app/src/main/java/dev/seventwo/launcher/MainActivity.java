@@ -65,6 +65,9 @@ public final class MainActivity extends Activity {
     private String activeWallpaperMode;
     private EditText search;
     private CategoryRail categoryRail;
+    // Text legibility over images: photo luminance percentiles (measured off the UI thread) and the resolved level.
+    private volatile double photoDark=.05, photoBright=.5;
+    private int legibility;
     // Material 3 tonal roles. Expressive themes take them from the wallpaper palette (Android 12+).
     private int primaryContainer, onPrimaryContainer, secondaryContainer, onSecondaryContainer, surfaceContainer;
     private AlphabetRail alphabet;
@@ -225,6 +228,7 @@ public final class MainActivity extends Activity {
             boolean selected=c.equals(category);
             TextView t=text(theme.layout.equals("xmb")?Character.toUpperCase(c.charAt(0))+c.substring(1):c,titleSize,selected?fg:MetroArt.alpha(muted,.62f));
             if(theme.expressive){t.setTypeface(Typeface.create(theme.typeface,selected?800:500,false));t.setLetterSpacing(-.02f);}
+            if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
             t.setPadding(dp(24),dp(theme.liquid?12:0),dp(12),dp(theme.liquid?14:6));t.setSingleLine(true);t.setLetterSpacing(theme.layout.equals("xmb")?0:-.035f);
             t.setContentDescription(c+" category"+(selected?", selected":""));t.setOnClickListener(v->selectCategory(c,true));
@@ -247,7 +251,7 @@ public final class MainActivity extends Activity {
         if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop();glassSurfaces.clear();glassBackdrop.clear();
         root=column();scene=new FrameLayout(this);backdropView=new View(this);
         scene.addView(backdropView,new FrameLayout.LayoutParams(-1,-1));scene.addView(root,new FrameLayout.LayoutParams(-1,-1));
-        activeWallpaperMode=prefs.getString("wallpaperMode","solid");
+        activeWallpaperMode=prefs.getString("wallpaperMode","solid");legibility=resolveLegibility();
         boolean useSystemWallpaper=activeWallpaperMode.equals("system");
         if(useSystemWallpaper)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
@@ -258,7 +262,7 @@ public final class MainActivity extends Activity {
         setContentView(scene); root.requestApplyInsets();
         if (searching) {
             LinearLayout row = row(); row.setPadding(dp(18), dp(8), dp(12), dp(8));
-            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(muted); search.setTextSize(25); search.setSingleLine(); search.setHint("find an app"); search.setTypeface(theme.typeface); search.setText(query);
+            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); legible(search); search.setTextSize(25); search.setSingleLine(); search.setHint("find an app"); search.setTypeface(theme.typeface); search.setText(query);
             row.addView(search,new LinearLayout.LayoutParams(0,dp(58),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed())); root.addView(row);
             search.addTextChangedListener(new TextWatcher() { public void beforeTextChanged(CharSequence s,int a,int c,int f) {} public void onTextChanged(CharSequence s,int a,int b,int c) { query=s.toString(); refreshList(true); } public void afterTextChanged(Editable e) {} });
             search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0)); return true; });
@@ -277,7 +281,7 @@ public final class MainActivity extends Activity {
         adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list,new FrameLayout.LayoutParams(-1,-1));
         list.setOnItemClickListener((p,v,pos,id) -> launch(visible.get(pos)));
         list.setOnItemLongClickListener((p,v,pos,id) -> { appMenu(visible.get(pos)); return true; });
-        empty = text("",20,muted); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40),0,dp(40),0); listArea.addView(empty,new FrameLayout.LayoutParams(-1,-1));
+        empty = text("",20,secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40),0,dp(40),0); listArea.addView(empty,new FrameLayout.LayoutParams(-1,-1));
         alphabet = new AlphabetRail(); FrameLayout.LayoutParams railParams = new FrameLayout.LayoutParams(dp(40),-1, left?Gravity.LEFT:Gravity.RIGHT); listArea.addView(alphabet,railParams);
         letter = text("",64,accent); letter.setGravity(Gravity.CENTER); letter.setBackground(outline(MetroArt.alpha(bg,.96f),MetroArt.alpha(accent,.5f))); letter.setVisibility(View.GONE);
         FrameLayout.LayoutParams bubble = new FrameLayout.LayoutParams(dp(100),dp(100),Gravity.CENTER); listArea.addView(letter,bubble);
@@ -357,7 +361,7 @@ public final class MainActivity extends Activity {
         }
         void bind(App app) {
             label.setText(app.work ? getString(R.string.work_app,app.name) : app.name);
-            label.setTextColor(fg); label.setTypeface(theme.liquid?Typeface.create(theme.typeface,450,false):theme.typeface);
+            label.setTextColor(fg); legible(label); label.setTypeface(theme.liquid?Typeface.create(theme.typeface,450,false):theme.typeface);
             String style=prefs.getString("icons",theme.iconStyle);
             icon.setVisibility(style.equals("none")?GONE:VISIBLE); icon.setImageDrawable(app.icon);
             if(style.equals("mono")) { ColorMatrix colors=new ColorMatrix();colors.setSaturation(0);icon.setColorFilter(new ColorMatrixColorFilter(colors));icon.setAlpha(.82f); }
@@ -517,7 +521,8 @@ public final class MainActivity extends Activity {
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); final ArrayList<String> letters = new ArrayList<>(); final ArrayList<Integer> positions=new ArrayList<>(); int selected=-1;
         AlphabetRail(){super(MainActivity.this);setContentDescription("Alphabet scrubber. Drag to jump to an app letter");setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
         void update(){ letters.clear();positions.clear(); for(int i=0;i<visible.size();i++){String l=CategoryRules.initial(visible.get(i).name);if(!letters.contains(l)){letters.add(l);positions.add(i);}}invalidate(); }
-        @Override protected void onDraw(Canvas c){super.onDraw(c);if(letters.isEmpty())return;paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(10));float step=Math.min(dp(22),(getHeight()-dp(16))/(float)letters.size());float start=(getHeight()-step*letters.size())/2;for(int i=0;i<letters.size();i++){paint.setColor(i==selected?accent:muted);c.drawText(letters.get(i),getWidth()/2f,start+step*(i+.5f)+dp(4),paint);}}
+        @Override protected void onDraw(Canvas c){super.onDraw(c);if(letters.isEmpty())return;paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(10));float step=Math.min(dp(22),(getHeight()-dp(16))/(float)letters.size());float start=(getHeight()-step*letters.size())/2;if(legibility!=Legibility.OFF)paint.setShadowLayer(dp(3),0,dp(.5f),Color.luminance(fg)>=.4?MetroArt.alpha(Color.BLACK,.6f):MetroArt.alpha(Color.WHITE,.7f));else paint.clearShadowLayer();
+            for(int i=0;i<letters.size();i++){paint.setColor(i==selected?accent:secondaryInk());c.drawText(letters.get(i),getWidth()/2f,start+step*(i+.5f)+dp(4),paint);}}
         @Override public boolean performClick(){super.performClick();return true;}
         @Override public boolean onTouchEvent(MotionEvent e){
             if(letters.isEmpty())return false;
@@ -606,7 +611,7 @@ public final class MainActivity extends Activity {
             surfaceContainer=mix(bg,fg,dark?.09f:.05f);
         }else{
             primaryContainer=accent;onPrimaryContainer=onAccent();secondaryContainer=MetroArt.alpha(accent,Color.luminance(accent)>.6?.22f:.18f);onSecondaryContainer=accent;
-            surfaceContainer=dark?MetroArt.alpha(mix(bg,fg,.12f),.92f):MetroArt.alpha(fg,.06f);
+            surfaceContainer=dark?MetroArt.alpha(mix(bg,fg,.12f),.92f):MetroArt.alpha(mix(bg,fg,.06f),.88f); // opaque enough to read over photos
         }
     }
     private JSONObject themeJson(){try{return new JSONObject(theme.json.toString());}catch(JSONException e){throw new IllegalStateException(e);}}
@@ -717,12 +722,45 @@ public final class MainActivity extends Activity {
         }catch(Exception e){ThemeEngine.deleteTree(prepared.directory);fileError(e);}
     }
     private GlassSurface glassSurface(View host){GlassSurface surface=new GlassSurface(host,scene,()->backdropView.getBackground(),glassBackdrop,theme,getResources().getDisplayMetrics().density);glassSurfaces.add(surface);host.setClipToOutline(true);if(theme.liquid)host.setElevation(dp(3));return surface;}
+    /** 10th/90th percentile relative luminance of the photo; the spots that threaten dark and light text. */
+    private void measurePhoto(Bitmap image){
+        try{
+            Bitmap small=Bitmap.createScaledBitmap(image,48,96,true);int[] px=new int[48*96];small.getPixels(px,0,48,0,0,48,96);if(small!=image)small.recycle();
+            double[] l=new double[px.length];for(int i=0;i<px.length;i++)l[i]=Color.luminance(px[i]);Arrays.sort(l);
+            photoDark=l[(int)(l.length*.1)];photoBright=l[(int)(l.length*.9)];
+        }catch(RuntimeException ignored){}
+    }
+    private boolean overImage(){return "photo".equals(activeWallpaperMode)&&wallpaper!=null||"system".equals(activeWallpaperMode);}
+    /** Picks Subtle or Strong from measured contrast; the phone wallpaper uses Android's color hints. */
+    private int resolveLegibility(){
+        int automatic=Legibility.SUBTLE;
+        if(overImage()){
+            double dark=photoDark,bright=photoBright;
+            if("system".equals(activeWallpaperMode)){
+                try{WallpaperColors colors=WallpaperManager.getInstance(this).getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
+                    if(colors!=null){double primary=Color.luminance(colors.getPrimaryColor().toArgb());boolean light=Build.VERSION.SDK_INT>=31?(colors.getColorHints()&WallpaperColors.HINT_SUPPORTS_DARK_TEXT)!=0:primary>.5;
+                        bright=light?Math.max(.7,primary):Math.max(.25,Math.min(1,primary*1.8));dark=light?Math.min(.3,primary):primary*.5;}}
+                catch(RuntimeException ignored){}
+            }
+            automatic=Legibility.auto(Color.luminance(fg),Color.luminance(bg),dark,bright,prefs.getInt("wallpaperDim",60)/100.0);
+        }
+        return Legibility.resolve(prefs.getString("legibility","auto"),overImage(),automatic);
+    }
+    /** Secondary text over images: lifted from muted grey toward the main text color. */
+    private int secondaryInk(){return legibility==Legibility.OFF?muted:mix(muted,fg,legibility==Legibility.STRONG?.8f:.55f);}
+    /** A soft halo behind text drawn on an image: dark behind light text, light behind dark text. */
+    private void legible(TextView t){
+        if(legibility==Legibility.OFF){t.setShadowLayer(0,0,0,0);return;}
+        boolean lightText=Color.luminance(t.getCurrentTextColor())>=.4;
+        float strong=legibility==Legibility.STRONG?1:0;
+        t.setShadowLayer(dp(5+5*strong),0,dp(1),lightText?MetroArt.alpha(Color.BLACK,.45f+.3f*strong):MetroArt.alpha(Color.WHITE,.6f+.3f*strong));
+    }
     private void updateBackdrop(){
         if(backdropView==null)return;glassBackdrop.clear();for(GlassSurface surface:glassSurfaces)surface.invalidateSelf();if(waves!=null)waves.stop();waves=null;
         Bitmap image=Build.VERSION.SDK_INT<31&&softWallpaper!=null?softWallpaper:wallpaper;
         boolean system=activeWallpaperMode.equals("system");
         if(theme.backdrop.equals("waves")&&!activeWallpaperMode.equals("photo")&&!system){waves=new Ps3Backdrop(bg,accent);backdropView.setBackground(waves);if(foreground&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start();}
-        else backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,prefs.getInt("wallpaperDim",60)/100f,system));
+        else backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",60)/100f+(float)Legibility.extraDim(legibility)),system));
         if(Build.VERSION.SDK_INT>=31){backdropView.setRenderEffect(theme.blur>0?RenderEffect.createBlurEffect(dp(theme.blur),dp(theme.blur),Shader.TileMode.CLAMP):null);getWindow().setBackgroundBlurRadius(system?dp(theme.blur):0);}
     }
     private void prepareSoftWallpaper(){
@@ -738,7 +776,7 @@ public final class MainActivity extends Activity {
         final File selectedFile=file;
         worker.execute(() -> {
             try {
-                Bitmap image=decodeWallpaper(selectedFile);
+                Bitmap image=decodeWallpaper(selectedFile);measurePhoto(image);
                 handler.post(() -> { if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();}else image.recycle(); });
             } catch(IOException ignored) { }
         });
@@ -764,7 +802,7 @@ public final class MainActivity extends Activity {
                     byte[] buffer=new byte[8192];int n,total=0;
                     while((n=in.read(buffer))!=-1){total+=n;if(total>32*1024*1024)throw new IOException("Choose an image smaller than 32 MB");out.write(buffer,0,n);}
                 }
-                Bitmap image=decodeWallpaper(incoming);
+                Bitmap image=decodeWallpaper(incoming);measurePhoto(image);
                 android.util.AtomicFile saved=new android.util.AtomicFile(new File(getFilesDir(),"wallpaper.jpg"));
                 FileOutputStream output=null;
                 try { output=saved.startWrite();if(!image.compress(Bitmap.CompressFormat.JPEG,92,output))throw new IOException("Couldn't save image");saved.finishWrite(output); }
@@ -777,7 +815,8 @@ public final class MainActivity extends Activity {
         });
     }
     private void wallpaperSettings() {
-        menu("wallpaper",new String[]{"choose a photo","use phone wallpaper","solid background","wallpaper dimming","use saved photo"},i -> {
+        menu("wallpaper",new String[]{"choose a photo","use phone wallpaper","solid background","wallpaper dimming","use saved photo","text legibility · "+legibilitySummary()},i -> {
+            if(i==5){legibilitySettings();return;}
             if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast("No image picker available");}}
             if(i==1||i==2){prefs.edit().putString("wallpaperMode",i==1?"system":"solid").apply();buildUi();}
             if(i==3){
@@ -810,20 +849,20 @@ public final class MainActivity extends Activity {
             switch(item){
                 case "clock":{
                     LinearLayout timeRow=row(); timeRow.setGravity(Gravity.CENTER_VERTICAL);
-                    clock=text("",theme.layout.equals("xmb")?30:percent<=10?34:46,fg); clock.setLetterSpacing(-.045f); clock.setSingleLine(true);
+                    clock=text("",theme.layout.equals("xmb")?30:percent<=10?34:46,fg);legible(clock); clock.setLetterSpacing(-.045f); clock.setSingleLine(true);
                     timeRow.addView(clock,new LinearLayout.LayoutParams(0,-2,1.2f));
                     View divider=new View(this); divider.setBackgroundColor(MetroArt.alpha(accent,.75f));
                     LinearLayout.LayoutParams lineParams=new LinearLayout.LayoutParams(dp(1),dp(38)); lineParams.setMargins(dp(14),0,dp(18),0); timeRow.addView(divider,lineParams);
-                    date=text("",11,muted); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(6),1); date.setLetterSpacing(.1f);
+                    date=text("",11,secondaryInk());legible(date); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(6),1); date.setLetterSpacing(.1f);
                     date.setContentDescription("Date and active context. Tap for quick settings"); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
                     timeRow.addView(date,new LinearLayout.LayoutParams(0,-2,1)); header.addView(timeRow); updateClock();
                     clock.setContentDescription("Clock. Tap to open alarms"); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
                     break;}
                 case "alarm":
-                    alarmText=text("",13,muted); alarmText.setLetterSpacing(.08f); alarmText.setPadding(0,first?0:dp(12),0,0); alarmText.setSingleLine();
+                    alarmText=text("",13,secondaryInk());legible(alarmText); alarmText.setLetterSpacing(.08f); alarmText.setPadding(0,first?0:dp(12),0,0); alarmText.setSingleLine();
                     alarmText.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS))); header.addView(alarmText); updateAlarm(); break;
                 case "agenda":
-                    agendaText=text("",14,fg); agendaText.setLineSpacing(dp(4),1); agendaText.setPadding(0,first?0:dp(12),0,0); agendaText.setMaxLines(3); agendaText.setEllipsize(TextUtils.TruncateAt.END);
+                    agendaText=text("",14,fg);legible(agendaText); agendaText.setLineSpacing(dp(4),1); agendaText.setPadding(0,first?0:dp(12),0,0); agendaText.setMaxLines(3); agendaText.setEllipsize(TextUtils.TruncateAt.END);
                     header.addView(agendaText); updateAgenda(); break;
                 case "smartspace":{
                     View smartspace=smartspaceView(first);
@@ -834,7 +873,7 @@ public final class MainActivity extends Activity {
                     TextView playing=text("NOW PLAYING",9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
                     LinearLayout mediaRow=row(); mediaRow.setGravity(Gravity.CENTER_VERTICAL);
                     LinearLayout metadata=column(); metadata.setPadding(0,dp(6),dp(8),0);
-                    mediaTitle=text("",18,fg); mediaArtist=text("",12,muted);
+                    mediaTitle=text("",18,fg); mediaArtist=text("",12,secondaryInk()); legible(mediaTitle); legible(mediaArtist);
                     mediaTitle.setSingleLine(); mediaTitle.setEllipsize(TextUtils.TruncateAt.END); mediaArtist.setSingleLine();
                     metadata.addView(mediaTitle); metadata.addView(mediaArtist); mediaRow.addView(metadata,new LinearLayout.LayoutParams(0,-2,1));
                     playButton=iconButton("play","Play or pause",true,v->mediaAction(1));
@@ -885,7 +924,7 @@ public final class MainActivity extends Activity {
     private void updateAgenda(){
         if(agendaText==null)return;
         agendaLoaded=System.currentTimeMillis();
-        if(!calendarAllowed()){agendaText.setTextColor(muted);agendaText.setText("tap to show your calendar here");agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));return;}
+        if(!calendarAllowed()){agendaText.setTextColor(secondaryInk());agendaText.setText("tap to show your calendar here");agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));return;}
         final TextView target=agendaText;final boolean is24=android.text.format.DateFormat.is24HourFormat(this);
         target.setOnClickListener(v->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("content://com.android.calendar/time/"+System.currentTimeMillis()))));
         worker.execute(()->{
@@ -902,7 +941,7 @@ public final class MainActivity extends Activity {
                 }
             }catch(RuntimeException ignored){}
             String result=out.length()==0?"nothing in the next 24 hours":out.toString();
-            handler.post(()->{if(target==agendaText){target.setTextColor(out.length()==0?muted:fg);target.setText(result);}});
+            handler.post(()->{if(target==agendaText){target.setTextColor(out.length()==0?secondaryInk():fg);target.setText(result);}});
         });
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
@@ -1249,6 +1288,7 @@ public final class MainActivity extends Activity {
         page.addView(sectionLabel("wallpaper"));
         String mode=prefs.getString("wallpaperMode","solid");
         page.addView(settingRow("wallpaper",(mode.equals("photo")?"photo":mode.equals("system")?"phone wallpaper":"solid")+" · "+prefs.getInt("wallpaperDim",60)+"% dim",v->wallpaperSettings()));
+        page.addView(settingRow("text legibility",legibilitySummary(),v->legibilitySettings()));
 
         page.addView(sectionLabel("backup & about"));
         page.addView(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()));
@@ -1353,6 +1393,17 @@ public final class MainActivity extends Activity {
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);if(name.isEmpty()){input.setError("Enter a name");return;}r.name=name;d.dismiss();contextsChanged();});
     }
 
+    private String legibilitySummary(){
+        String mode=prefs.getString("legibility","auto");
+        if(!overImage())return mode+" · applies over photos";
+        return mode.equals("auto")?"auto · "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper":mode;
+    }
+    private void legibilitySettings(){
+        menu("text legibility",new String[]{"auto · measures your wallpaper","subtle · soft halo, lifted grey text","strong · stronger halo and a little extra dimming","off"},n->{
+            prefs.edit().putString("legibility",Legibility.MODES[n]).apply();buildUi();
+            if(n==0&&overImage())toast("Auto picked "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper");
+        });
+    }
     private void defaultHome(){try{if(Build.VERSION.SDK_INT>=29){RoleManager rm=getSystemService(RoleManager.class);if(rm.isRoleAvailable(RoleManager.ROLE_HOME)&&!rm.isRoleHeld(RoleManager.ROLE_HOME)){startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME),43);return;}}safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}}
     // Onboarding: a five-step, skippable first-run tour drawn over the live launcher with the current theme.
     private static final int TOUR_PAGES=5;
