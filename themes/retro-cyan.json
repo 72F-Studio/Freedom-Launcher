@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "background": "#000000",
+  "text": "#FFFFFF",
+  "muted": "#898989",
+  "accent": "#39B9D4",
+  "font": "sans-serif-light",
+  "titleSize": 60,
+  "name": "Retro",
+  "uiIconSet": "retro"
+}

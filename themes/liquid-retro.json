@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "name": "Liquid Retro",
+  "layout": "metro",
+  "backdrop": "glow",
+  "background": "#06151D",
+  "text": "#FFFFFF",
+  "muted": "#898989",
+  "accent": "#39B9D4",
+  "font": "sans-serif-light",
+  "titleSize": 60,
+  "appSize": 27,
+  "iconSize": 30,
+  "rowHeight": 62,
+  "iconStyle": "mono",
+  "motionMs": 230,
+  "blur": 18,
+  "glass": 50,
+  "liquid": true,
+  "wallpaperMode": "solid",
+  "uiIconSet": "retro"
+}

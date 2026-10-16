@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "name": "Wave",
+  "layout": "xmb",
+  "backdrop": "waves",
+  "background": "#071626",
+  "text": "#FFFFFF",
+  "muted": "#ACBDCE",
+  "accent": "#DCEBFF",
+  "font": "sans-serif-light",
+  "titleSize": 24,
+  "appSize": 24,
+  "iconSize": 34,
+  "rowHeight": 66,
+  "iconStyle": "mono",
+  "motionMs": 300,
+  "animated": true,
+  "wallpaperMode": "solid",
+  "uiIconSet": "wave"
+}

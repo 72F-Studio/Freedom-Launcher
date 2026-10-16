@@ -1,0 +1,8 @@
+<resources>
+    <style name="MetroTheme" parent="MetroBaseTheme">
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#000000</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>
