@@ -1,10 +1,10 @@
-# 72F Launcher — v1.0.0 RC2
+# 72F Launcher — v1.0.0 RC3
 
 An original, native Android launcher: Retro typography with horizontal categories and vertical app lists. Android 9+ (API 28). No internet permission, ads, or analytics. The only library is the optional Smartspacer Client SDK, loaded on Android 10+.
 
 ## Install
 
-Install `dist/72F-Launcher-1.0.0-rc2.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
+Install `dist/72F-Launcher-1.0.0-rc3.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
 
 This beta uses a development signing certificate. Keep that certificate for subsequent beta updates; a production certificate will require a separate migration/reinstall. It is not a Play Store release.
 
@@ -66,7 +66,7 @@ Release APK (R8-shrunk), signed with the same development key as the betas so it
 
 ```sh
 ./gradlew :app:assembleRelease
-apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc2.apk app/build/outputs/apk/release/app-release-unsigned.apk
+apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc3.apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 ## Implementation
@@ -88,4 +88,4 @@ GraceLauncher and focus-launcher were reviewed through public documentation for 
 
 ## Known limits
 
-Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. Category order is fixed (Favorites, built-ins, custom, All apps). The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. RC2 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC2-NOTES.md` for what was checked and the release gate.
+Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. Category order is fixed (Favorites, built-ins, custom, All apps). The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. RC3 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC3-NOTES.md` for what was checked and the release gate.

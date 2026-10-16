@@ -7,8 +7,8 @@ android {
         minSdk = 28
         targetSdk = 35
         testInstrumentationRunner = "dev.seventwo.launcher.EngineChecks"
-        versionCode = 5
-        versionName = "1.0.0-rc2"
+        versionCode = 6
+        versionName = "1.0.0-rc3"
     }
     buildTypes {
         release {
