@@ -9,8 +9,13 @@ def adb(*args):
     return subprocess.check_output([ADB, '-s', SERIAL, *map(str,args)])
 def shell(*args): return adb('shell', *args).decode()
 def ui():
-    shell('uiautomator', 'dump', '/sdcard/72f-test.xml')
-    return list(ET.fromstring(shell('cat', '/sdcard/72f-test.xml')).iter('node'))
+    for attempt in range(3):  # uiautomator is occasionally killed or returns no root; retry
+        try:
+            shell('uiautomator', 'dump', '/sdcard/72f-test.xml')
+            return list(ET.fromstring(shell('cat', '/sdcard/72f-test.xml')).iter('node'))
+        except (subprocess.CalledProcessError, ET.ParseError):
+            if attempt == 2: raise
+            time.sleep(1)
 def find(label, nodes=None, prefix=False):
     for n in nodes if nodes is not None else ui():
         t = n.get('text') or ''; d = n.get('content-desc') or ''
@@ -37,8 +42,12 @@ def search(): tap('Search apps', prefix=True)
 def reset():
     """Fresh 72F data (only this app's), set as Home, welcome dismissed."""
     shell('pm','clear','dev.seventwo.launcher'); shell('cmd','package','set-home-activity','dev.seventwo.launcher/.MainActivity')
-    start(); time.sleep(1.2)
-    if any(n.get('text') == 'LET’S GO' for n in ui()): tap('LET’S GO')
+    start()
+    for _ in range(10):  # a cold start after pm clear can take a few seconds to show the first-run tour
+        nodes = ui()
+        if any(n.get('content-desc') == 'Skip setup' for n in nodes): tap('Skip setup'); time.sleep(.6); return
+        time.sleep(.6)
+    raise AssertionError('First-run tour did not appear')
 def pick_file(name):
     """Choose a file in Android's document picker: Downloads, list view, scroll until visible."""
     time.sleep(1)

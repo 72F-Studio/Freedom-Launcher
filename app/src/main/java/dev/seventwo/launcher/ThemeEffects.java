@@ -26,6 +26,12 @@ final class ThemeEffects {
         for(int pass=0;pass<3;pass++){box(pixels,scratch,w,h,radius,true);box(scratch,pixels,w,h,radius,false);}
         return Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888);
     }
+    /** Three-pass box blur (close to Gaussian) into the same bitmap, using caller-owned buffers. */
+    static void blurInPlace(Bitmap target,int radius,int[] pixels,int[] scratch) {
+        int w=target.getWidth(),h=target.getHeight();target.getPixels(pixels,0,w,0,0,w,h);
+        for(int pass=0;pass<3;pass++){box(pixels,scratch,w,h,radius,true);box(scratch,pixels,w,h,radius,false);}
+        target.setPixels(pixels,0,w,0,0,w,h);
+    }
     private static void box(int[] src,int[] dst,int w,int h,int radius,boolean horizontal) {
         int lines=horizontal?h:w,length=horizontal?w:h,diameter=radius*2+1;
         for(int line=0;line<lines;line++){

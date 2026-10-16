@@ -126,20 +126,20 @@ public final class MainActivity extends Activity {
         readState();
         restoreWallpaper();
         activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext);
-        if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); }
+        if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); tourPage = state.getInt("tour", -1); }
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         launcher.registerCallback(appChanges, handler);
         buildUi(); loadApps();
-        if (!prefs.getBoolean("introduced", false)) handler.postDelayed(this::welcome, 500);
+        if (!prefs.getBoolean("introduced", false) && tourPage < 0) handler.postDelayed(this::welcome, 300);
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
+    @Override protected void onResume() { super.onResume(); foreground = true; registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); if(waves!=null)waves.stop(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
-    @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); super.onSaveInstanceState(out); }
+    @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
-    @Override public void onBackPressed() { if (sheet != null && sheet.back()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
+    @Override public void onBackPressed() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
         favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();
@@ -867,7 +867,7 @@ public final class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
-        if(request==49){agendaLoaded=0;updateAgenda();if(sheet!=null)sheet.refresh();}
+        if(request==49){agendaLoaded=0;updateAgenda();if(sheet!=null)sheet.refresh();if(tourPage>=0)attachTour(0);}
     }
 
     // Contexts: evaluated only while Home is visible.
@@ -1022,6 +1022,7 @@ public final class MainActivity extends Activity {
         sheet.setColors(surface(),MetroArt.alpha(muted,.22f),MetroArt.alpha(muted,.45f));
         sheet.requestApplyInsets();
         if(sheet.isShowing())sheet.refresh();
+        if(tourPage>=0)attachTour(0);
     }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}sheet.open(this::quickPage);}
     private final class SwipeUpFooter extends LinearLayout {
@@ -1209,6 +1210,7 @@ public final class MainActivity extends Activity {
 
         page.addView(sectionLabel("backup & about"));
         page.addView(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()));
+        page.addView(settingRow("replay the tour","the five-step introduction from first launch",v->startTour(0)));
         page.addView(settingRow("about 72F",version()+" · open-source notices",v->aboutSettings()));
         return page;
     }
@@ -1310,13 +1312,128 @@ public final class MainActivity extends Activity {
     }
 
     private void defaultHome(){try{if(Build.VERSION.SDK_INT>=29){RoleManager rm=getSystemService(RoleManager.class);if(rm.isRoleAvailable(RoleManager.ROLE_HOME)&&!rm.isRoleHeld(RoleManager.ROLE_HOME)){startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME),43);return;}}safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}}
-    private void welcome(){
-        if(isFinishing()||isDestroyed())return;
-        prefs.edit().putBoolean("introduced",true).apply();
-        showDialog(new AlertDialog.Builder(this).setTitle("welcome to 72F")
-            .setMessage("Swipe sideways to explore categories. Scroll to find your apps.\n\nHold an app to organize it. The bar at the bottom moves between categories; the side alphabet gets you there faster.\n\nSearch is the round button. Hold it, or swipe up on the bar, for settings.\n\nFavorites is always home.")
-            .setPositiveButton("let’s go",(d,w)->{}).setNeutralButton("set as default",(d,w)->defaultHome()).create());
+    // Onboarding: a five-step, skippable first-run tour drawn over the live launcher with the current theme.
+    private static final int TOUR_PAGES=5;
+    private int tourPage=-1;
+    private FrameLayout tour;
+    private void welcome(){if(isFinishing()||isDestroyed())return;startTour(0);}
+    private void startTour(int page){if(sheet!=null)sheet.dismiss();dismissDialogs();tourPage=page;attachTour(0);}
+    private void endTour(){
+        prefs.edit().putBoolean("introduced",true).apply();tourPage=-1;
+        if(tour!=null){View old=tour;tour=null;old.animate().alpha(0).setDuration(theme.motionMs>0?200:0).withEndAction(()->{if(old.getParent()!=null)((android.view.ViewGroup)old.getParent()).removeView(old);}).start();}
     }
+    private void tourStep(int delta){
+        int next=tourPage+delta;if(next<0)return;if(next>=TOUR_PAGES){endTour();return;}
+        tourPage=next;attachTour(delta);
+    }
+    /** (Re)builds the tour over the current scene; called again after theme changes rebuild the UI. */
+    private void attachTour(int direction){
+        if(tourPage<0||scene==null)return;
+        if(tour!=null&&tour.getParent()!=null)((android.view.ViewGroup)tour.getParent()).removeView(tour);
+        tour=new FrameLayout(this);tour.setBackgroundColor(bg);tour.setClickable(true);tour.setFocusable(true);
+        tour.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
+        LinearLayout frame=column();tour.addView(frame,new FrameLayout.LayoutParams(-1,-1));
+        // Top: progress and skip.
+        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(dp(26),dp(8),dp(10),0);
+        for(int i=0;i<TOUR_PAGES;i++){View dot=new View(this);GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(3));d.setColor(i==tourPage?accent:MetroArt.alpha(muted,.35f));dot.setBackground(d);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(i==tourPage?22:6),dp(6));p.setMargins(0,0,dp(6),0);top.addView(dot,p);}
+        top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        if(tourPage<TOUR_PAGES-1){TextView skip=text("skip",15,muted);skip.setGravity(Gravity.CENTER);skip.setMinHeight(dp(48));skip.setMinWidth(dp(64));skip.setContentDescription("Skip setup");skip.setOnClickListener(v->endTour());skip.setFocusable(true);top.addView(skip);}
+        frame.addView(top,new LinearLayout.LayoutParams(-1,dp(56)));
+        ScrollView scroll=new ScrollView(this);scroll.setVerticalScrollBarEnabled(false);scroll.setFillViewport(true);
+        View content=tourContent(tourPage);scroll.addView(content);
+        frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        // Bottom: back and the primary action.
+        LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER_VERTICAL);bottom.setPadding(dp(18),dp(8),dp(18),dp(18));
+        if(tourPage>0){TextView back=text("back",16,fg);back.setGravity(Gravity.CENTER);back.setMinHeight(dp(52));back.setMinWidth(dp(72));back.setOnClickListener(v->tourStep(-1));back.setFocusable(true);back.setContentDescription("Previous step");bottom.addView(back);}
+        bottom.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        boolean last=tourPage==TOUR_PAGES-1;
+        TextView next=text(last?"let’s go":"next",17,onPrimaryContainer);next.setGravity(Gravity.CENTER);next.setPadding(dp(28),0,dp(28),0);next.setMinHeight(dp(52));
+        GradientDrawable fill=new GradientDrawable();fill.setColor(primaryContainer);fill.setCornerRadius(theme.layout.equals("xmb")||theme.expressive||theme.liquid?dp(26):dp(2));next.setBackground(fill);
+        next.setOnClickListener(v->tourStep(1));next.setFocusable(true);next.setContentDescription(last?"Finish setup":"Next step");
+        bottom.addView(next);
+        frame.addView(bottom);
+        scene.addView(tour,new FrameLayout.LayoutParams(-1,-1));tour.requestApplyInsets();
+        if(direction!=0&&theme.motionMs>0&&android.animation.ValueAnimator.areAnimatorsEnabled()){content.setTranslationX(dp(40)*direction);content.setAlpha(0);content.animate().translationX(0).alpha(1).setDuration(theme.motionMs).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).start();}
+        content.announceForAccessibility("Step "+(tourPage+1)+" of "+TOUR_PAGES);
+    }
+    private TextView tourTitle(String s){TextView t=text(s,38,fg);t.setTypeface(theme.expressive?Typeface.create(theme.typeface,800,false):theme.typeface);t.setLetterSpacing(-.03f);t.setPadding(dp(26),dp(18),dp(26),dp(10));t.setAccessibilityHeading(true);return t;}
+    private TextView tourBody(String s){TextView t=text(s,16,muted);t.setLineSpacing(dp(4),1);t.setPadding(dp(26),0,dp(26),dp(12));return t;}
+    private View tourHint(String mark,String title,String body){
+        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(10),dp(26),dp(10));
+        MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,mark,accent,false);icon.setFocusable(false);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        line.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
+        LinearLayout words=column();words.setPadding(dp(16),0,0,0);words.addView(text(title,18,fg));TextView b=text(body,14,muted);b.setPadding(0,dp(3),0,0);words.addView(b);
+        line.addView(words,new LinearLayout.LayoutParams(0,-2,1));line.setFocusable(true);line.setContentDescription(title+". "+body);return line;
+    }
+    private boolean isDefaultHome(){if(Build.VERSION.SDK_INT<29)return false;RoleManager rm=getSystemService(RoleManager.class);return rm!=null&&rm.isRoleHeld(RoleManager.ROLE_HOME);}
+    private View tourContent(int page){
+        LinearLayout c=column();c.setPadding(0,dp(12),0,dp(12));
+        switch(page){
+            case 0:{
+                TextView mark=text("72F",76,fg);mark.setTypeface(theme.titleTypeface);mark.setLetterSpacing(-.04f);mark.setPadding(dp(26),dp(24),dp(26),0);c.addView(mark);
+                c.addView(tourBody("Horizontal categories. Vertical app lists. A top zone that follows your day."));
+                c.addView(tourBody("This takes a minute. Everything here can be changed later in settings, and you can skip at any time."));
+                boolean home=isDefaultHome();
+                c.addView(chipRow(chip(home?"72F is your home screen":"make 72F your home screen",home,v->{if(!isDefaultHome())defaultHome();})));
+                break;}
+            case 1:{
+                c.addView(tourTitle("pick a look"));
+                c.addView(tourBody("Palettes and layouts. Styles combine with any of them."));
+                c.addView(swatches());
+                c.addView(sectionLabel("style"));
+                ArrayList<View> styles=new ArrayList<>();
+                styles.add(chip("expressive",theme.expressive,v->changeEffect("expressive",!theme.expressive)));
+                if(Build.VERSION.SDK_INT>=31)styles.add(chip("wallpaper colors",theme.dynamic,v->changeEffect("dynamic",!theme.dynamic)));
+                styles.add(chip("glass",theme.glass>0&&!theme.liquid,v->setGlass(theme.glass>0&&!theme.liquid?0:40,false)));
+                styles.add(chip("liquid glass",theme.liquid,v->setGlass(theme.liquid?0:65,!theme.liquid)));
+                c.addView(chipRow(styles.toArray(new View[0])));
+                c.addView(sectionLabel("app icons"));
+                String icons=prefs.getString("icons",theme.iconStyle);
+                c.addView(chipRow(chip("monochrome",icons.equals("mono"),v->setIcons("mono")),chip("color",icons.equals("color"),v->setIcons("color")),chip("text only",icons.equals("none"),v->setIcons("none"))));
+                break;}
+            case 2:{
+                c.addView(tourTitle("how it works"));
+                c.addView(tourHint("arrow","swipe sideways","Move between categories, or tap and slide along the bar at the bottom."));
+                c.addView(tourHint("all apps","scroll and scrub","Scroll a list, or drag the side alphabet to jump to a letter."));
+                c.addView(tourHint("favorites","hold an app","Add it to favorites, move it to a category, or uninstall it."));
+                c.addView(tourHint("search","tap search","The round button finds any app. Hold it, or swipe up on the bar, for settings."));
+                break;}
+            case 3:{
+                c.addView(tourTitle("the top zone"));
+                c.addView(tourBody("The space above your apps. Contexts change it through the day, and can choose which category Home opens on."));
+                ContextRules.Rule everyday=contexts.get(contexts.size()-1);
+                c.addView(sectionLabel("usually show"));
+                String[][] layouts={{"clock"},{"clock","media"},{"clock","agenda"},{}};String[] names={"clock","clock + media","clock + agenda","nothing"};
+                View[] options=new View[layouts.length];
+                for(int i=0;i<layouts.length;i++){final String[] items=layouts[i];boolean on=everyday.widgets.equals(Arrays.asList(items));
+                    options[i]=chip(names[i],on,v->{everyday.widgets.clear();everyday.widgets.addAll(Arrays.asList(items));if(items.length==0)everyday.header=0;else if(everyday.header==0)everyday.header=-1;
+                        if(Arrays.asList(items).contains("agenda")&&!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);contextsChanged();attachTour(0);});}
+                c.addView(chipRow(options));
+                c.addView(sectionLabel("add contexts"));
+                String[] kinds={"morning","work","headphones","night"};View[] adds=new View[kinds.length];
+                for(int i=0;i<kinds.length;i++){final String kind=kinds[i];ContextRules.Rule existing=null;for(ContextRules.Rule r:contexts)if(r.name.equals(kind))existing=r;final ContextRules.Rule found=existing;
+                    adds[i]=chip(kind,found!=null,v->{
+                        if(found!=null){for(String item:new ArrayList<>(found.widgets))if(item.startsWith("widget:"))removeContextItem(found,item);contexts.remove(found);}
+                        else if(contexts.size()<ContextStore.MAX_RULES){ContextRules.Rule r=ContextRules.template(kind,ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(contexts.size()-1,r);}
+                        contextsChanged();attachTour(0);});}
+                c.addView(chipRow(adds));
+                c.addView(tourBody("Morning and work follow weekday hours, headphones switches to music, night slims the top zone. Edit them anytime under settings → contexts."));
+                break;}
+            default:{
+                c.addView(tourTitle("optional access"));
+                c.addView(tourBody("72F has no internet permission. These stay on your phone and are only needed for the features below."));
+                boolean media=mediaAccess(),calendar=calendarAllowed(),home=isDefaultHome();
+                c.addView(settingRow("media controls",media?"allowed":"show what's playing in the top zone",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
+                c.addView(settingRow("calendar",calendar?"allowed":"show upcoming events in the agenda item",v->{if(!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}));
+                c.addView(settingRow("home screen",home?"72F is your home screen":"use 72F when you press Home",v->{if(!isDefaultHome())defaultHome();}));
+                c.addView(tourBody("Hold the round search button any time for quick settings."));
+            }
+        }
+        return c;
+    }
+    private void setGlass(int amount,boolean liquid){try{JSONObject t=themeJson();t.put("glass",amount);t.put("liquid",liquid);if(liquid&&theme.blur==0)t.put("blur",18);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
+    private void setIcons(String style){prefs.edit().putString("icons",style).apply();buildUi();}
     private interface Choice{void accept(int i);}
     private void menu(String title,String[] options,Choice action){
         if(options.length==0){toast("No categories available");return;}

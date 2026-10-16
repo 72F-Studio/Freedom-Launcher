@@ -87,7 +87,7 @@ final class GlassSurface extends Drawable implements Runnable {
         Rect bounds = getBounds(); if (bounds.isEmpty()) return;
         Drawable drawable = source.get();
         boolean animated = active && drawable instanceof Animatable && ((Animatable) drawable).isRunning();
-        Bitmap image = backdrop.obtain(drawable, scene.getWidth(), scene.getHeight(), density, animated);
+        Bitmap image = backdrop.obtain(drawable, scene.getWidth(), scene.getHeight(), diffusion(), animated);
         host.getLocationInWindow(location); scene.getLocationInWindow(sceneLocation);
         float x = location[0] - sceneLocation[0] + bounds.left;
         float y = location[1] - sceneLocation[1] + bounds.top;
@@ -100,8 +100,8 @@ final class GlassSurface extends Drawable implements Runnable {
                 gpu.draw(canvas, image, backdrop.scale, bounds.width(), bounds.height(), radius,
                         theme.glass / 100f, density, x, y);
             } else {
-                // Older Android uses the same anchored texture with diffusion and glass chrome.
-                // No moving bitmap mesh: that stretches pixels and opens seams at the corners.
+                // Android 9–12 (and software canvases): the same anchored, diffused texture without
+                // refraction. A moving bitmap mesh stretched pixels and opened seams at the corners.
                 matrix.setScale(1 / backdrop.scale, 1 / backdrop.scale);
                 matrix.postTranslate(-x, -y);
                 canvas.drawBitmap(image, matrix, paint);
@@ -109,8 +109,20 @@ final class GlassSurface extends Drawable implements Runnable {
         }
         if (theme.liquid) drawFinish(canvas, bounds.width(), bounds.height(), radius);
         canvas.restore();
-        if (!theme.liquid) { chrome.setBounds(bounds); chrome.draw(canvas); }
-        if (animated) scheduleSelf(this, SystemClock.uptimeMillis() + 80);
+        // Chrome follows the lens shape (pills, circles); a fixed radius would be clipped at the ends.
+        if (!theme.liquid) { chrome.setCornerRadius(radius); chrome.setBounds(bounds); chrome.draw(canvas); }
+        if (animated) scheduleSelf(this, SystemClock.uptimeMillis() + GlassBackdrop.ANIMATED_INTERVAL);
+    }
+    /**
+     * Blur radius in scene pixels. Liquid glass is a clear lens with a hint of diffusion; subtle/frosted
+     * glass frosts with strength. Both add the scene's own blur so the lens shows what surrounds it:
+     * on Android 12+ that blur is a RenderEffect on the backdrop view, which the captured Drawable lacks
+     * (older versions already draw a pre-blurred wallpaper, so nothing is added there).
+     */
+    private int diffusion() {
+        float frost = (theme.liquid ? 1.2f : 4f + 12f * theme.glass / 100f) * density;
+        float scene = Build.VERSION.SDK_INT >= 31 ? .58f * theme.blur * density : 0;
+        return Math.max(1, Math.round((float) Math.hypot(frost, scene)));
     }
     @Override public void run() { if (active) invalidateSelf(); }
     @Override public void setAlpha(int alpha) { }
@@ -146,8 +158,6 @@ final class GlassSurface extends Drawable implements Runnable {
         private final RuntimeShader shader = new RuntimeShader(CODE);
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Matrix matrix = new Matrix();
-    private final Paint finish = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Shader faceLight, rimLight;
         private Bitmap previous;
         private BitmapShader texture;
         void draw(Canvas canvas, Bitmap image, float scale, int w, int h, float radius,

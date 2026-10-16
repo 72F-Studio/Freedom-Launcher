@@ -1,10 +1,10 @@
-# 72F Launcher — v1.0.0 RC1
+# 72F Launcher — v1.0.0 RC2
 
 An original, native Android launcher: Retro typography with horizontal categories and vertical app lists. Android 9+ (API 28). No internet permission, ads, or analytics. The only library is the optional Smartspacer Client SDK, loaded on Android 10+.
 
 ## Install
 
-Install `dist/72F-Launcher-1.0.0-rc1.apk`. Open **72F Launcher**, then choose **set as default** in onboarding or quick settings (hold the round search button). Android's Home app setting lets you switch back anytime.
+Install `dist/72F-Launcher-1.0.0-rc2.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
 
 This beta uses a development signing certificate. Keep that certificate for subsequent beta updates; a production certificate will require a separate migration/reinstall. It is not a Play Store release.
 
@@ -37,7 +37,7 @@ Seven built-in looks: four Retro palettes, **Wave**, **Liquid Retro**, and **Mat
 
 **Settings → appearance & themes** controls presets, imports/exports, typography, icons, and effects. Themes use versioned JSON or portable `.72ftheme` ZIP packages with wallpaper, custom fonts, and per-app image icons. Third-party ADW/Nova-compatible icon packs use installed resources and fall back to system icons for unmapped apps. Theme exports embed the selected photo and custom assets; an installed icon pack is referenced by package name.
 
-Blur, translucent glass surfaces, and liquid glass styling can be mixed with either layout. Android 12+ blurs the launcher backdrop with RenderEffect; Android 9–11 uses a bounded software fallback for imported photos. Android's live system-wallpaper blur depends on device support. Liquid glass actually refracts and locally blurs the app-owned backdrop. Imported wallpapers are sampled from the private image; no screenshot is needed. All lenses share one stationary, scene-aligned wallpaper texture; rounded clipping keeps icons and widget content inside their glass surfaces. Android 13+ uses an AGSL edge lens adapted from AndroidLiquidGlass, with light diffusion, dispersion and directional highlights. Older devices use anchored frosted glass. Opaque backgrounds supplied by third-party widgets remain opaque. Live system wallpaper cannot be sampled for refraction; choose a photo inside the launcher for that mode. See [the theme creator guide](docs/THEMES.md) and `themes/` for ready-to-import packages.
+Blur, translucent glass surfaces, and liquid glass styling can be mixed with either layout. Android 12+ blurs the launcher backdrop with RenderEffect; Android 9–11 uses a bounded software fallback for imported photos. Android's live system-wallpaper blur depends on device support. All glass samples one shared, scene-sized copy of the app-owned backdrop, diffused to match the background's own blur, so moving a panel never recaptures it. **Subtle** and **frosted** glass frost that copy by strength. **Liquid glass** is a clear lens: on Android 13+ an AGSL shader (adapted from AndroidLiquidGlass, Apache-2.0) refracts it at the rounded edges with slight dispersion and directional rim light; older versions show the same anchored, diffused texture without refraction. Animated backdrops (Wave) are resampled at about 6 fps into reused buffers. Live system wallpaper cannot be sampled; choose a photo inside the launcher for refraction. See [the theme creator guide](docs/THEMES.md) and `themes/` for ready-to-import packages.
 
 All launcher controls use a complete vector icon set: original **Retro**, original **Wave**, or [Google Material Icons](https://github.com/google/material-design-icons). Switch independently under **launcher icon set**. Theme packages can override individual controls through `uiIcons`; app icons use separate settings.
 
@@ -64,7 +64,7 @@ Release APK (R8-shrunk), signed with the same development key as the betas so it
 
 ```sh
 ./gradlew :app:assembleRelease
-apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc1.apk app/build/outputs/apk/release/app-release-unsigned.apk
+apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc2.apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 ## Implementation
@@ -86,4 +86,4 @@ GraceLauncher and focus-launcher were reviewed through public documentation for 
 
 ## Known limits
 
-Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. Category order is fixed (Favorites, built-ins, custom, All apps). The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. RC1 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC1-NOTES.md` for what was checked and the release gate.
+Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. Category order is fixed (Favorites, built-ins, custom, All apps). The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. RC2 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC2-NOTES.md` for what was checked and the release gate.
