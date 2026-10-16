@@ -42,8 +42,8 @@ final class SettingsSheet extends FrameLayout {
         addView(scrim, new LayoutParams(-1, -1));
         panel = new LinearLayout(context); panel.setOrientation(LinearLayout.VERTICAL);
         handle = new View(context);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(36), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL; handleParams.setMargins(0, dp(10), 0, dp(6));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL; handleParams.setMargins(0, dp(12), 0, dp(10));
         panel.addView(handle, handleParams);
         scroller = new ScrollView(context); scroller.setVerticalScrollBarEnabled(false); scroller.setClipToPadding(false);
         panel.addView(scroller, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -61,8 +61,8 @@ final class SettingsSheet extends FrameLayout {
     void setListener(Listener l) { listener = l; }
 
     void setColors(int surface, int border, int handleColor) {
-        GradientDrawable d = new GradientDrawable(); d.setColor(surface); d.setStroke(dp(1), border);
-        float r = dp(22); d.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        GradientDrawable d = new GradientDrawable(); d.setColor(surface); d.setStroke(Math.max(1, dp(.75f)), border);
+        float r = dp(28); d.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
         panel.setBackground(d);
         GradientDrawable h = new GradientDrawable(); h.setColor(handleColor); h.setCornerRadius(dp(2)); handle.setBackground(h);
     }

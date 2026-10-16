@@ -226,7 +226,7 @@ public final class MainActivity extends Activity {
         titles.removeAllViews();
         for (String c : categories) {
             boolean selected=c.equals(category);
-            TextView t=text(theme.layout.equals("xmb")?Character.toUpperCase(c.charAt(0))+c.substring(1):c,titleSize,selected?fg:MetroArt.alpha(muted,.62f));
+            TextView t=text(c,titleSize,selected?fg:MetroArt.alpha(muted,.62f));
             if(theme.expressive){t.setTypeface(Typeface.create(theme.typeface,selected?800:500,false));t.setLetterSpacing(-.02f);}
             if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
@@ -261,9 +261,15 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(Color.luminance(bg) > .5 ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
         setContentView(scene); root.requestApplyInsets();
         if (searching) {
-            LinearLayout row = row(); row.setPadding(dp(18), dp(8), dp(12), dp(8));
-            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); legible(search); search.setTextSize(25); search.setSingleLine(); search.setHint("find an app"); search.setTypeface(theme.typeface); search.setText(query);
-            row.addView(search,new LinearLayout.LayoutParams(0,dp(58),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed())); root.addView(row);
+            // Search: one pill field with the glyph inside and close at its end.
+            LinearLayout row = row(); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16), dp(2), dp(4), dp(2));
+            row.setBackground(rounded(theme.glass>0||overImage()?MetroArt.alpha(surface(),.82f):mix(bg,fg,Color.luminance(bg)>.5?.06f:.09f),100));
+            MetroArt.Icon glyph = new MetroArt.Icon(this, uiIcons, "search", secondaryInk(), false); glyph.setGlyphSize(20); glyph.setFocusable(false); glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); glyph.setMinimumWidth(0);
+            row.addView(glyph, new LinearLayout.LayoutParams(dp(28), dp(48)));
+            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); search.setTextSize(20); search.setSingleLine(); search.setHint("find an app"); search.setTypeface(theme.typeface); search.setText(query);
+            search.setBackground(null); search.setPadding(dp(10), 0, dp(4), 0); search.setHighlightColor(MetroArt.alpha(accent,.35f));
+            row.addView(search,new LinearLayout.LayoutParams(0,dp(56),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed()));
+            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.setMargins(dp(16), dp(10), dp(16), dp(10)); root.addView(row, sp);
             search.addTextChangedListener(new TextWatcher() { public void beforeTextChanged(CharSequence s,int a,int c,int f) {} public void onTextChanged(CharSequence s,int a,int b,int c) { query=s.toString(); refreshList(true); } public void afterTextChanged(Editable e) {} });
             search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0)); return true; });
         } else {
@@ -277,13 +283,13 @@ public final class MainActivity extends Activity {
         list = new ListView(this); list.setDivider(null); list.setCacheColorHint(Color.TRANSPARENT); list.setVerticalScrollBarEnabled(false); list.setClipToPadding(false);
         boolean left = prefs.getBoolean("left",false); list.setPadding(dp(left?48:24),dp(2),dp(left?24:48),dp(12));
         list.setVerticalFadingEdgeEnabled(true); list.setFadingEdgeLength(dp(24));
-        list.setSelector(new android.graphics.drawable.ColorDrawable((accent & 0xffffff) | 0x12000000));
+        list.setSelector(new android.graphics.drawable.InsetDrawable(rounded(MetroArt.alpha(fg,.08f),16),-dp(10),dp(2),-dp(10),dp(2)));
         adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list,new FrameLayout.LayoutParams(-1,-1));
         list.setOnItemClickListener((p,v,pos,id) -> launch(visible.get(pos)));
         list.setOnItemLongClickListener((p,v,pos,id) -> { appMenu(visible.get(pos)); return true; });
         empty = text("",20,secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40),0,dp(40),0); listArea.addView(empty,new FrameLayout.LayoutParams(-1,-1));
         alphabet = new AlphabetRail(); FrameLayout.LayoutParams railParams = new FrameLayout.LayoutParams(dp(40),-1, left?Gravity.LEFT:Gravity.RIGHT); listArea.addView(alphabet,railParams);
-        letter = text("",64,accent); letter.setGravity(Gravity.CENTER); letter.setBackground(outline(MetroArt.alpha(bg,.96f),MetroArt.alpha(accent,.5f))); letter.setVisibility(View.GONE);
+        letter = text("",64,accent); letter.setGravity(Gravity.CENTER); letter.setBackground(rounded(MetroArt.alpha(surface(),.94f),28));letter.setElevation(dp(6)); letter.setVisibility(View.GONE);
         FrameLayout.LayoutParams bubble = new FrameLayout.LayoutParams(dp(100),dp(100),Gravity.CENTER); listArea.addView(letter,bubble);
         // Dock: a category pill stretching to a floating search button (Niagara-style), both on one surface.
         LinearLayout footer = new SwipeUpFooter(); footer.setOrientation(LinearLayout.HORIZONTAL); footer.setGravity(Gravity.CENTER_VERTICAL);
@@ -308,10 +314,10 @@ public final class MainActivity extends Activity {
         boolean is24 = android.text.format.DateFormat.is24HourFormat(this);
         Date now = new Date();
         clock.setText(new SimpleDateFormat(is24 ? "HH:mm" : "h:mm",Locale.getDefault()).format(now));
-        String period = is24 ? "" : new SimpleDateFormat("a",Locale.getDefault()).format(now) + " · ";
-        String context = activeContext == null || activeContext.fallback ? "" : "\n● " + activeContext.name.toUpperCase(Locale.getDefault());
-        date.setText(period + new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toUpperCase(Locale.getDefault()) + "\n"
-            + new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toUpperCase(Locale.getDefault()) + context);
+        String period = is24 ? "" : new SimpleDateFormat("a",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + " · ";
+        String context = activeContext == null || activeContext.fallback ? "" : "\n● " + activeContext.name;
+        date.setText(period + new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + "\n"
+            + new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + context);
     }
     private void selectCategory(String next, boolean animate) {
         if (category.equals(next)) return;
@@ -415,8 +421,9 @@ public final class MainActivity extends Activity {
             float step=(right-left)/Math.max(1,categories.size()-1),slot=categories.size()>1?step:getWidth();
             boolean icons=slot>=dp(28);
             // Sliding highlight behind the selected category.
-            // Expressive: M3 navigation-bar pill indicator (wide, 32dp tall); otherwise a softer capsule.
-            float x=left+step*shown,half=theme.expressive?Math.min(slot/2f-dp(2),dp(28)):Math.min(slot/2f-dp(3),dp(24)),tall=theme.expressive?dp(16):dp(20);
+            // A horizontal capsule (M3 navigation-bar indicator, up to 56×32dp). Its height follows its width, so a
+            // crowded dock gets a smaller capsule instead of one squeezed into a vertical rectangle.
+            float x=left+step*shown,half=Math.min(slot/2f-dp(1),dp(28)),tall=Math.min(dp(16),half*.68f);
             paint.setStyle(Paint.Style.FILL);paint.setColor(secondaryContainer);
             if(icons)c.drawRoundRect(x-half,y-tall,x+half,y+tall,tall,tall,paint);
             int selectedInk=theme.expressive?onSecondaryContainer:accent;
@@ -552,7 +559,7 @@ public final class MainActivity extends Activity {
         if(i==1)nameDialog("new category","",name->{custom.add(name);saveState();refreshCategories();});
         if(i==2){ArrayList<String> cs=editableCategories();boolean[] checked=new boolean[cs.size()];for(int j=0;j<cs.size();j++)checked[j]=!disabled.contains(cs.get(j));AlertDialog d=new AlertDialog.Builder(this).setTitle("visible categories").setMultiChoiceItems(cs.toArray(new String[0]),checked,(dialog,n,on)->{if(on)disabled.remove(cs.get(n));else disabled.add(cs.get(n));}).setPositiveButton("done",(a,b)->{saveState();refreshCategories();refreshList(true);}).create();d.setOnCancelListener(a->{saveState();refreshCategories();refreshList(true);});showDialog(d);}
         if(i==3){ArrayList<String> cs=editableCategories();menu("merge from",cs.toArray(new String[0]),n->{String from=cs.remove(n);menu("merge into",cs.toArray(new String[0]),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);toast("Merged into "+target);});});}
-        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast("No custom categories yet");return;}menu(i==4?"rename":"delete",cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{track(new AlertDialog.Builder(this).setTitle("Delete "+old+"?").setMessage("Apps remain installed and return to automatic categories.").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).show());}});}
+        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast("No custom categories yet");return;}menu(i==4?"rename":"delete",cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{showDialog(new AlertDialog.Builder(this).setTitle("delete "+old+"?").setMessage("Apps remain installed and return to automatic categories.").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).create());}});}
     });}
     private interface NameAction{void accept(String s);}
     private void nameDialog(String title,String existing,NameAction action){
@@ -577,7 +584,7 @@ public final class MainActivity extends Activity {
     private void updateMedia(){if(mediaBox==null)return;boolean show=controller!=null;mediaBox.setVisibility(show?View.VISIBLE:View.GONE);if(!show)return;MediaMetadata m=controller.getMetadata();mediaTitle.setText(m==null?"now playing":m.getDescription().getTitle());mediaArtist.setText(m==null?"":m.getDescription().getSubtitle());if(playButton!=null)playButton.setMark(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING?"pause":"play",fg);}
     private void mediaAction(int action){if(controller==null)return;MediaController.TransportControls c=controller.getTransportControls();if(action==0)c.skipToPrevious();else if(action==2)c.skipToNext();else if(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING)c.pause();else c.play();}
 
-    private void themeSettings(){menu("appearance",new String[]{"retro · cyan","retro · cobalt","retro · magenta","paper · light","Wave","Liquid Retro","Material 3 Expressive","import theme","export theme package","title size","app icons","app icon packs","effects","launcher icon set"},i->{
+    private void themeSettings(){menu("appearance",new String[]{"retro · cyan","retro · cobalt","retro · magenta","paper · light","wave","liquid retro","material 3 expressive","import theme","export theme package","title size","app icons","app icon packs","effects","launcher icon set"},i->{
         try{
             if(i<7){applyPreset(i);return;}
             i--;
@@ -586,7 +593,7 @@ public final class MainActivity extends Activity {
             if(i==8)menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
             if(i==9)menu("app icons",new String[]{"monochrome","original color","text only"},n->{prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();});
             if(i==10)chooseIconPack();if(i==11)effectsSettings();
-            if(i==12)menu("launcher icon set",new String[]{"Retro","Wave","Material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
+            if(i==12)menu("launcher icon set",new String[]{"retro","wave","material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
         }catch(Exception e){fileError(e);}
     });}
     private void applyTheme(JSONObject t)throws Exception {
@@ -652,7 +659,7 @@ public final class MainActivity extends Activity {
         LinearLayout head=row();head.addView(text(name,17,fg),new LinearLayout.LayoutParams(0,-2,1));
         TextView shown=text(label.of(value),14,muted);head.addView(shown);block.addView(head);
         SeekBar bar=new SeekBar(this);bar.setMax(max-min);bar.setProgress(value-min);bar.setContentDescription(name);
-        bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setThumbTintList(ColorStateList.valueOf(accent));
+        styleSlider(bar);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar b,int p,boolean user){if(!user)return;shown.setText(label.of(p+min));change.accept(p+min);}
             public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){handler.removeCallbacks(applyGlass);applyGlass.run();}
@@ -676,7 +683,7 @@ public final class MainActivity extends Activity {
         if(create)intent.putExtra(Intent.EXTRA_TITLE,name);startActivityForResult(intent,request);
     }
     private void backupSettings(){menu("backup & restore",new String[]{"export launcher backup","restore launcher backup"},i->{try{pickDocument(i==0?45:46,i==0,"application/zip","72f-launcher.72fbackup.zip");}catch(Exception e){fileError(e);}});}
-    private void fileError(Exception error){if(!isDestroyed())message("Couldn't use this file",error.getMessage()==null?"Choose a supported 72F file.":error.getMessage());}
+    private void fileError(Exception error){if(!isDestroyed())message("couldn't use this file",error.getMessage()==null?"Choose a supported 72F file.":error.getMessage());}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==47||request==48){int id=prefs.getInt("pendingWidget",-1);if(id<0)return;if(result!=RESULT_OK){cancelWidget();return;}if(request==47)configureWidget(id);else placeWidget(id);return;}
@@ -810,7 +817,7 @@ public final class MainActivity extends Activity {
                 prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
                 handler.post(() -> { if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast("Wallpaper set");}else image.recycle(); });
             } catch(Exception error) {
-                handler.post(() -> {if(!isDestroyed())message("Couldn't open wallpaper","Choose a readable photo or image, up to 32 MB.");});
+                handler.post(() -> {if(!isDestroyed())message("couldn't open wallpaper","Choose a readable photo or image, up to 32 MB.");});
             } finally { if(incoming!=null)incoming.delete(); }
         });
     }
@@ -824,7 +831,7 @@ public final class MainActivity extends Activity {
                 TextView value=text(prefs.getInt("wallpaperDim",60)+"% dim",24,fg);box.addView(value);
                 TextView explanation=text("Adjust the wallpaper brightness behind apps.",14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
                 SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription("Wallpaper dimming");dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
-                dimmer.setProgressTintList(ColorStateList.valueOf(accent));dimmer.setThumbTintList(ColorStateList.valueOf(accent));
+                styleSlider(dimmer);
                 dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
                     public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(amount+"% dim");updateBackdrop();}
                     public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}
@@ -853,7 +860,7 @@ public final class MainActivity extends Activity {
                     timeRow.addView(clock,new LinearLayout.LayoutParams(0,-2,1.2f));
                     View divider=new View(this); divider.setBackgroundColor(MetroArt.alpha(accent,.75f));
                     LinearLayout.LayoutParams lineParams=new LinearLayout.LayoutParams(dp(1),dp(38)); lineParams.setMargins(dp(14),0,dp(18),0); timeRow.addView(divider,lineParams);
-                    date=text("",11,secondaryInk());legible(date); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(6),1); date.setLetterSpacing(.1f);
+                    date=text("",13,secondaryInk());legible(date); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(5),1); date.setLetterSpacing(.02f);
                     date.setContentDescription("Date and active context. Tap for quick settings"); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
                     timeRow.addView(date,new LinearLayout.LayoutParams(0,-2,1)); header.addView(timeRow); updateClock();
                     clock.setContentDescription("Clock. Tap to open alarms"); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
@@ -870,7 +877,7 @@ public final class MainActivity extends Activity {
                     break;}
                 case "media":{
                     mediaBox=column(); mediaBox.setPadding(0,first?0:dp(18),0,0);
-                    TextView playing=text("NOW PLAYING",9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
+                    TextView playing=text("now playing",9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
                     LinearLayout mediaRow=row(); mediaRow.setGravity(Gravity.CENTER_VERTICAL);
                     LinearLayout metadata=column(); metadata.setPadding(0,dp(6),dp(8),0);
                     mediaTitle=text("",18,fg); mediaArtist=text("",12,secondaryInk()); legible(mediaTitle); legible(mediaArtist);
@@ -917,7 +924,7 @@ public final class MainActivity extends Activity {
         AlarmManager.AlarmClockInfo next=getSystemService(AlarmManager.class).getNextAlarmClock();
         if(next==null){alarmText.setVisibility(View.GONE);return;}
         String pattern=android.text.format.DateFormat.is24HourFormat(this)?"EEE HH:mm":"EEE h:mm a";
-        alarmText.setVisibility(View.VISIBLE);alarmText.setText("ALARM  "+new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault()));
+        alarmText.setVisibility(View.VISIBLE);alarmText.setText("alarm  "+new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault()));
         alarmText.setContentDescription("Next alarm "+alarmText.getText()+". Tap to open alarms");
     }
     private boolean calendarAllowed(){return checkSelfPermission(android.Manifest.permission.READ_CALENDAR)==PackageManager.PERMISSION_GRANTED;}
@@ -1092,13 +1099,14 @@ public final class MainActivity extends Activity {
     }
 
     // Settings: quick sheet that expands into the full page.
-    private int surface(){return theme.expressive?surfaceContainer:Color.luminance(bg)>.5?bg:0xff101114;}
+    /** Sheet colour: the theme background, deepened and lifted a touch so it keeps the palette's hue. */
+    private int surface(){return theme.expressive?surfaceContainer:Color.luminance(bg)>.5?mix(bg,fg,.02f):mix(mix(bg,Color.BLACK,.35f),fg,.045f);}
     private int onAccent(){return Color.luminance(accent)>.45?0xff000000:0xffffffff;}
     private void attachSheet(){
         if(sheet==null){sheet=new SettingsSheet(this);}
         if(sheet.getParent()!=null)((android.view.ViewGroup)sheet.getParent()).removeView(sheet);
         scene.addView(sheet,new FrameLayout.LayoutParams(-1,-1));
-        sheet.setColors(surface(),MetroArt.alpha(muted,.22f),MetroArt.alpha(muted,.45f));
+        sheet.setColors(surface(),MetroArt.alpha(fg,.07f),MetroArt.alpha(muted,.4f));
         sheet.requestApplyInsets();
         if(sheet.isShowing())sheet.refresh();
         if(tourPage>=0)attachTour(0);
@@ -1120,37 +1128,73 @@ public final class MainActivity extends Activity {
         }
         @Override public boolean performClick(){super.performClick();return true;}
     }
-    private TextView sectionLabel(String label){TextView t=text(label.toUpperCase(Locale.ROOT),11,accent);t.setLetterSpacing(.16f);t.setPadding(dp(26),dp(28),dp(26),dp(6));t.setAccessibilityHeading(true);return t;}
+    // Settings chrome: grouped rounded cards on the sheet surface, tinted (never solid) accents.
+    private int card(){return theme.expressive?mix(surface(),fg,.07f):mix(surface(),fg,Color.luminance(surface())>.5?.05f:.065f);}
+    private int tint(float amount){return theme.expressive?secondaryContainer:mix(card(),accent,amount);}
+    private int tintInk(){return theme.expressive?onSecondaryContainer:fg;}
+    private GradientDrawable rounded(int fill,float radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));return d;}
+    private void foregroundRipple(View v){v.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(fg,.10f)),null,v.getBackground()));v.setClipToOutline(true);}
+    private TextView sectionLabel(String label){TextView t=text(label,13.5f,mix(accent,muted,.3f));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setLetterSpacing(.01f);t.setPadding(dp(34),dp(26),dp(26),dp(10));t.setAccessibilityHeading(true);return t;}
+    /** A rounded card holding rows, separated by inset hairlines. */
+    private LinearLayout group(View... rows){
+        LinearLayout card=column();card.setBackground(rounded(card(),22));card.setClipToOutline(true);
+        for(int i=0;i<rows.length;i++){
+            if(i>0){View line=new View(this);line.setBackgroundColor(MetroArt.alpha(fg,.07f));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,Math.max(1,dp(.75f)));lp.setMargins(dp(18),0,0,0);card.addView(line,lp);}
+            card.addView(rows[i]);
+        }
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(dp(16),0,dp(16),0);card.setLayoutParams(p);
+        return card;
+    }
     private LinearLayout settingRow(String title,String summary,View.OnClickListener click){
-        LinearLayout row=row();row.setGravity(Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(60));row.setPadding(dp(26),dp(10),dp(18),dp(10));
-        LinearLayout words=column();words.addView(text(title,19,fg));
-        if(summary!=null&&!summary.isEmpty()){TextView s=text(summary,13,muted);s.setPadding(0,dp(4),0,0);s.setMaxLines(2);s.setEllipsize(TextUtils.TruncateAt.END);words.addView(s);}
+        LinearLayout row=row();row.setGravity(Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(60));row.setPadding(dp(18),dp(13),dp(12),dp(13));
+        LinearLayout words=column();TextView name=text(title,17,fg);words.addView(name);
+        if(summary!=null&&!summary.isEmpty()){TextView s=text(summary,13,muted);s.setPadding(0,dp(4),0,0);s.setMaxLines(2);s.setEllipsize(TextUtils.TruncateAt.END);s.setLineSpacing(dp(1),1);words.addView(s);}
         row.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-        MetroArt.Icon arrow=new MetroArt.Icon(this,uiIcons,"arrow",MetroArt.alpha(muted,.6f),false);arrow.setFocusable(false);arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(arrow,new LinearLayout.LayoutParams(dp(28),dp(32)));
+        MetroArt.Icon arrow=new MetroArt.Icon(this,uiIcons,"chevron",MetroArt.alpha(muted,.55f),false);arrow.setGlyphSize(16);arrow.setFocusable(false);arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);arrow.setMinimumWidth(0);arrow.setMinimumHeight(0);
+        row.addView(arrow,new LinearLayout.LayoutParams(dp(24),dp(24)));
         row.setFocusable(true);pressFeedback(row);row.setOnClickListener(click);row.setContentDescription(title+(summary==null?"":". "+summary));
         return row;
     }
-    private GradientDrawable shape(int fill,int border){GradientDrawable d=outline(fill,theme.expressive?Color.TRANSPARENT:border);d.setCornerRadius(theme.expressive?dp(20):theme.layout.equals("xmb")?dp(14):dp(2));return d;}
+    /** Pill chip: a 48dp touch target drawing a 40dp pill. */
     private TextView chip(String label,boolean on,View.OnClickListener click){
-        int fill=theme.expressive?secondaryContainer:primaryContainer,ink=theme.expressive?onSecondaryContainer:onPrimaryContainer;
-        TextView t=text(label,14,on?ink:fg);t.setGravity(Gravity.CENTER);t.setMinHeight(dp(48));t.setMinWidth(dp(48));t.setPadding(dp(14),dp(8),dp(14),dp(8));
-        t.setBackground(shape(on?fill:theme.expressive?MetroArt.alpha(fg,.06f):Color.TRANSPARENT,on?fill:MetroArt.alpha(muted,.4f)));t.setOnClickListener(click);t.setFocusable(true);
+        TextView t=text(label,14,on?tintInk():fg);t.setGravity(Gravity.CENTER);t.setMinHeight(dp(48));t.setMinWidth(dp(48));t.setPadding(dp(16),dp(8),dp(16),dp(8));
+        if(on)t.setTypeface(Typeface.create(theme.typeface,600,false));
+        GradientDrawable pill=rounded(on?tint(.30f):MetroArt.alpha(fg,.065f),100);if(!on&&!theme.expressive)pill.setStroke(Math.max(1,dp(.75f)),MetroArt.alpha(fg,.08f));
+        t.setBackground(new android.graphics.drawable.InsetDrawable(pill,0,dp(4),0,dp(4)));t.setPadding(dp(16),dp(8),dp(16),dp(8)); // after: the inset background would reset it
+        t.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(fg,.10f)),null,new android.graphics.drawable.InsetDrawable(rounded(Color.WHITE,100),0,dp(4),0,dp(4))));
+        t.setOnClickListener(click);t.setFocusable(true);
         t.setContentDescription(label+(on?", selected":""));return t;
     }
     private View chipRow(View... chips){
-        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.setClipToPadding(false);scroll.setPadding(dp(26),dp(4),dp(26),dp(4));
+        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.setClipToPadding(false);scroll.setPadding(dp(16),0,dp(16),0);
         LinearLayout line=row();for(View c:chips){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(8),0);line.addView(c,p);}
         scroll.addView(line);return scroll;
     }
-    /** Metro tile: filled when on, outlined when off. */
+    /** Segmented control: one rounded track, the chosen segment raised in the accent tint. */
+    private View segmented(String label,String[] options,int value,IntChoice change){
+        LinearLayout track=row();track.setPadding(dp(4),dp(4),dp(4),dp(4));track.setBackground(rounded(MetroArt.alpha(fg,.06f),100));
+        for(int i=0;i<options.length;i++){
+            final int n=i;boolean on=value==i;
+            TextView s=text(options[i],14,on?tintInk():muted);s.setGravity(Gravity.CENTER);s.setMinWidth(dp(54));s.setMinHeight(dp(48));s.setPadding(dp(12),0,dp(12),0);
+            if(on){s.setBackground(rounded(tint(.34f),100));s.setTypeface(Typeface.create(theme.typeface,600,false));}else s.setBackground(rounded(Color.TRANSPARENT,100));
+            foregroundRipple(s);s.setFocusable(true);s.setOnClickListener(v->change.accept(n));s.setContentDescription(label+": "+options[i]+(on?", selected":""));
+            track.addView(s,new LinearLayout.LayoutParams(-2,dp(48)));
+        }
+        return track;
+    }
+    private void styleSlider(SeekBar bar){
+        bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setThumbTintList(ColorStateList.valueOf(accent));
+        bar.setProgressBackgroundTintList(ColorStateList.valueOf(MetroArt.alpha(fg,.35f)));bar.setSplitTrack(false);
+    }
+    /** Quick toggle: soft tonal tile, tinted with the accent and marked with a dot when on. */
     private View tile(String label,String state,boolean on,View.OnClickListener click){
-        LinearLayout t=column();t.setPadding(dp(10),dp(10),dp(10),dp(10));t.setBackground(shape(on?primaryContainer:MetroArt.alpha(fg,theme.expressive?.07f:.04f),on?primaryContainer:MetroArt.alpha(muted,.3f)));
-        if(theme.expressive)t.setPadding(dp(14),dp(12),dp(12),dp(12));
-        TextView name=text(label,14,on?onPrimaryContainer:fg);name.setMaxLines(2);t.addView(name,new LinearLayout.LayoutParams(-1,0,1));
-        if(theme.expressive)name.setTypeface(Typeface.create(theme.typeface,on?650:500,false));
+        LinearLayout t=column();t.setPadding(dp(12),dp(11),dp(10),dp(10));t.setBackground(rounded(on?tint(.24f):card(),18));
+        TextView name=text(label,13.5f,on?tintInk():fg);name.setMaxLines(2);name.setTypeface(Typeface.create(theme.typeface,on?600:400,false));name.setLineSpacing(dp(1),1);t.addView(name,new LinearLayout.LayoutParams(-1,0,1));
         fitWords(name);
-        TextView value=text(state,11,on?MetroArt.alpha(onPrimaryContainer,.8f):muted);value.setLetterSpacing(.06f);value.setSingleLine();t.addView(value);
+        LinearLayout foot=row();foot.setGravity(Gravity.CENTER_VERTICAL);
+        if(on){View dot=new View(this);dot.setBackground(rounded(theme.expressive?onSecondaryContainer:accent,3));LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(dp(6),dp(6));dl.setMargins(0,0,dp(6),0);foot.addView(dot,dl);}
+        TextView value=text(state.toLowerCase(Locale.ROOT),12,on?MetroArt.alpha(tintInk(),.8f):muted);value.setSingleLine();foot.addView(value);t.addView(foot);
+        foregroundRipple(t);
         t.setFocusable(true);t.setOnClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);click.onClick(v);});t.setContentDescription(label+", "+state);
         return t;
     }
@@ -1163,10 +1207,10 @@ public final class MainActivity extends Activity {
         });
     }
     private LinearLayout tileGrid(View... tiles){
-        LinearLayout grid=column();grid.setPadding(dp(22),dp(6),dp(22),dp(6));
+        LinearLayout grid=column();grid.setPadding(dp(12),dp(4),dp(12),dp(4));
         for(int i=0;i<tiles.length;i+=4){
             LinearLayout line=row();
-            for(int j=i;j<i+4;j++){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(78),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));if(j<tiles.length)line.addView(tiles[j],p);else line.addView(new View(this),p);}
+            for(int j=i;j<i+4;j++){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(74),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));if(j<tiles.length)line.addView(tiles[j],p);else line.addView(new View(this),p);}
             grid.addView(line);
         }
         return grid;
@@ -1179,18 +1223,22 @@ public final class MainActivity extends Activity {
             applyTheme(next);persistTheme();buildUi();loadApps();}catch(Exception e){fileError(e);}
     }
     private View swatches(){
-        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.setPadding(dp(22),dp(4),dp(22),dp(4));scroll.setClipToPadding(false);
+        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.setPadding(dp(12),dp(8),dp(12),dp(8));scroll.setClipToPadding(false);
         LinearLayout line=row();
         for(int i=0;i<PRESETS.length;i++){
             final int index=i;JSONObject preset;try{preset=ThemeEngine.preset(PRESETS[i]);}catch(JSONException e){continue;}
             int pBg=Color.parseColor(preset.optString("background","#000000")),pAccent=Color.parseColor(preset.optString("accent","#39B9D4"));
             boolean selected=theme.name.equals(preset.optString("name"));
             LinearLayout item=column();item.setGravity(Gravity.CENTER_HORIZONTAL);item.setPadding(dp(4),dp(4),dp(4),dp(4));
+            // Selected: a ring around the swatch, separated by a gap of the sheet colour.
+            FrameLayout ring=new FrameLayout(this);ring.setPadding(dp(3),dp(3),dp(3),dp(3));
+            GradientDrawable outer=new GradientDrawable();outer.setShape(GradientDrawable.OVAL);outer.setStroke(dp(2),selected?fg:Color.TRANSPARENT);ring.setBackground(outer);
             View swatch=new View(this);GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{pBg,pBg,pAccent});
-            d.setCornerRadius(theme.layout.equals("xmb")?dp(26):dp(2));d.setStroke(dp(selected?3:1),selected?accent:MetroArt.alpha(muted,.35f));swatch.setBackground(d);
-            item.addView(swatch,new LinearLayout.LayoutParams(dp(52),dp(52)));
-            TextView name=text(PRESETS[i].replace("retro · ",""),11,selected?fg:muted);name.setPadding(0,dp(6),0,0);item.addView(name);
-            item.setFocusable(true);item.setContentDescription(PRESETS[i]+" theme"+(selected?", active":""));item.setOnClickListener(v->applyPreset(index));
+            d.setShape(GradientDrawable.OVAL);d.setStroke(Math.max(1,dp(.75f)),MetroArt.alpha(fg,.14f));swatch.setBackground(d);
+            FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.setMargins(dp(2),dp(2),dp(2),dp(2));ring.addView(swatch,sp);
+            item.addView(ring,new LinearLayout.LayoutParams(dp(54),dp(54)));
+            TextView name=text(PRESETS[i].replace("retro · ","").toLowerCase(Locale.ROOT),11.5f,selected?fg:muted);name.setPadding(0,dp(6),0,0);if(selected)name.setTypeface(Typeface.create(theme.typeface,600,false));item.addView(name);
+            item.setFocusable(true);item.setContentDescription(PRESETS[i].toLowerCase(Locale.ROOT)+" theme"+(selected?", active":""));item.setOnClickListener(v->applyPreset(index));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(72),-2);line.addView(item,p);
         }
         scroll.addView(line);return scroll;
@@ -1198,17 +1246,18 @@ public final class MainActivity extends Activity {
     private View quickPage(){
         LinearLayout page=column();
         // Active context and why.
-        LinearLayout ctx=row();ctx.setGravity(Gravity.CENTER_VERTICAL);ctx.setPadding(dp(26),dp(6),dp(18),dp(8));
+        LinearLayout ctx=row();ctx.setGravity(Gravity.CENTER_VERTICAL);ctx.setPadding(dp(18),dp(14),dp(12),dp(14));
         LinearLayout words=column();
-        TextView over=text("CONTEXT",10,accent);over.setLetterSpacing(.16f);words.addView(over);
+        TextView over=text("context",13,mix(accent,muted,.3f));over.setTypeface(Typeface.create(theme.typeface,600,false));words.addView(over);
         String name=activeContext==null?"everyday":activeContext.name;
-        TextView title=text(name,30,fg);title.setPadding(0,dp(4),0,dp(2));words.addView(title);
+        TextView title=text(name,26,fg);title.setPadding(0,dp(6),0,dp(4));words.addView(title);
         String pinned=pinSummary();
-        words.addView(text(pinned!=null?pinned:activeContext==null||activeContext.fallback?"used when no other context matches":"because "+ContextRules.describe(activeContext),13,muted));
+        TextView why=text(pinned!=null?pinned:activeContext==null||activeContext.fallback?"used when no other context matches":"because "+ContextRules.describe(activeContext),13,muted);why.setMaxLines(2);words.addView(why);
         ctx.addView(words,new LinearLayout.LayoutParams(0,-2,1));
         ctx.addView(chip(pinned!=null?"held":"auto",pinned!=null,v->contextOverride()));
         ctx.setOnClickListener(v->{if(activeContext!=null)sheet.push(()->contextPage(activeContext));});pressFeedback(ctx);
-        page.addView(ctx);
+        LinearLayout ctxCard=group(ctx);((LinearLayout.LayoutParams)ctxCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));
+        page.addView(ctxCard);
         page.addView(swatches());
         String icons=prefs.getString("icons",theme.iconStyle);
         int effective=activeContext!=null&&activeContext.header>=0?activeContext.header:prefs.getInt("header",20);
@@ -1228,16 +1277,17 @@ public final class MainActivity extends Activity {
             tile("waves",theme.animated?"ON":"OFF",theme.animated,v->changeEffect("animated",!theme.animated)),
             tile("title size",titleSize<=40?"S":titleSize<=62?"M":"L",true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
         // Wallpaper dimming.
-        LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(26),dp(4),dp(18),dp(4));
-        TextView dimLabel=text("dim "+prefs.getInt("wallpaperDim",60)+"%",14,muted);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(72),-2));
+        LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
+        TextView dimLabel=text("dim "+prefs.getInt("wallpaperDim",60)+"%",14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
         SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription("Wallpaper dimming");dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
-        dimmer.setProgressTintList(ColorStateList.valueOf(accent));dimmer.setThumbTintList(ColorStateList.valueOf(accent));
+        styleSlider(dimmer);
         dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();dimLabel.setText("dim "+amount+"%");updateBackdrop();}
             public void onStartTrackingTouch(SeekBar bar){bar.getParent().requestDisallowInterceptTouchEvent(true);}public void onStopTrackingTouch(SeekBar bar){}
         });
-        dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(48),1));page.addView(dim);
-        if(theme.glass>0)page.addView(chipRow(chip("tune glass · blur, tint"+(theme.liquid?", refraction":""),false,v->glassTuning())));
+        dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(52),1));
+        LinearLayout dimCard=group(dim);((LinearLayout.LayoutParams)dimCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));page.addView(dimCard);
+        if(theme.glass>0){View tune=chipRow(chip("tune glass · blur, tint"+(theme.liquid?", refraction":""),false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);}
         // Anchor: everything below is revealed by swiping the sheet up.
         LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
         MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1252,48 +1302,36 @@ public final class MainActivity extends Activity {
     private View fullSettings(){
         LinearLayout page=column();
         page.addView(sectionLabel("contexts"));
-        TextView intro=text("The top zone and starting category follow the first context that matches. Checked only while Home is on screen.",13,muted);intro.setPadding(dp(26),0,dp(26),dp(6));page.addView(intro);
+        TextView intro=text("the first matching context sets the top zone and where home opens · checked only while home is on screen",13,muted);intro.setPadding(dp(34),0,dp(30),dp(12));intro.setLineSpacing(dp(2),1);page.addView(intro);
+        ArrayList<View> contextRows=new ArrayList<>();
         for(ContextRules.Rule r:contexts){
             String summary=(r.enabled||r.fallback?ContextRules.describe(r):"off")+" → "+(r.widgets.isEmpty()?"no top zone":r.widgets.size()+" item"+(r.widgets.size()==1?"":"s"))+(r.category.isEmpty()?"":", opens "+r.category);
-            LinearLayout row=settingRow((activeContext!=null&&r.id.equals(activeContext.id)?"● ":"")+r.name,summary,v->sheet.push(()->contextPage(r)));
+            boolean active=activeContext!=null&&r.id.equals(activeContext.id);
+            LinearLayout row=settingRow(r.name,summary,v->sheet.push(()->contextPage(r)));
+            if(active){TextView badge=text("active",11.5f,tintInk());badge.setTypeface(Typeface.create(theme.typeface,600,false));badge.setPadding(dp(10),dp(4),dp(10),dp(4));badge.setBackground(rounded(tint(.30f),100));
+                LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-2,-2);bp.setMargins(dp(8),0,dp(4),0);row.addView(badge,row.getChildCount()-1,bp);row.setContentDescription(r.name+", active. "+summary);}
             if(!r.enabled&&!r.fallback)row.setAlpha(.55f);
-            page.addView(row);
+            contextRows.add(row);
         }
-        page.addView(settingRow("add context","morning, work, headphones, night, charging or blank",v->{
+        contextRows.add(settingRow("add context","morning, work, headphones, night, charging or blank",v->{
             if(contexts.size()>=ContextStore.MAX_RULES){toast("Up to "+ContextStore.MAX_RULES+" contexts");return;}
             String[] kinds={"morning","work","headphones","night","charging","blank"};
             menu("add context",kinds,i->{ContextRules.Rule r=ContextRules.template(kinds[i].equals("blank")?"new context":kinds[i],ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(Math.max(0,contexts.size()-1),r);contextsChanged();sheet.push(()->contextPage(r));});
         }));
-        page.addView(settingRow("override","hold a context for a while, or return to automatic",v->contextOverride()));
-
+        contextRows.add(settingRow("override","hold a context for a while, or return to automatic",v->contextOverride()));
+        page.addView(group(contextRows.toArray(new View[0])));
         page.addView(sectionLabel("home & categories"));
-        page.addView(settingRow("set as default launcher",null,v->defaultHome()));
-        page.addView(settingRow("categories & folders",(prefs.getBoolean("categories",true)?editableCategories().size()-disabled.size()+" visible":"off")+" · create, hide, merge, rename",v->categorySettings()));
-        page.addView(settingRow("scrubber side",prefs.getBoolean("left",false)?"left":"right",v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();}));
-
+        page.addView(group(settingRow("set as default launcher",null,v->defaultHome()),settingRow("categories & folders",(prefs.getBoolean("categories",true)?editableCategories().size()-disabled.size()+" visible":"off")+" · create, hide, merge, rename",v->categorySettings()),settingRow("scrubber side",prefs.getBoolean("left",false)?"left":"right",v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
         page.addView(sectionLabel("appearance"));
-        page.addView(settingRow("themes",theme.name+" · presets, import, export",v->themeSettings()));
-        page.addView(settingRow("title size",String.valueOf(titleSize),v->menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})));
         String icons=prefs.getString("icons",theme.iconStyle);
-        page.addView(settingRow("app icons",(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu("app icons",new String[]{"monochrome","original color","text only","icon packs"},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})));
-        page.addView(settingRow("glass",theme.glass==0?"off · turn on liquid or frosted glass":(theme.liquid?"liquid":"frosted")+" · blur "+(theme.glassBlur>=0?theme.glassBlur+"dp":"auto")+" · tint "+(theme.glassTint==0?"theme":theme.glassTint<0?"darker":"lighter")+(theme.liquid?" · refraction "+theme.refraction+"%":""),v->glassTuning()));
-        page.addView(settingRow("effects","blur "+theme.blur+" · glass "+theme.glass+" · waves "+(theme.animated?"on":"off")+(theme.expressive?" · expressive":"")+(theme.dynamic?" · wallpaper colors":""),v->effectsSettings()));
-        page.addView(settingRow("launcher icon set",theme.uiIconSet,v->menu("launcher icon set",new String[]{"Retro","Wave","Material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})));
-
+        page.addView(group(settingRow("themes",theme.name.toLowerCase(Locale.ROOT)+" · presets, import, export",v->themeSettings()),settingRow("title size",String.valueOf(titleSize),v->menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow("app icons",(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu("app icons",new String[]{"monochrome","original color","text only","icon packs"},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow("glass",theme.glass==0?"off · turn on liquid or frosted glass":(theme.liquid?"liquid":"frosted")+" · blur "+(theme.glassBlur>=0?theme.glassBlur+"dp":"auto")+" · tint "+(theme.glassTint==0?"theme":theme.glassTint<0?"darker":"lighter")+(theme.liquid?" · refraction "+theme.refraction+"%":""),v->glassTuning()),settingRow("effects","blur "+theme.blur+" · glass "+theme.glass+" · waves "+(theme.animated?"on":"off")+(theme.expressive?" · expressive":"")+(theme.dynamic?" · wallpaper colors":""),v->effectsSettings()),settingRow("launcher icon set",theme.uiIconSet,v->menu("launcher icon set",new String[]{"retro","wave","material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
         page.addView(sectionLabel("top zone"));
-        page.addView(settingRow("default height",prefs.getInt("header",20)==0?"off":prefs.getInt("header",20)+"% of the screen · contexts can override",v->menu("top zone height",new String[]{"none","10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})));
-        page.addView(settingRow("media access",mediaAccess()?"allowed":"needed for media controls and the media-playing condition",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
-        page.addView(settingRow("calendar access",calendarAllowed()?"allowed":"needed for the agenda item",v->headerSettings()));
-
-        page.addView(sectionLabel("wallpaper"));
+        page.addView(group(settingRow("default height",prefs.getInt("header",20)==0?"off":prefs.getInt("header",20)+"% of the screen · contexts can override",v->menu("top zone height",new String[]{"none","10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow("media access",mediaAccess()?"allowed":"needed for media controls and the media-playing condition",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow("calendar access",calendarAllowed()?"allowed":"needed for the agenda item",v->headerSettings())));
+        page.addView(sectionLabel("background"));
         String mode=prefs.getString("wallpaperMode","solid");
-        page.addView(settingRow("wallpaper",(mode.equals("photo")?"photo":mode.equals("system")?"phone wallpaper":"solid")+" · "+prefs.getInt("wallpaperDim",60)+"% dim",v->wallpaperSettings()));
-        page.addView(settingRow("text legibility",legibilitySummary(),v->legibilitySettings()));
-
+        page.addView(group(settingRow("wallpaper",(mode.equals("photo")?"photo":mode.equals("system")?"phone wallpaper":"solid")+" · "+prefs.getInt("wallpaperDim",60)+"% dim",v->wallpaperSettings()),settingRow("text legibility",legibilitySummary(),v->legibilitySettings())));
         page.addView(sectionLabel("backup & about"));
-        page.addView(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()));
-        page.addView(settingRow("replay the tour","the five-step introduction from first launch",v->startTour(0)));
-        page.addView(settingRow("about 72F",version()+" · open-source notices",v->aboutSettings()));
+        page.addView(group(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()),settingRow("replay the tour","the five-step introduction from first launch",v->startTour(0)),settingRow("about 72F",version()+" · open-source notices",v->aboutSettings())));
         return page;
     }
     private static final String[] TRI={"any","yes","no"};
@@ -1301,12 +1339,12 @@ public final class MainActivity extends Activity {
         LinearLayout page=column();
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
         head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text(r.name,32,fg);title.setPadding(dp(6),0,0,0);title.setMinHeight(dp(48));title.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=text(r.name,28,fg);title.setPadding(dp(4),0,0,0);title.setMinHeight(dp(48));title.setGravity(Gravity.CENTER_VERTICAL);
         if(!r.fallback){title.setOnClickListener(v->renameContext(r));title.setContentDescription(r.name+". Tap to rename");}
         head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         if(!r.fallback)head.addView(chip(r.enabled?"on":"off",r.enabled,v->{r.enabled=!r.enabled;contextsChanged();}));
         page.addView(head);
-        TextView why=text(r.fallback?"Used when no other context matches.":ContextRules.describe(r),13,muted);why.setPadding(dp(26),dp(4),dp(26),0);page.addView(why);
+        TextView why=text(r.fallback?"used when no other context matches":ContextRules.describe(r),13,muted);why.setPadding(dp(66),0,dp(26),dp(4));page.addView(why);
 
         if(!r.fallback){
             page.addView(sectionLabel("when · days"));
@@ -1320,10 +1358,11 @@ public final class MainActivity extends Activity {
                 chip(r.allDay()?"from …":"from "+ContextRules.time(r.start),!r.allDay(),v->pickTime(r,true)),
                 chip(r.allDay()?"until …":"until "+ContextRules.time(r.end),!r.allDay(),v->pickTime(r,false))));
             page.addView(sectionLabel("when · conditions"));
-            page.addView(conditionRow("headphones",r.headphones,n->{r.headphones=n;contextsChanged();}));
-            page.addView(conditionRow("charging",r.charging,n->{r.charging=n;contextsChanged();}));
-            page.addView(conditionRow("do not disturb",r.dnd,n->{r.dnd=n;contextsChanged();}));
-            page.addView(conditionRow("media playing",r.playing,n->{r.playing=n;if(n!=0&&!mediaAccess())message("media playing","Enable 72F media controls in notification access so this condition can see playback.");contextsChanged();}));
+            page.addView(group(
+                conditionRow("headphones",r.headphones,n->{r.headphones=n;contextsChanged();}),
+                conditionRow("charging",r.charging,n->{r.charging=n;contextsChanged();}),
+                conditionRow("do not disturb",r.dnd,n->{r.dnd=n;contextsChanged();}),
+                conditionRow("media playing",r.playing,n->{r.playing=n;if(n!=0&&!mediaAccess())message("media playing","Enable 72F media controls in notification access so this condition can see playback.");contextsChanged();})));
         }
 
         page.addView(sectionLabel("then · open on"));
@@ -1338,16 +1377,17 @@ public final class MainActivity extends Activity {
         page.addView(chipRow(hs));
 
         page.addView(sectionLabel("then · top zone items"));
+        ArrayList<View> itemRows=new ArrayList<>();
         for(int i=0;i<r.widgets.size();i++){
             final int index=i;String item=r.widgets.get(i);
-            LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(2),dp(12),dp(2));line.setMinimumHeight(dp(52));
-            TextView label=text(itemLabel(item),18,fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+            LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(18),dp(4),dp(8),dp(4));line.setMinimumHeight(dp(56));
+            TextView label=text(itemLabel(item),17,fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
             if(index>0){TextView upButton=chip("↑",false,v->{Collections.swap(r.widgets,index,index-1);contextsChanged();});upButton.setContentDescription("Move "+itemLabel(item)+" up");LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(upButton,p);}
             TextView remove=chip("remove",false,v->{removeContextItem(r,item);contextsChanged();});remove.setContentDescription("Remove "+itemLabel(item));line.addView(remove);
-            page.addView(line);
+            itemRows.add(line);
         }
         ArrayList<String> addable=new ArrayList<>();for(String w:ContextRules.WIDGETS)if(!r.widgets.contains(w)&&(Build.VERSION.SDK_INT>=29||!w.equals("smartspace")))addable.add(w);
-        page.addView(settingRow("add item",r.widgets.size()>=ContextStore.MAX_WIDGETS?"this context is full":"clock, alarm, agenda, media, Smartspacer or any app widget",v->{
+        itemRows.add(settingRow("add item",r.widgets.size()>=ContextStore.MAX_WIDGETS?"this context is full":"clock, alarm, agenda, media, Smartspacer or any app widget",v->{
             if(r.widgets.size()>=ContextStore.MAX_WIDGETS){toast("This context is full");return;}
             ArrayList<String> labels=new ArrayList<>();for(String w:addable)labels.add(itemLabel(w));labels.add("app widget…");
             menu("add to top zone",labels.toArray(new String[0]),n->{
@@ -1358,23 +1398,25 @@ public final class MainActivity extends Activity {
                 contextsChanged();
             });
         }));
+        page.addView(group(itemRows.toArray(new View[0])));
 
         if(!r.fallback){
             page.addView(sectionLabel("order"));
             int position=contexts.indexOf(r);
-            page.addView(settingRow("priority",(position+1)+" of "+(contexts.size()-1)+" · the first match wins",v->menu("priority",new String[]{"move up","move down"},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})));
-            page.addView(settingRow("hold this context","use it now, regardless of conditions",v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(r.name+" held for 1 hour");}));
-            page.addView(settingRow("delete context",null,v->track(new AlertDialog.Builder(this).setTitle("Delete "+r.name+"?").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{
+            page.addView(group(settingRow("priority",(position+1)+" of "+(contexts.size()-1)+" · the first match wins",v->menu("priority",new String[]{"move up","move down"},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})),
+            settingRow("hold this context","use it now, regardless of conditions",v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(r.name+" held for 1 hour");}),
+            settingRow("delete context",null,v->showDialog(new AlertDialog.Builder(this).setTitle("delete "+r.name+"?").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{
                 for(String item:new ArrayList<>(r.widgets))if(item.startsWith("widget:")){r.widgets.remove(item);removeContextItem(r,item);}
-                contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).show())));
+                contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).create()))));
+            View bottom=new View(this);page.addView(bottom,new LinearLayout.LayoutParams(-1,dp(12)));
         }
         return page;
     }
     private interface IntChoice{void accept(int n);}
     private View conditionRow(String label,int value,IntChoice change){
-        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(2),dp(20),dp(2));line.setMinimumHeight(dp(50));
-        line.addView(text(label,17,fg),new LinearLayout.LayoutParams(0,-2,1));
-        for(int i=0;i<3;i++){final int n=i;TextView c=chip(TRI[i],value==i,v->change.accept(n));c.setContentDescription(label+": "+TRI[i]+(value==i?", selected":""));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(dp(6),0,0,0);line.addView(c,p);}
+        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(18),dp(8),dp(8),dp(8));line.setMinimumHeight(dp(64));
+        line.addView(text(label,16,fg),new LinearLayout.LayoutParams(0,-2,1));
+        line.addView(segmented(label,TRI,value,change));
         return line;
     }
     private void pickTime(ContextRules.Rule r,boolean start){
@@ -1528,27 +1570,35 @@ public final class MainActivity extends Activity {
     private void setGlass(int amount,boolean liquid){try{JSONObject t=themeJson();t.put("glass",amount);t.put("liquid",liquid);if(liquid&&theme.blur==0)t.put("blur",18);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
     private void setIcons(String style){prefs.edit().putString("icons",style).apply();buildUi();}
     private interface Choice{void accept(int i);}
+    /** Rounded sheet surface for menus and dialogs: top corners only, it sits on the bottom edge. */
+    private GradientDrawable sheetSurface(){GradientDrawable d=new GradientDrawable();d.setColor(surface());float r=dp(28);d.setCornerRadii(new float[]{r,r,r,r,0,0,0,0});return d;}
+    private View sheetHandle(){View h=new View(this);h.setBackground(rounded(MetroArt.alpha(muted,.4f),2));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(32),dp(4));p.gravity=Gravity.CENTER_HORIZONTAL;p.setMargins(0,0,0,dp(14));h.setLayoutParams(p);return h;}
     private void menu(String title,String[] options,Choice action){
         if(options.length==0){toast("No categories available");return;}
         Dialog dialog=new Dialog(this);
-        LinearLayout sheet=column();sheet.setPadding(dp(26),dp(22),dp(26),dp(24));
-        sheet.setBackground(outline(Color.luminance(bg)>.5?bg:0xff101114,MetroArt.alpha(muted,.18f)));
-        TextView heading=text(title,38,fg);heading.setPadding(0,dp(8),0,dp(18));sheet.addView(heading);
+        LinearLayout sheet=column();sheet.setPadding(dp(12),dp(10),dp(12),dp(16));
+        sheet.setBackground(sheetSurface());sheet.addView(sheetHandle());
+        TextView heading=text(title,26,fg);heading.setPadding(dp(14),dp(4),dp(14),dp(14));heading.setAccessibilityHeading(true);sheet.addView(heading);
         ScrollView scroller=new ScrollView(this);scroller.setVerticalScrollBarEnabled(false);
-        LinearLayout choices=column();scroller.addView(choices);
+        LinearLayout choices=column();choices.setBackground(rounded(card(),22));choices.setClipToOutline(true);scroller.addView(choices);
         for(int i=0;i<options.length;i++){
             final int index=i;
-            LinearLayout option=row();option.setGravity(Gravity.CENTER_VERTICAL);option.setMinimumHeight(dp(54));option.setPadding(0,dp(10),0,dp(10));
-            LinearLayout words=column();TextView label=text(options[i],20,fg);words.addView(label);
-            option.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-            MetroArt.Icon arrow=new MetroArt.Icon(this,uiIcons,"arrow",MetroArt.alpha(muted,.7f),false);arrow.setFocusable(false);arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            option.addView(arrow,new LinearLayout.LayoutParams(dp(32),dp(36)));
+            if(i>0){View line=new View(this);line.setBackgroundColor(MetroArt.alpha(fg,.07f));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,Math.max(1,dp(.75f)));lp.setMargins(dp(18),0,0,0);choices.addView(line,lp);}
+            LinearLayout option=row();option.setGravity(Gravity.CENTER_VERTICAL);option.setMinimumHeight(dp(56));option.setPadding(dp(18),dp(12),dp(18),dp(12));
+            // "name · detail" options show the detail quieter.
+            String o=options[i];int dot=o.indexOf(" · ");
+            android.text.SpannableString styled=new android.text.SpannableString(o);
+            if(dot>0)styled.setSpan(new android.text.style.ForegroundColorSpan(muted),dot,o.length(),android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            TextView label=text("",17,fg);label.setText(styled);label.setContentDescription(o);
+            option.addView(label,new LinearLayout.LayoutParams(0,-2,1));
             option.setFocusable(true);pressFeedback(option);option.setOnClickListener(v->{dialog.dismiss();action.accept(index);});choices.addView(option);
         }
         int maxHeight=(int)(getResources().getDisplayMetrics().heightPixels*.60f);
-        choices.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(52),View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        choices.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(24),View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
         sheet.addView(scroller,new LinearLayout.LayoutParams(-1,Math.min(maxHeight,choices.getMeasuredHeight())));
-        TextView close=text("close",14,accent);close.setGravity(Gravity.CENTER_VERTICAL);close.setMinHeight(dp(48));close.setPadding(0,dp(12),0,0);close.setOnClickListener(v->dialog.dismiss());close.setFocusable(true);sheet.addView(close);
+        TextView close=text("close",15,fg);close.setGravity(Gravity.CENTER);close.setMinHeight(dp(52));close.setBackground(rounded(MetroArt.alpha(fg,.07f),100));foregroundRipple(close);
+        close.setOnClickListener(v->dialog.dismiss());close.setFocusable(true);
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.setMargins(0,dp(12),0,0);sheet.addView(close,cp);
         track(dialog);dialog.setContentView(sheet);Window window=dialog.getWindow();
         if(window!=null){window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.5f);window.setGravity(Gravity.BOTTOM);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);}
         dialog.show();if(window!=null)window.setLayout(-1,-2);
@@ -1560,8 +1610,8 @@ public final class MainActivity extends Activity {
     private void showDialog(AlertDialog d){
         track(d);d.show();
         Window window=d.getWindow();
-        if(window!=null){window.setBackgroundDrawable(outline(Color.luminance(bg)>.5?bg:0xff101114,MetroArt.alpha(muted,.2f)));window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);tintDialog(window.getDecorView());}
-        for(int which:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){android.widget.Button b=d.getButton(which);if(b!=null)b.setTextColor(accent);}
+        if(window!=null){window.setBackgroundDrawable(sheetSurface());window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(14),dp(8),dp(12));tintDialog(window.getDecorView());}
+        for(int which:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){android.widget.Button b=d.getButton(which);if(b!=null){b.setTextColor(accent);b.setAllCaps(false);b.setTypeface(Typeface.create(theme.typeface,600,false));}}
     }
     private void tintDialog(View view){
         if(view instanceof TextView){TextView t=(TextView)view;t.setTextColor(fg);t.setTypeface(theme.typeface);if(t instanceof EditText)((EditText)t).setBackgroundTintList(ColorStateList.valueOf(accent));}

@@ -30,7 +30,7 @@ def press(label, prefix=False, ms=900):
 def home(): shell('input','keyevent','3'); time.sleep(.8)
 def open_settings():
     """Quick settings: hold the dock's search button."""
-    home(); press('Search apps', prefix=True); find('CONTEXT')
+    home(); press('Search apps', prefix=True); find('context')
 def settings(row):
     """Open the full settings page and tap a row, scrolling the sheet as needed."""
     open_settings()
@@ -84,8 +84,8 @@ def run():
     shot('search.png')
     tap('Close search'); check('favorites category, selected')
     settings('categories & folders'); tap('create category')
-    shell('input','text','beta-test'); tap('SAVE')
-    settings('categories & folders'); tap('show or hide categories'); check('beta-test'); tap('DONE')
+    shell('input','text','beta-test'); tap('save')
+    settings('categories & folders'); tap('show or hide categories'); check('beta-test'); tap('done')
     print('PASS custom category creation',flush=True)
     settings('categories & folders'); tap('turn categories off'); home()
     nodes=ui(); cats=[n.get('content-desc','') for n in nodes if ' category' in n.get('content-desc','')]
@@ -98,10 +98,10 @@ def run():
     settings('scrubber side'); assert '<boolean name="left" value="true"' in prefs_xml()
     settings('scrubber side'); assert '<boolean name="left" value="false"' in prefs_xml()
     print('PASS palettes and handedness',flush=True)
-    settings('categories & folders'); tap('delete custom category'); tap('beta-test'); tap('DELETE')
+    settings('categories & folders'); tap('delete custom category'); tap('beta-test'); tap('delete')
     home(); check('favorites category, selected')
     # Dock: search button opens search; swipe up on the category bar opens quick settings.
-    x,y = center(find('Category switcher', prefix=True)); swipe(x,y,x,y-500,200); time.sleep(.6); check('CONTEXT')
+    x,y = center(find('Category switcher', prefix=True)); swipe(x,y,x,y-500,200); time.sleep(.6); check('context')
     print('PASS dock gestures',flush=True); home()
     shot('home.png')
     print('SMOKE PASS',flush=True)

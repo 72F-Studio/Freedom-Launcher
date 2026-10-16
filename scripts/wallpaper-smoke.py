@@ -20,7 +20,7 @@ assert prefs().get('wallpaperMode')=='photo'
 shot('wallpaper-restored.png'); print('PASS wallpaper persists across process restart',flush=True)
 wallpaper_menu();tap('wallpaper dimming')
 n=find('Wallpaper dimming');x1,y1,x2,y2=map(int,re.findall(r'\d+',n.get('bounds')))
-shell('input','tap',int(x1+(x2-x1)*.38),(y1+y2)//2); tap('DONE')
+shell('input','tap',int(x1+(x2-x1)*.38),(y1+y2)//2); tap('done')
 assert 20<int(prefs()['wallpaperDim'])<50
 shot('wallpaper-dimmed.png');print('PASS adjustable dimming',flush=True)
 wallpaper_menu();tap('use phone wallpaper');assert prefs()['wallpaperMode']=='system';shot('system-wallpaper.png')

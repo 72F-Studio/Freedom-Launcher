@@ -20,7 +20,7 @@ tap('Clock'); time.sleep(.5)
 assert 'dev.seventwo.launcher' not in shell('dumpsys','activity','activities').split('topResumedActivity=')[-1].split('\n')[0], 'Clock should launch'
 print('PASS launches installed app',flush=True)
 start()
-settings('categories & folders'); tap('create category'); shell('input','text','beta-check'); tap('SAVE')
+settings('categories & folders'); tap('create category'); shell('input','text','beta-check'); tap('save')
 home(); search(); shell('input','text','calendar'); time.sleep(.2); hold('Calendar'); tap('move to category'); tap('beta-check')
 hold('Calendar'); tap('add to favorites'); tap('Close search')
 shell('am','force-stop','dev.seventwo.launcher'); start(); check('Calendar')
