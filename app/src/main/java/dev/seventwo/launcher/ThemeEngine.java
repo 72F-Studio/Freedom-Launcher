@@ -14,6 +14,8 @@ final class ThemeEngine {
     static final int MAX_MANIFEST = 256 * 1024;
     final JSONObject json;
     final int background, text, muted, accent, titleSize, appSize, rowHeight, iconSize, motionMs, blur, glass;
+    /** Glass tuning: blur in dp (-1 = automatic), tint -100 (darker) … 100 (lighter), refraction 0 … 100 (50 = default). */
+    final int glassBlur, glassTint, refraction;
     final String layout, backdrop, font, iconStyle, uiIconSet, name;
     final boolean animated, liquid, expressive, dynamic;
     final Typeface typeface, titleTypeface;
@@ -44,6 +46,7 @@ final class ThemeEngine {
         motionMs = number("motionMs", layout.equals("xmb")?300:230, 0, 600);
         animated = json.optBoolean("animated", true);
         blur = number("blur",0,0,40); glass = number("glass",0,0,90);
+        glassBlur = number("glassBlur",-1,-1,40); glassTint = number("glassTint",0,-100,100); refraction = number("refraction",50,0,100);
         liquid = json.optBoolean("liquid",false);
         // Material 3 Expressive: tonal containers, pill indicators, springy motion and emphasized type.
         expressive = json.optBoolean("expressive",false); dynamic = json.optBoolean("dynamic",false);
@@ -65,7 +68,7 @@ final class ThemeEngine {
         json.put("uiIconSet",uiIconSet);
         json.put("version",2);json.put("name",name);json.put("layout",layout);json.put("backdrop",backdrop);
         json.put("titleSize",titleSize);json.put("appSize",appSize);json.put("rowHeight",rowHeight);
-        json.put("iconSize",iconSize);json.put("motionMs",motionMs);json.put("iconStyle",iconStyle);json.put("animated",animated);json.put("blur",blur);json.put("glass",glass);json.put("liquid",liquid);json.put("expressive",expressive);json.put("dynamic",dynamic);
+        json.put("iconSize",iconSize);json.put("motionMs",motionMs);json.put("iconStyle",iconStyle);json.put("animated",animated);json.put("blur",blur);json.put("glass",glass);json.put("glassBlur",glassBlur);json.put("glassTint",glassTint);json.put("refraction",refraction);json.put("liquid",liquid);json.put("expressive",expressive);json.put("dynamic",dynamic);
     }
     private int color(String key,String fallback)throws IOException {
         try {int c=Color.parseColor(json.optString(key,fallback));if(Color.alpha(c)!=255)throw new IOException("Use opaque colors");return c;}

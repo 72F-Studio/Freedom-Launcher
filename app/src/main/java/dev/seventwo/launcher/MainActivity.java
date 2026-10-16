@@ -611,13 +611,53 @@ public final class MainActivity extends Activity {
     }
     private JSONObject themeJson(){try{return new JSONObject(theme.json.toString());}catch(JSONException e){throw new IllegalStateException(e);}}
     private void persistTheme(){prefs.edit().putString("theme",theme.json.toString()).apply();prepareSoftWallpaper();}
-    private void effectsSettings(){menu("effects",new String[]{"background blur","glass surfaces","wave animation · "+(theme.animated?"on":"off"),"material 3 expressive · "+(theme.expressive?"on":"off"),"wallpaper colors · "+(Build.VERSION.SDK_INT<31?"Android 12+":theme.dynamic?"on":"off")},i->{
+    private void effectsSettings(){menu("effects",new String[]{"background blur","glass surfaces","glass tuning · blur, tint, refraction","wave animation · "+(theme.animated?"on":"off"),"material 3 expressive · "+(theme.expressive?"on":"off"),"wallpaper colors · "+(Build.VERSION.SDK_INT<31?"Android 12+":theme.dynamic?"on":"off")},i->{
+        if(i==2){glassTuning();return;}
+        if(i>2)i--;
         if(i==3)changeEffect("expressive",!theme.expressive);
         if(i==4){if(Build.VERSION.SDK_INT<31){toast("Wallpaper colors need Android 12 or newer");return;}changeEffect("dynamic",!theme.dynamic);}
         if(i==0)menu("blur",new String[]{"off","soft · 8","frosted · 18","deep · 32"},n->changeEffect("blur",new int[]{0,8,18,32}[n]));
         if(i==1)menu("glass",new String[]{"off","subtle","frosted","liquid glass"},n->{try{JSONObject t=themeJson();t.put("glass",new int[]{0,20,40,65}[n]);t.put("liquid",n==3);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
         if(i==2)changeEffect("animated",!theme.animated);
     });}
+    // Glass tuning: three live sliders. Rebuilds are debounced so dragging stays smooth.
+    private JSONObject pendingGlass;
+    private final Runnable applyGlass=()->{if(pendingGlass==null)return;try{applyTheme(pendingGlass);persistTheme();buildUi();}catch(Exception e){fileError(e);}pendingGlass=null;};
+    private void glassTuning(){
+        if(sheet!=null)sheet.dismiss(); // show the whole screen while tuning
+        if(theme.glass==0){
+            menu("turn on glass first",new String[]{"liquid glass","frosted glass"},n->{setGlass(n==0?65:40,n==0);glassTuning();});return;
+        }
+        LinearLayout box=column();box.setPadding(dp(24),dp(8),dp(24),dp(12));
+        TextView note=text(theme.liquid?"Liquid glass: blur under the lens, its tint, and how strongly the edges bend.":"Frosted glass: blur and tint. Refraction applies to liquid glass.",14,muted);note.setPadding(0,0,0,dp(8));box.addView(note);
+        float autoBlur=theme.liquid?2f+6f*theme.glass/100f:4f+12f*theme.glass/100f;
+        int blurNow=theme.glassBlur>=0?theme.glassBlur:Math.round(autoBlur);
+        box.addView(glassSlider("blur",blurNow,0,40,v->v+" dp",v->tuneGlass("glassBlur",v)));
+        box.addView(glassSlider("darker ↔ lighter",theme.glassTint+100,0,200,v->v==100?"theme":v<100?"darker "+(100-v)+"%":"lighter "+(v-100)+"%",v->tuneGlass("glassTint",v-100)));
+        if(theme.liquid)box.addView(glassSlider("refraction",theme.refraction,0,100,v->v==0?"off":v+"%",v->tuneGlass("refraction",v)));
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("glass").setView(box)
+            .setNeutralButton("reset",(a,b)->{try{JSONObject t=themeJson();t.remove("glassBlur");t.remove("glassTint");t.remove("refraction");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})
+            .setPositiveButton("done",null).create();
+        showDialog(d);
+        if(d.getWindow()!=null)d.getWindow().setDimAmount(0f); // keep the glass visible while tuning
+    }
+    private interface Label{String of(int v);}
+    private View glassSlider(String name,int value,int min,int max,Label label,IntChoice change){
+        LinearLayout block=column();block.setPadding(0,dp(10),0,0);
+        LinearLayout head=row();head.addView(text(name,17,fg),new LinearLayout.LayoutParams(0,-2,1));
+        TextView shown=text(label.of(value),14,muted);head.addView(shown);block.addView(head);
+        SeekBar bar=new SeekBar(this);bar.setMax(max-min);bar.setProgress(value-min);bar.setContentDescription(name);
+        bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setThumbTintList(ColorStateList.valueOf(accent));
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar b,int p,boolean user){if(!user)return;shown.setText(label.of(p+min));change.accept(p+min);}
+            public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){handler.removeCallbacks(applyGlass);applyGlass.run();}
+        });
+        block.addView(bar,new LinearLayout.LayoutParams(-1,dp(48)));return block;
+    }
+    private void tuneGlass(String key,int value){
+        try{if(pendingGlass==null)pendingGlass=themeJson();pendingGlass.put(key,value);}catch(JSONException e){return;}
+        handler.removeCallbacks(applyGlass);handler.postDelayed(applyGlass,90);
+    }
     private void changeEffect(String key,Object value){try{JSONObject t=themeJson();t.put(key,value);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
     private void chooseIconPack(){
         List<IconPacks.Pack> packs=IconPacks.installed(this);ArrayList<String> names=new ArrayList<>();names.add("system icons");for(IconPacks.Pack p:packs)names.add(p.label);
@@ -1158,6 +1198,7 @@ public final class MainActivity extends Activity {
             public void onStartTrackingTouch(SeekBar bar){bar.getParent().requestDisallowInterceptTouchEvent(true);}public void onStopTrackingTouch(SeekBar bar){}
         });
         dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(48),1));page.addView(dim);
+        if(theme.glass>0)page.addView(chipRow(chip("tune glass · blur, tint"+(theme.liquid?", refraction":""),false,v->glassTuning())));
         // Anchor: everything below is revealed by swiping the sheet up.
         LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
         MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1196,6 +1237,7 @@ public final class MainActivity extends Activity {
         page.addView(settingRow("title size",String.valueOf(titleSize),v->menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})));
         String icons=prefs.getString("icons",theme.iconStyle);
         page.addView(settingRow("app icons",(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu("app icons",new String[]{"monochrome","original color","text only","icon packs"},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})));
+        page.addView(settingRow("glass",theme.glass==0?"off · turn on liquid or frosted glass":(theme.liquid?"liquid":"frosted")+" · blur "+(theme.glassBlur>=0?theme.glassBlur+"dp":"auto")+" · tint "+(theme.glassTint==0?"theme":theme.glassTint<0?"darker":"lighter")+(theme.liquid?" · refraction "+theme.refraction+"%":""),v->glassTuning()));
         page.addView(settingRow("effects","blur "+theme.blur+" · glass "+theme.glass+" · waves "+(theme.animated?"on":"off")+(theme.expressive?" · expressive":"")+(theme.dynamic?" · wallpaper colors":""),v->effectsSettings()));
         page.addView(settingRow("launcher icon set",theme.uiIconSet,v->menu("launcher icon set",new String[]{"Retro","Wave","Material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})));
 

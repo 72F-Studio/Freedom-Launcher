@@ -6,7 +6,7 @@ Retro and Wave are original launcher control sets. No icon fonts, emoji, Sony ar
 
 ## Liquid glass
 
-The rounded-rectangle lens math in `GlassSurface.Gpu` is adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass), commit `65ab177e90e5c1d8c62e70cf7755841982da65f6`, `backdrop/src/commonMain/kotlin/com/kyant/backdrop/internal/Shaders.kt`. Copyright 2025 Kyant, Apache License 2.0. Modified for native Android Views, a shared stationary bitmap texture, uniform corners, restrained dispersion and edge lighting. The license is in `third-party/android-liquid-glass/LICENSE` and bundled in app assets.
+The glass effect stack and its shaders in `GlassSurface` are adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (`backdrop` module: `internal/Shaders.kt`, `effects/Lens.kt`, `effects/ColorFilter.kt`, `highlight/`), Copyright 2025 Kyant, Apache License 2.0: the rounded-rectangle SDF, circle-mapped edge refraction with seven-tap chromatic dispersion, the angle-shaded rim highlight, and the vibrancy → blur → lens ordering and reference parameters. Modified for native Android Views and RenderNode, a single corner radius, a runtime dispersion switch, and user-tunable blur, tint and refraction. The license is in `third-party/android-liquid-glass/LICENSE` and bundled in app assets.
 
 ## Smartspacer Client SDK
 

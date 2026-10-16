@@ -56,6 +56,9 @@ For that example, include `assets/background.jpg` and `assets/settings.png` in t
 | `wallpaper` | Packaged PNG/JPEG/WebP; importing it selects photo mode |
 | `wallpaperMode` | `solid`, `system`, `photo`; photo needs a saved/imported photo |
 | `blur` | 0–40dp backdrop blur |
+| `glassBlur` | -1 (automatic) or 0–40dp blur under glass panels |
+| `glassTint` | -100 (darker) … 0 (theme) … 100 (lighter) glass tint |
+| `refraction` | 0–100 liquid-glass edge refraction; 50 is the default strength |
 | `glass` | 0–90 surface strength; 0 disables glass |
 | `liquid` | Boolean; brighter edges and softer glass corners |
 
@@ -65,7 +68,7 @@ Launcher icon names: `favorites`, `social`, `music`, `video`, `photos`, `games`,
 
 App icon priority: packaged component icon → packaged package icon → selected installed icon pack → original app icon. Mono/color/none then controls presentation. ADW/Nova-style `appfilter.xml` mappings in resources or assets are supported. Adaptive icon masking, generated missing icons, dynamic calendars, and every vendor-specific icon-pack extension are not implemented. Package resources are read without executing third-party code. Missing packs on another phone fall back to original icons. [Lawnchair's icon-pack format overview](https://github.com/LawnchairLauncher/docs/blob/main/developers/concepts/icon-packs.md) describes the common mapping convention.
 
-Blur is applied to the background layer, keeping labels and controls sharp. Android 12+ uses native RenderEffect; Android 9–11 software-blurs imported photos at a bounded resolution. Animated waves/glow are not software-blurred on those older versions. Live system-wallpaper blur is available only where Android's compositor supports it and may be disabled by the OS. Glass surfaces capture their portion of the app-owned backdrop. Liquid glass uses rounded-rectangle edge refraction, local blur, dispersion, and rim light in an original AGSL shader on Android 13+. Older devices use local software blur and bitmap-mesh refraction. Captures are bounded to 480px width; animated wave capture updates at roughly 6fps, while controls stay sharp. Live system wallpaper is outside the capture layer: select an image inside the launcher for actual photo refraction. No screenshot or broad storage permission is needed.
+Blur is applied to the background layer, keeping labels and controls sharp. Android 12+ uses native RenderEffect; Android 9–11 software-blurs imported photos at a bounded resolution. Live system-wallpaper blur is available only where Android's compositor supports it and may be disabled by the OS. Glass panels sample the app-owned backdrop: on Android 12+ each panel replays it live through vibrancy, a Gaussian blur (`glassBlur`, plus the background's own blur) and, for liquid glass on Android 13+, an AGSL edge lens with chromatic dispersion (`refraction`), then a tint (`glassTint`) and an additive rim. Android 9–11 uses one shared, diffused texture without refraction. Live system wallpaper is outside the capture layer: select an image inside the launcher for photo refraction. No screenshot or broad storage permission is needed.
 
 Packages are data-only: no scripts, downloaded resources, native libraries, or APK installation. Imports reject traversal, duplicate paths, unknown schema versions, unsupported assets, missing assets, and oversized content. Limits: 48 MiB expanded package, 32 MiB per entry, 1,200 entries, 256 KiB manifest, 1,000 icon mappings, wallpaper dimensions up to 8,192 per side, icon dimensions up to 2,048 per side. Exported packages include referenced custom assets; system wallpaper and installed icon packs remain references.
 

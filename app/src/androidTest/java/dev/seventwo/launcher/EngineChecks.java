@@ -25,13 +25,18 @@ public final class EngineChecks extends Instrumentation {
         reject(()->new ThemeEngine(new JSONObject().put("version",999),null));
         reject(()->new ThemeEngine(new JSONObject().put("text","#000000"),null));
         reject(()->new ThemeEngine(new JSONObject().put("blur",99),null));
+        reject(()->new ThemeEngine(new JSONObject().put("refraction",101),null));
+        reject(()->new ThemeEngine(new JSONObject().put("glassTint",-101),null));
+        reject(()->new ThemeEngine(new JSONObject().put("glassBlur",41),null));
+        ThemeEngine tuned=new ThemeEngine(new JSONObject().put("glassBlur",12).put("glassTint",-40).put("refraction",80),null);yes(tuned.glassBlur==12&&tuned.glassTint==-40&&tuned.refraction==80);
+        ThemeEngine untuned=new ThemeEngine(new JSONObject(),null);yes(untuned.glassBlur==-1&&untuned.glassTint==0&&untuned.refraction==50);
         reject(()->new ThemeEngine(new JSONObject().put("layout","run-script"),null));
         reject(()->new ThemeEngine(new JSONObject().put("uiIconSet","unknown"),null));
         for(String set:new String[]{"retro","wave","material"}){
             UiIcons pack=new UiIcons(c,new ThemeEngine(new JSONObject().put("uiIconSet",set),null));
             for(String name:UiIcons.NAMES)yes(pack.drawable(name)!=null);
         }
-        if(android.os.Build.VERSION.SDK_INT>=33){new GlassSurface.Gpu();yes(true);}
+        if(android.os.Build.VERSION.SDK_INT>=33){yes(GlassSurface.Shaders.lens()!=null);yes(GlassSurface.Shaders.highlight()!=null);} // AGSL compiles on device
         // The wallpaper is shared, retains its resolution, and refreshes on source/size changes.
         GlassBackdrop backdrop=new GlassBackdrop();
         android.graphics.drawable.GradientDrawable gradient=new android.graphics.drawable.GradientDrawable(
