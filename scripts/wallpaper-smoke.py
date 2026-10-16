@@ -6,15 +6,10 @@ def prefs():
     tree=ET.fromstring(shell('run-as','dev.seventwo.launcher','cat','shared_prefs/launcher.xml'))
     return {n.get('name'): n.get('value',n.text) for n in tree}
 def wallpaper_menu():
-    tap('Launcher settings'); tap('wallpaper')
-def pick_download(name):
-    tap('Show roots'); tap('Downloads')
-    nodes=ui()
-    node=next(n for n in nodes if n.get('text')==name or n.get('content-desc','').startswith(name+', '))
-    x1,y1,x2,y2=map(int,re.findall(r'\d+',node.get('bounds')))
-    shell('input','tap',(x1+x2)//2,(y1+y2)//2); time.sleep(1)
+    settings('wallpaper')
+pick_download=pick_file
 
-start()
+reset()
 adb('push',str(ROOT/'tests'/'fixtures'/'wallpaper.png'),'/sdcard/Download/72f-wallpaper.png')
 wallpaper_menu(); tap('choose a photo'); pick_download('72f-wallpaper.png')
 assert prefs().get('wallpaperMode')=='photo'
@@ -33,7 +28,7 @@ wallpaper_menu();tap('solid background');assert prefs()['wallpaperMode']=='solid
 wallpaper_menu();tap('use saved photo');assert prefs()['wallpaperMode']=='photo'
 print('PASS system / solid / saved-photo selection',flush=True)
 adb('push',str(ROOT/'themes'/'retro-cyan.json'),'/sdcard/Download/72f-theme.json')
-tap('Launcher settings');tap('appearance & themes');tap('import theme');pick_download('72f-theme.json')
+settings('themes');tap('import theme');pick_download('72f-theme.json')
 assert '#39B9D4' in prefs()['theme']; print('PASS theme import',flush=True)
-start();shot('beta2-home.png');tap('Launcher settings');shot('beta2-settings.png');back()
+home();shot('beta2-home.png');open_settings();shot('beta2-settings.png');back()
 print('WALLPAPER SMOKE PASS',flush=True)

@@ -96,7 +96,9 @@ public final class MainActivity extends Activity {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!foreground) return;
-            bindMedia(); evaluateContext(); updateClock(); updateAlarm(); if (System.currentTimeMillis() - agendaLoaded > 300000) updateAgenda(); handler.postDelayed(this, 10000);
+            bindMedia(); evaluateContext(); updateClock(); updateAlarm(); if (System.currentTimeMillis() - agendaLoaded > 300000) updateAgenda();
+            // Wake at the next minute boundary (or in 10 s) so the clock never lags a minute change.
+            long now = System.currentTimeMillis(); handler.postDelayed(this, Math.min(10000, 60000 - now % 60000 + 50));
         }
     };
     private final LauncherApps.Callback appChanges = new LauncherApps.Callback() {
@@ -136,7 +138,7 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() { foreground = false; unregisterSignals(); if(waves!=null)waves.stop(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
     @Override public void onBackPressed() { if (sheet != null && sheet.back()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
@@ -538,13 +540,14 @@ public final class MainActivity extends Activity {
             if(i>=4){int p=favorites.indexOf(app.id),to=p+(i==4?-1:1);if(to>=0&&to<favorites.size()){Collections.swap(favorites,p,to);saveState();refreshList(false);}}
         });
     }
-    private void aboutSettings(){menu("72F beta 3",new String[]{"about 72F","open-source notices"},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message("open-source notices",new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message("72F beta 3","Horizontal categories. Vertical app lists.\n\nSwipe sideways for categories; scroll vertically for apps. Hold apps to organize.\n\nOriginal native Android implementation. No ads, analytics, accounts, or internet permission. Theme files stay on your device.\n\nAutomatic categories use local heuristics; your choices take priority.\n\nContexts change the top zone and starting category by time, headphones, charging, Do Not Disturb or playing media. They are checked only while Home is on screen.");});}
+    private String version(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(PackageManager.NameNotFoundException e){return "";}}
+    private void aboutSettings(){menu("72F "+version(),new String[]{"about 72F","open-source notices"},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message("open-source notices",new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message("72F "+version(),"Horizontal categories. Vertical app lists.\n\nSwipe sideways for categories; scroll vertically for apps. Hold apps to organize.\n\nOriginal native Android implementation. No ads, analytics, accounts, or internet permission. Theme files stay on your device.\n\nAutomatic categories use local heuristics; your choices take priority.\n\nContexts change the top zone and starting category by time, headphones, charging, Do Not Disturb or playing media. They are checked only while Home is on screen.");});}
     private void categorySettings(){menu("categories",new String[]{prefs.getBoolean("categories",true)?"turn categories off":"turn categories on","create category","show or hide categories","merge categories","rename custom category","delete custom category"},i->{
         if(i==0){prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);}
         if(i==1)nameDialog("new category","",name->{custom.add(name);saveState();refreshCategories();});
         if(i==2){ArrayList<String> cs=editableCategories();boolean[] checked=new boolean[cs.size()];for(int j=0;j<cs.size();j++)checked[j]=!disabled.contains(cs.get(j));AlertDialog d=new AlertDialog.Builder(this).setTitle("visible categories").setMultiChoiceItems(cs.toArray(new String[0]),checked,(dialog,n,on)->{if(on)disabled.remove(cs.get(n));else disabled.add(cs.get(n));}).setPositiveButton("done",(a,b)->{saveState();refreshCategories();refreshList(true);}).create();d.setOnCancelListener(a->{saveState();refreshCategories();refreshList(true);});showDialog(d);}
         if(i==3){ArrayList<String> cs=editableCategories();menu("merge from",cs.toArray(new String[0]),n->{String from=cs.remove(n);menu("merge into",cs.toArray(new String[0]),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);toast("Merged into "+target);});});}
-        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast("No custom categories yet");return;}menu(i==4?"rename":"delete",cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{new AlertDialog.Builder(this).setTitle("Delete "+old+"?").setMessage("Apps remain installed and return to automatic categories.").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).show();}});}
+        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast("No custom categories yet");return;}menu(i==4?"rename":"delete",cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{track(new AlertDialog.Builder(this).setTitle("Delete "+old+"?").setMessage("Apps remain installed and return to automatic categories.").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).show());}});}
     });}
     private interface NameAction{void accept(String s);}
     private void nameDialog(String title,String existing,NameAction action){
@@ -772,7 +775,7 @@ public final class MainActivity extends Activity {
                     View divider=new View(this); divider.setBackgroundColor(MetroArt.alpha(accent,.75f));
                     LinearLayout.LayoutParams lineParams=new LinearLayout.LayoutParams(dp(1),dp(38)); lineParams.setMargins(dp(14),0,dp(18),0); timeRow.addView(divider,lineParams);
                     date=text("",11,muted); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(6),1); date.setLetterSpacing(.1f);
-                    date.setContentDescription("Date and active context. Tap for quick settings"); date.setOnClickListener(v->openSettings());
+                    date.setContentDescription("Date and active context. Tap for quick settings"); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
                     timeRow.addView(date,new LinearLayout.LayoutParams(0,-2,1)); header.addView(timeRow); updateClock();
                     clock.setContentDescription("Clock. Tap to open alarms"); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
                     break;}
@@ -1051,7 +1054,7 @@ public final class MainActivity extends Activity {
     private GradientDrawable shape(int fill,int border){GradientDrawable d=outline(fill,theme.expressive?Color.TRANSPARENT:border);d.setCornerRadius(theme.expressive?dp(20):theme.layout.equals("xmb")?dp(14):dp(2));return d;}
     private TextView chip(String label,boolean on,View.OnClickListener click){
         int fill=theme.expressive?secondaryContainer:primaryContainer,ink=theme.expressive?onSecondaryContainer:onPrimaryContainer;
-        TextView t=text(label,14,on?ink:fg);t.setGravity(Gravity.CENTER);t.setMinHeight(dp(40));t.setMinWidth(dp(44));t.setPadding(dp(14),dp(8),dp(14),dp(8));
+        TextView t=text(label,14,on?ink:fg);t.setGravity(Gravity.CENTER);t.setMinHeight(dp(48));t.setMinWidth(dp(48));t.setPadding(dp(14),dp(8),dp(14),dp(8));
         t.setBackground(shape(on?fill:theme.expressive?MetroArt.alpha(fg,.06f):Color.TRANSPARENT,on?fill:MetroArt.alpha(muted,.4f)));t.setOnClickListener(click);t.setFocusable(true);
         t.setContentDescription(label+(on?", selected":""));return t;
     }
@@ -1206,7 +1209,7 @@ public final class MainActivity extends Activity {
 
         page.addView(sectionLabel("backup & about"));
         page.addView(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()));
-        page.addView(settingRow("about 72F","beta 3 · open-source notices",v->aboutSettings()));
+        page.addView(settingRow("about 72F",version()+" · open-source notices",v->aboutSettings()));
         return page;
     }
     private static final String[] TRI={"any","yes","no"};
@@ -1214,7 +1217,8 @@ public final class MainActivity extends Activity {
         LinearLayout page=column();
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
         head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text(r.name,32,fg);title.setPadding(dp(6),0,0,0);title.setOnClickListener(v->{if(!r.fallback)renameContext(r);});
+        TextView title=text(r.name,32,fg);title.setPadding(dp(6),0,0,0);title.setMinHeight(dp(48));title.setGravity(Gravity.CENTER_VERTICAL);
+        if(!r.fallback){title.setOnClickListener(v->renameContext(r));title.setContentDescription(r.name+". Tap to rename");}
         head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         if(!r.fallback)head.addView(chip(r.enabled?"on":"off",r.enabled,v->{r.enabled=!r.enabled;contextsChanged();}));
         page.addView(head);
@@ -1276,9 +1280,9 @@ public final class MainActivity extends Activity {
             int position=contexts.indexOf(r);
             page.addView(settingRow("priority",(position+1)+" of "+(contexts.size()-1)+" · the first match wins",v->menu("priority",new String[]{"move up","move down"},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})));
             page.addView(settingRow("hold this context","use it now, regardless of conditions",v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(r.name+" held for 1 hour");}));
-            page.addView(settingRow("delete context",null,v->new AlertDialog.Builder(this).setTitle("Delete "+r.name+"?").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{
+            page.addView(settingRow("delete context",null,v->track(new AlertDialog.Builder(this).setTitle("Delete "+r.name+"?").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{
                 for(String item:new ArrayList<>(r.widgets))if(item.startsWith("widget:")){r.widgets.remove(item);removeContextItem(r,item);}
-                contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).show()));
+                contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).show())));
         }
         return page;
     }
@@ -1297,7 +1301,7 @@ public final class MainActivity extends Activity {
             if(r.start==r.end)r.end=(r.end+60)%1440;
             contextsChanged();
         },current/60,current%60,android.text.format.DateFormat.is24HourFormat(this));
-        picker.show();
+        track(picker);picker.show();
     }
     private void renameContext(ContextRules.Rule r){
         EditText input=new EditText(this);input.setSingleLine();input.setText(r.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
@@ -1335,12 +1339,16 @@ public final class MainActivity extends Activity {
         choices.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(52),View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
         sheet.addView(scroller,new LinearLayout.LayoutParams(-1,Math.min(maxHeight,choices.getMeasuredHeight())));
         TextView close=text("close",14,accent);close.setGravity(Gravity.CENTER_VERTICAL);close.setMinHeight(dp(48));close.setPadding(0,dp(12),0,0);close.setOnClickListener(v->dialog.dismiss());close.setFocusable(true);sheet.addView(close);
-        dialog.setContentView(sheet);Window window=dialog.getWindow();
+        track(dialog);dialog.setContentView(sheet);Window window=dialog.getWindow();
         if(window!=null){window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.5f);window.setGravity(Gravity.BOTTOM);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);}
         dialog.show();if(window!=null)window.setLayout(-1,-2);
     }
+    /** Open dialogs, closed when Home is pressed so Home always lands on a clean home screen. */
+    private final ArrayList<Dialog> openDialogs=new ArrayList<>();
+    private <T extends Dialog> T track(T d){openDialogs.add(d);d.setOnDismissListener(x->openDialogs.remove(d));return d;}
+    private void dismissDialogs(){for(Dialog d:new ArrayList<>(openDialogs))if(d.isShowing())d.dismiss();openDialogs.clear();}
     private void showDialog(AlertDialog d){
-        d.show();
+        track(d);d.show();
         Window window=d.getWindow();
         if(window!=null){window.setBackgroundDrawable(outline(Color.luminance(bg)>.5?bg:0xff101114,MetroArt.alpha(muted,.2f)));window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);tintDialog(window.getDecorView());}
         for(int which:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){android.widget.Button b=d.getButton(which);if(b!=null)b.setTextColor(accent);}

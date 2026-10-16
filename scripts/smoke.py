@@ -11,13 +11,50 @@ def shell(*args): return adb('shell', *args).decode()
 def ui():
     shell('uiautomator', 'dump', '/sdcard/72f-test.xml')
     return list(ET.fromstring(shell('cat', '/sdcard/72f-test.xml')).iter('node'))
-def find(label, nodes=None):
+def find(label, nodes=None, prefix=False):
     for n in nodes if nodes is not None else ui():
-        if n.get('text') == label or n.get('content-desc') == label: return n
+        t = n.get('text') or ''; d = n.get('content-desc') or ''
+        if label in (t, d) or prefix and (t.startswith(label) or d.startswith(label)): return n
     raise AssertionError('Missing UI: '+label)
-def tap(label):
-    n = find(label); x1,y1,x2,y2 = map(int,re.findall(r'\d+',n.get('bounds')))
-    shell('input','tap',(x1+x2)//2,(y1+y2)//2); time.sleep(.25)
+def center(n):
+    x1,y1,x2,y2 = map(int,re.findall(r'\d+',n.get('bounds'))); return (x1+x2)//2,(y1+y2)//2
+def tap(label, prefix=False):
+    x,y = center(find(label, prefix=prefix)); shell('input','tap',x,y); time.sleep(.25)
+def press(label, prefix=False, ms=900):
+    x,y = center(find(label, prefix=prefix)); shell('input','swipe',x,y,x,y,ms); time.sleep(.6)
+def home(): shell('input','keyevent','3'); time.sleep(.8)
+def open_settings():
+    """Quick settings: hold the dock's search button."""
+    home(); press('Search apps', prefix=True); find('CONTEXT')
+def settings(row):
+    """Open the full settings page and tap a row, scrolling the sheet as needed."""
+    open_settings()
+    for _ in range(10):
+        if any(n.get('text') == row for n in ui()): return tap(row)
+        swipe(540,1950,540,1000,250); time.sleep(.3)
+    raise AssertionError('Missing setting: '+row)
+def search(): tap('Search apps', prefix=True)
+def reset():
+    """Fresh 72F data (only this app's), set as Home, welcome dismissed."""
+    shell('pm','clear','dev.seventwo.launcher'); shell('cmd','package','set-home-activity','dev.seventwo.launcher/.MainActivity')
+    start(); time.sleep(1.2)
+    if any(n.get('text') == 'LET’S GO' for n in ui()): tap('LET’S GO')
+def pick_file(name):
+    """Choose a file in Android's document picker: Downloads, list view, scroll until visible."""
+    time.sleep(1)
+    def match(nodes): return next((n for n in nodes if n.get('text')==name or (n.get('content-desc') or '').startswith(name+', ')),None)
+    nodes=ui()
+    if match(nodes) is None and not any(n.get('text')=='Downloads' for n in nodes):
+        tap('Show roots'); time.sleep(.5); roots=[n for n in ui() if n.get('text')=='Downloads']
+        x,y=center(roots[-1]); shell('input','tap',x,y); time.sleep(1)
+    if any(n.get('content-desc')=='List view' for n in ui()): tap('List view'); time.sleep(.6)
+    for _ in range(15):
+        node=match(ui())
+        if node is not None:
+            x,y=center(node); shell('input','tap',x,y); time.sleep(1); return
+        swipe(540,1900,540,900,300); time.sleep(.4)
+    raise AssertionError('Missing file '+name)
+def prefs_xml(): return shell('run-as','dev.seventwo.launcher','cat','shared_prefs/launcher.xml')
 def check(label): find(label); print('PASS', label, flush=True)
 def back(): shell('input','keyevent','4'); time.sleep(.25)
 def start(): shell('am','start','-n','dev.seventwo.launcher/.MainActivity'); time.sleep(.4)
@@ -25,37 +62,38 @@ def swipe(x1,y1,x2,y2,duration=300): shell('input','swipe',x1,y1,x2,y2,duration)
 def shot(name): (ROOT/'docs'/name).write_bytes(adb('exec-out','screencap','-p'))
 
 def run():
-    start()
-    nodes=ui()
-    if any(n.get('text') == 'LET’S GO' for n in nodes): tap('LET’S GO')
+    reset()
     check('favorites category, selected')
     shot('home.png')
     swipe(850,1200,180,1200)
     check('social category, selected')
     swipe(180,1200,850,1200)
     check('favorites category, selected')
-    tap('Search apps'); shell('input','text','camera'); time.sleep(.3)
+    search(); shell('input','text','camera'); time.sleep(.3)
     assert any(n.get('text','').lower() == 'camera' for n in ui()), 'Search must find camera'
     print('PASS search finds installed Camera',flush=True)
     shot('search.png')
     tap('Close search'); check('favorites category, selected')
-    tap('Launcher settings'); tap('categories & folders'); tap('create category')
+    settings('categories & folders'); tap('create category')
     shell('input','text','beta-test'); tap('SAVE')
-    tap('Launcher settings'); tap('categories & folders'); tap('show or hide categories'); check('beta-test'); tap('DONE')
+    settings('categories & folders'); tap('show or hide categories'); check('beta-test'); tap('DONE')
     print('PASS custom category creation',flush=True)
-    tap('Launcher settings'); tap('categories & folders'); tap('turn categories off')
+    settings('categories & folders'); tap('turn categories off'); home()
     nodes=ui(); cats=[n.get('content-desc','') for n in nodes if ' category' in n.get('content-desc','')]
     assert not any('social category' in c for c in cats), cats
     swipe(850,1200,180,1200); check('all apps category, selected'); shot('all-apps.png')
     print('PASS two-category mode',flush=True)
-    tap('Launcher settings'); tap('categories & folders'); tap('turn categories on')
-    tap('Launcher settings'); tap('appearance & themes'); tap('paper · light'); shot('paper.png')
-    tap('Launcher settings'); tap('appearance & themes'); tap('retro · cyan')
-    tap('Launcher settings'); tap('scrubber side · right')
-    tap('Launcher settings'); check('scrubber side · left'); tap('scrubber side · left')
+    settings('categories & folders'); tap('turn categories on')
+    settings('themes'); tap('paper · light'); home(); shot('paper.png')
+    settings('themes'); tap('retro · cyan')
+    settings('scrubber side'); assert '<boolean name="left" value="true"' in prefs_xml()
+    settings('scrubber side'); assert '<boolean name="left" value="false"' in prefs_xml()
     print('PASS palettes and handedness',flush=True)
-    tap('Launcher settings'); tap('categories & folders'); tap('delete custom category'); tap('beta-test'); tap('DELETE')
-    start(); check('favorites category, selected')
+    settings('categories & folders'); tap('delete custom category'); tap('beta-test'); tap('DELETE')
+    home(); check('favorites category, selected')
+    # Dock: search button opens search; swipe up on the category bar opens quick settings.
+    x,y = center(find('Category switcher', prefix=True)); swipe(x,y,x,y-500,200); time.sleep(.6); check('CONTEXT')
+    print('PASS dock gestures',flush=True); home()
     shot('home.png')
     print('SMOKE PASS',flush=True)
 
