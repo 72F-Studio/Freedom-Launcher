@@ -1,10 +1,10 @@
-# 72F Launcher — v1.0.0 RC3
+# 72F Launcher — v1.0.0 RC4
 
 An original, native Android launcher: Retro typography with horizontal categories and vertical app lists. Android 9+ (API 28). No internet permission, ads, or analytics. The only library is the optional Smartspacer Client SDK, loaded on Android 10+.
 
 ## Install
 
-Install `dist/72F-Launcher-1.0.0-rc3.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
+Install `dist/72F-Launcher-1.0.0-rc4.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
 
 This beta uses a development signing certificate. Keep that certificate for subsequent beta updates; a production certificate will require a separate migration/reinstall. It is not a Play Store release.
 
@@ -13,7 +13,8 @@ This beta uses a development signing certificate. Keep that certificate for subs
 - Swipe horizontally across the app list, tap a category title, or drag the bottom slider to change categories.
 - Scroll vertically; use the side alphabet to jump within a category. Settings switches its side.
 - Search at the bottom searches every launchable app, including accessible work-profile apps.
-- Hold an app to add/remove a favorite, move it to a category, open app info, or uninstall. Favorites supports up to 20 apps, with move-up/down actions.
+- Hold an app for its own shortcuts (as the default launcher), then: add/remove a favorite, move it to a category, rename it, hide it from lists (it stays in search), open app info, or uninstall. Favorites supports up to 20 apps, with move-up/down actions.
+- Settings → home & categories: category order (favorites first and all apps last), hidden apps, and notification dots. Dots need notification access; only which apps have notifications is read, never their content.
 - Home returns to Favorites. Returning from another app preserves the active category.
 - Settings supports category creation, visibility, merging, and custom category renaming/deletion. Disable categories to retain only Favorites and All apps.
 - The dock is a category bar plus a round **search** button. Tap or scrub the bar to switch categories. Hold the search button, or swipe up on the dock, for **quick settings**: active context, theme swatches, Metro toggle tiles and wallpaper dimming. Swipe the sheet up for **all settings**; drag down or press Back to collapse.
@@ -49,7 +50,7 @@ All launcher controls use a complete vector icon set: original **Retro**, origin
 
 ## Build
 
-Use JDK 21 (newer JDKs such as Android Studio's bundled JDK 25 are rejected by this Gradle version) and Android SDK 35 / Build Tools 35.0.0. Set `ANDROID_HOME` or your local `sdk.dir` in untracked `local.properties`.
+Use JDK 21 (newer JDKs such as Android Studio's bundled JDK 25 are rejected by this Gradle version) and Android SDK 36 / Build Tools 35.0.0 (the app targets SDK 36 and uses predictive back). Set `ANDROID_HOME` or your local `sdk.dir` in untracked `local.properties`.
 
 ```sh
 ./gradlew :app:assembleDebug :app:lintDebug
@@ -60,13 +61,13 @@ Use JDK 21 (newer JDKs such as Android Studio's bundled JDK 25 are rejected by t
 
 `./scripts/test.sh` uses `JAVA_HOME` (or Android Studio's bundled Java).
 
-UI suites drive an installed build over ADB: `smoke.py` (navigation, search, categories, settings, dock gestures), `extended-smoke.py` (scrubbers, launching, persistence, merges), `wallpaper-smoke.py`, `theme-smoke.py` (theme/backup round trips through the document picker) and `a11y-smoke.py` (labels and 48dp touch targets). **Each suite clears 72F's app data first** (`pm clear`), so run them only on a test emulator. Set `ANDROID_SERIAL` to pick the device.
+UI suites drive an installed build over ADB: `smoke.py` (navigation, search, categories, settings, dock gestures), `features-smoke.py` (predictive back, app shortcuts, rename, hide, category order, notification dots from a real SMS), `extended-smoke.py` (scrubbers, launching, persistence, merges), `wallpaper-smoke.py`, `theme-smoke.py` (theme/backup round trips through the document picker) and `a11y-smoke.py` (labels and 48dp touch targets). **Each suite clears 72F's app data first** (`pm clear`), so run them only on a test emulator. Set `ANDROID_SERIAL` to pick the device.
 
 Release APK (R8-shrunk), signed with the same development key as the betas so it installs over them:
 
 ```sh
 ./gradlew :app:assembleRelease
-apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc3.apk app/build/outputs/apk/release/app-release-unsigned.apk
+apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc4.apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 ## Implementation
@@ -78,7 +79,7 @@ apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-al
 - `MetroArt`: original vector controls, navigation glyphs, and wallpaper rendering.
 - `ContextRules` / `ContextStore`: pure first-match rule evaluation (JVM-tested), JSON persistence and permission-free signal readers.
 - `SettingsSheet`: two-stage draggable bottom sheet (quick settings → full page) with a page stack for the context editor.
-- `MediaAccessService`: exposes the notification-listener component required for Android active media-session discovery. No notification contents are processed or stored.
+- `MediaAccessService`: the notification listener behind media-session discovery and notification dots. For dots it reads only the posting package, user and flags; titles, text and extras are never read or stored.
 
 The launcher UI is plain Android Views; the Smartspacer SDK (and the AndroidX/Kotlin libraries it needs) is the only dependency. Release builds use R8 so the APK stays small (about 1.6 MB). App discovery runs off the UI thread. Package callbacks refresh app lists after install/removal. App identity includes launcher activity and user profile.
 
@@ -88,4 +89,4 @@ GraceLauncher and focus-launcher were reviewed through public documentation for 
 
 ## Known limits
 
-Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. Category order is fixed (Favorites, built-ins, custom, All apps). The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. RC3 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC3-NOTES.md` for what was checked and the release gate.
+Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. Settings and labels are English-only (strings are not yet in Android resources). Release builds are signed with the development key; a production key is needed before a store release. RC4 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC4-NOTES.md` for what was checked and the release gate.

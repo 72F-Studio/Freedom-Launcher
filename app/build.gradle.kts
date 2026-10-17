@@ -1,14 +1,14 @@
 plugins { id("com.android.application") }
 android {
     namespace = "dev.seventwo.launcher"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "dev.seventwo.launcher"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         testInstrumentationRunner = "dev.seventwo.launcher.EngineChecks"
-        versionCode = 6
-        versionName = "1.0.0-rc3"
+        versionCode = 7
+        versionName = "1.0.0-rc4"
     }
     buildTypes {
         release {

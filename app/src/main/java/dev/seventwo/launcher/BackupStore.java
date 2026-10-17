@@ -9,7 +9,7 @@ import java.util.zip.ZipOutputStream;
 
 /** Portable, bounded backups. Assets are staged before a single preference commit. */
 final class BackupStore {
-    static final String[] KEYS={"favorites","custom","disabled","assignments","merges","categories","header","left","media","icons","iconPack","wallpaperMode","wallpaperDim","theme","seeded","introduced","contexts","legibility"};
+    static final String[] KEYS={"favorites","custom","disabled","assignments","merges","categories","header","left","media","icons","iconPack","wallpaperMode","wallpaperDim","theme","seeded","introduced","contexts","legibility","hidden","labels","order","dots"};
     static final class Pending {
         final File directory;final JSONObject preferences;final ThemeEngine theme;
         Pending(File d,JSONObject p,ThemeEngine t){directory=d;preferences=p;theme=t;}
@@ -62,7 +62,7 @@ final class BackupStore {
         while(keys.hasNext()){
             String key=keys.next();if(!allowed.contains(key))throw new IOException("Unknown backup setting: "+key);
             Object value=p.get(key);
-            if(Arrays.asList("categories","left","media","seeded","introduced").contains(key)) {if(!(value instanceof Boolean))throw new IOException("Invalid toggle: "+key);}
+            if(Arrays.asList("categories","left","media","seeded","introduced","dots").contains(key)) {if(!(value instanceof Boolean))throw new IOException("Invalid toggle: "+key);}
             else if(Arrays.asList("header","wallpaperDim").contains(key)){if(!(value instanceof Number))throw new IOException("Invalid number: "+key);}
             else if(!(value instanceof String))throw new IOException("Invalid setting: "+key);
         }
@@ -90,6 +90,12 @@ final class BackupStore {
         new JSONObject(p.optString("theme","{}"));
         if(p.has("contexts"))ContextStore.parse(p.getString("contexts"));
         if(!Arrays.asList(Legibility.MODES).contains(p.optString("legibility","auto")))throw new IOException("Invalid text legibility");
+        JSONArray hiddenApps=new JSONArray(p.optString("hidden","[]"));if(hiddenApps.length()>5000)throw new IOException("Too many hidden apps");
+        for(int i=0;i<hiddenApps.length();i++){String id=hiddenApps.getString(i);if(id.length()>400||!id.contains(":"))throw new IOException("Invalid hidden app");}
+        JSONObject names=new JSONObject(p.optString("labels","{}"));if(names.length()>5000)throw new IOException("Too many app names");
+        Iterator<String> named=names.keys();while(named.hasNext()){String id=named.next();String name=names.getString(id);if(id.length()>400||name.trim().isEmpty()||name.length()>40)throw new IOException("Invalid app name");}
+        JSONArray order=new JSONArray(p.optString("order","[]"));if(order.length()>200)throw new IOException("Invalid category order");
+        for(int i=0;i<order.length();i++)if(!groups.contains(order.getString(i)))throw new IOException("Invalid category order");
     }
     static void apply(Context context,SharedPreferences prefs,Pending pending)throws Exception {
         // Files already reside in a unique immutable directory; readers switch via one commit.

@@ -38,7 +38,9 @@ public final class MainActivity extends Activity {
     private LauncherApps launcher;
     private final ArrayList<App> apps = new ArrayList<>(), visible = new ArrayList<>();
     private final ArrayList<String> categories = new ArrayList<>(), favorites = new ArrayList<>(), custom = new ArrayList<>();
-    private final HashSet<String> disabled = new HashSet<>();
+    private final HashSet<String> disabled = new HashSet<>(), hidden = new HashSet<>();
+    private final HashMap<String,String> labels = new HashMap<>();
+    private final ArrayList<String> order = new ArrayList<>();
     private final HashMap<String,String> assignments = new HashMap<>(), merges = new HashMap<>();
     private final HashMap<String,Integer> scrollPositions = new HashMap<>();
     private String category = "favorites", query = "";
@@ -112,7 +114,7 @@ public final class MainActivity extends Activity {
         @Override public void onPackagesUnavailable(String[] p, UserHandle u, boolean r) { loadApps(); }
     };
     private static final class App {
-        String id, name, group;
+        String id, name, label, group; // label = the app's own name; name = custom label when renamed
         ComponentName component;
         UserHandle user;
         boolean work;
@@ -132,6 +134,8 @@ public final class MainActivity extends Activity {
         if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); tourPage = state.getInt("tour", -1); }
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         launcher.registerCallback(appChanges, handler);
+        MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); });
+        if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         buildUi(); loadApps();
         if (!prefs.getBoolean("introduced", false) && tourPage < 0) handler.postDelayed(this::welcome, 300);
     }
@@ -139,13 +143,17 @@ public final class MainActivity extends Activity {
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
     @Override protected void onResume() { super.onResume(); foreground = true; registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); if(waves!=null)waves.stop(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
-    @Override protected void onDestroy() { if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
+    @Override protected void onDestroy() { MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
-    @Override public void onBackPressed() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
+    /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
+    // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
+    @android.annotation.SuppressLint("GestureBackNavigation") @Override public void onBackPressed() { handleBack(); }
+    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
-        favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();
+        favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();hidden.clear();labels.clear();order.clear();
+        ArrayList<String> hiddenIds = new ArrayList<>(); readArray("hidden", hiddenIds); hidden.addAll(hiddenIds); readMap("labels", labels); readArray("order", order);
         readArray("favorites", favorites); readArray("custom", custom);
         ArrayList<String> off = new ArrayList<>(); readArray("disabled", off); disabled.addAll(off);
         readMap("assignments", assignments); readMap("merges", merges);
@@ -161,7 +169,8 @@ public final class MainActivity extends Activity {
     private void saveState() {
         prefs.edit().putString("favorites", new JSONArray(favorites).toString()).putString("custom", new JSONArray(custom).toString())
             .putString("disabled", new JSONArray(disabled).toString()).putString("assignments", new JSONObject(assignments).toString())
-            .putString("merges", new JSONObject(merges).toString()).apply();
+            .putString("merges", new JSONObject(merges).toString()).putString("hidden", new JSONArray(hidden).toString())
+            .putString("labels", new JSONObject(labels).toString()).putString("order", new JSONArray(order).toString()).apply();
     }
     private void loadApps() {
         if (worker.isShutdown()) return;
@@ -180,7 +189,7 @@ public final class MainActivity extends Activity {
                         if (info.getComponentName().getPackageName().equals(getPackageName())) continue;
                         App a = new App(); a.component = info.getComponentName(); a.user = user;
                         a.id = users.getSerialNumberForUser(user) + ":" + a.component.flattenToString();
-                        a.name = info.getLabel().toString(); a.work = !user.equals(android.os.Process.myUserHandle());
+                        a.label = info.getLabel().toString(); a.name = labels.getOrDefault(a.id, a.label); a.work = !user.equals(android.os.Process.myUserHandle());
                         a.group = CategoryRules.classify(a.component.getPackageName(), info.getApplicationInfo().category);
                         try { a.icon = info.getBadgedIcon(0); } catch (RuntimeException ignored) { }
                         try {
@@ -215,6 +224,8 @@ public final class MainActivity extends Activity {
         ArrayList<String> result = new ArrayList<>();
         for (String c : BUILT_INS) if (!merges.containsKey(c)) result.add(c);
         for (String c : custom) if (!merges.containsKey(c)) result.add(c);
+        // User order first; anything new keeps its default position after it.
+        result.sort((a,b)->{int i=order.indexOf(a),j=order.indexOf(b);return Integer.compare(i<0?Integer.MAX_VALUE:i,j<0?Integer.MAX_VALUE:j);});
         return result;
     }
     private void refreshCategories() {
@@ -333,7 +344,8 @@ public final class MainActivity extends Activity {
         if (!searching && category.equals("favorites")) {
             for (String id : favorites) for (App a : apps) if (a.id.equals(id)) { visible.add(a); break; }
         } else for (App a : apps) {
-            if (searching ? CategoryRules.normalized(a.name).contains(needle) : category.equals("all apps") || group(a).equals(category)) visible.add(a);
+            if (searching ? CategoryRules.normalized(a.name).contains(needle) || !a.name.equals(a.label) && CategoryRules.normalized(a.label).contains(needle)
+                : !hidden.contains(a.id) && (category.equals("all apps") || group(a).equals(category))) visible.add(a);
         }
         adapter.notifyDataSetChanged();
         empty.setText(searching ? "no matches\ntry another name" : category.equals("favorites") ? "no favorites yet\n\nHold an app in all apps\nto add a favorite." : "no apps here\n\nHold an app to move it here.");
@@ -344,6 +356,7 @@ public final class MainActivity extends Activity {
     private final class AppRow extends LinearLayout {
         final ImageView icon;
         final TextView label;
+        final View dot;
         AppRow() {
             super(MainActivity.this); setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
             setPadding(dp(2),dp(11),dp(2),dp(11)); setMinimumHeight(dp(theme.liquid?Math.max(72,theme.rowHeight):theme.rowHeight));
@@ -355,6 +368,10 @@ public final class MainActivity extends Activity {
             imageParams.setMargins(0,0,dp(20),0); addView(icon,imageParams);
             label=text("",theme.liquid?Math.min(22,theme.appSize):theme.appSize,fg); label.setLetterSpacing(-.02f);label.setMaxLines(2);label.setEllipsize(TextUtils.TruncateAt.END);
             addView(label,new LinearLayout.LayoutParams(0,-2,1));
+            // Notification dot: accent circle after the name (packages with notifications, never their content).
+            dot=new View(MainActivity.this);GradientDrawable d=new GradientDrawable();d.setShape(GradientDrawable.OVAL);d.setColor(accent);dot.setBackground(d);
+            dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            LinearLayout.LayoutParams dotParams=new LinearLayout.LayoutParams(dp(8),dp(8));dotParams.setMargins(dp(10),0,dp(4),0);addView(dot,dotParams);
         }
         @Override public void setPressed(boolean pressed) {
             super.setPressed(pressed);
@@ -372,7 +389,9 @@ public final class MainActivity extends Activity {
             icon.setVisibility(style.equals("none")?GONE:VISIBLE); icon.setImageDrawable(app.icon);
             if(style.equals("mono")) { ColorMatrix colors=new ColorMatrix();colors.setSaturation(0);icon.setColorFilter(new ColorMatrixColorFilter(colors));icon.setAlpha(.82f); }
             else {icon.clearColorFilter();icon.setAlpha(1f);}
-            setContentDescription(app.name+(app.work?", work profile":"")+". Hold for app options");
+            boolean notified=prefs.getBoolean("dots",true)&&MediaAccessService.hasDot(app.component.getPackageName(),app.user);
+            dot.setVisibility(notified?VISIBLE:GONE);
+            setContentDescription(app.name+(app.work?", work profile":"")+(notified?", has notifications":"")+(hidden.contains(app.id)?", hidden from lists":"")+". Hold for app options");
         }
     }
     private final class AppAdapter extends BaseAdapter {
@@ -540,17 +559,53 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Long-press: the app's own shortcuts first, then 72F's actions. */
     private void appMenu(App app) {
-        boolean favorite=favorites.contains(app.id);
-        ArrayList<String> options=new ArrayList<>(Arrays.asList(favorite?"remove favorite":"add to favorites","move to category","app info","uninstall"));
-        if(favorite){options.add("move favorite up");options.add("move favorite down");}
-        menu(app.name,options.toArray(new String[0]), i -> {
-            if(i==0){if(favorite)favorites.remove(app.id);else if(favorites.size()<20)favorites.add(app.id);else{toast("Favorites holds up to 20 apps");return;}saveState();refreshList(false);}
-            if(i==1){ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu("move to",destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});}
-            if(i==2)try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast("App info unavailable");}
-            if(i==3){if(app.work){toast("Use app info to manage work apps");return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));}
-            if(i>=4){int p=favorites.indexOf(app.id),to=p+(i==4?-1:1);if(to>=0&&to<favorites.size()){Collections.swap(favorites,p,to);saveState();refreshList(false);}}
-        });
+        ArrayList<String> options=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        for(ShortcutInfo shortcut:shortcuts(app)){
+            CharSequence title=shortcut.getShortLabel()!=null?shortcut.getShortLabel():shortcut.getLongLabel();if(title==null)continue;
+            options.add(title+" · shortcut");actions.add(()->{try{launcher.startShortcut(shortcut,null,null);}catch(RuntimeException e){toast("Shortcut unavailable");}});
+        }
+        boolean favorite=favorites.contains(app.id),isHidden=hidden.contains(app.id);
+        options.add(favorite?"remove favorite":"add to favorites");actions.add(()->{if(favorite)favorites.remove(app.id);else if(favorites.size()<20){favorites.add(app.id);hidden.remove(app.id);}else{toast("Favorites holds up to 20 apps");return;}saveState();refreshList(false);});
+        if(favorite){
+            options.add("move favorite up");actions.add(()->moveFavorite(app,-1));
+            options.add("move favorite down");actions.add(()->moveFavorite(app,1));
+        }
+        options.add("move to category");actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu("move to",destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
+        options.add("rename"+(app.name.equals(app.label)?"":" · "+app.label));actions.add(()->renameApp(app));
+        options.add(isHidden?"show in lists":"hide from lists · still in search");actions.add(()->{if(isHidden)hidden.remove(app.id);else{hidden.add(app.id);favorites.remove(app.id);}saveState();refreshList(false);toast(isHidden?app.name+" is back in its category":app.name+" hidden. Find it in search");});
+        options.add("app info");actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast("App info unavailable");}});
+        options.add("uninstall");actions.add(()->{if(app.work){toast("Use app info to manage work apps");return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));});
+        menu(app.name,options.toArray(new String[0]),i->actions.get(i).run());
+    }
+    private void moveFavorite(App app,int by){int p=favorites.indexOf(app.id),to=p+by;if(p>=0&&to>=0&&to<favorites.size()){Collections.swap(favorites,p,to);saveState();refreshList(false);}}
+    /** Dynamic, manifest and pinned shortcuts; only the default launcher may read them. */
+    private List<ShortcutInfo> shortcuts(App app){
+        ArrayList<ShortcutInfo> out=new ArrayList<>();
+        try{
+            if(!launcher.hasShortcutHostPermission())return out;
+            LauncherApps.ShortcutQuery q=new LauncherApps.ShortcutQuery().setPackage(app.component.getPackageName()).setActivity(app.component)
+                .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC|LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST|LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED);
+            List<ShortcutInfo> found=launcher.getShortcuts(q,app.user);if(found==null)return out;
+            for(ShortcutInfo s:found)if(s.isEnabled())out.add(s);
+            out.sort((a,b)->a.isDeclaredInManifest()!=b.isDeclaredInManifest()?(a.isDeclaredInManifest()?-1:1):Integer.compare(a.getRank(),b.getRank()));
+            while(out.size()>5)out.remove(out.size()-1);
+        }catch(RuntimeException ignored){} // locked work profile or revoked host access
+        return out;
+    }
+    private void renameApp(App app){
+        EditText input=new EditText(this);input.setSingleLine();input.setText(app.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("rename").setView(input).setNegativeButton("cancel",null)
+            .setNeutralButton("original name",(a,b)->{labels.remove(app.id);saveState();loadApps();}).setPositiveButton("save",null).create();showDialog(d);
+        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError("Enter a name");return;}
+            if(name.equals(app.label))labels.remove(app.id);else labels.put(app.id,name);saveState();d.dismiss();loadApps();});
+    }
+    private void hiddenAppsSettings(){
+        ArrayList<App> list=new ArrayList<>();for(App a:apps)if(hidden.contains(a.id))list.add(a);
+        if(list.isEmpty()){message("hidden apps","No hidden apps. Hold an app and choose “hide from lists”. Hidden apps stay findable in search.");return;}
+        String[] names=new String[list.size()];for(int i=0;i<names.length;i++)names[i]=list.get(i).name+" · show again";
+        menu("hidden apps",names,i->{hidden.remove(list.get(i).id);saveState();refreshList(false);toast(list.get(i).name+" is back");});
     }
     private String version(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(PackageManager.NameNotFoundException e){return "";}}
     private void aboutSettings(){menu("72F "+version(),new String[]{"about 72F","open-source notices"},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message("open-source notices",new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message("72F "+version(),"Horizontal categories. Vertical app lists.\n\nSwipe sideways for categories; scroll vertically for apps. Hold apps to organize.\n\nOriginal native Android implementation. No ads, analytics, accounts, or internet permission. Theme files stay on your device.\n\nAutomatic categories use local heuristics; your choices take priority.\n\nContexts change the top zone and starting category by time, headphones, charging, Do Not Disturb or playing media. They are checked only while Home is on screen.");});}
@@ -1321,7 +1376,12 @@ public final class MainActivity extends Activity {
         contextRows.add(settingRow("override","hold a context for a while, or return to automatic",v->contextOverride()));
         page.addView(group(contextRows.toArray(new View[0])));
         page.addView(sectionLabel("home & categories"));
-        page.addView(group(settingRow("set as default launcher",null,v->defaultHome()),settingRow("categories & folders",(prefs.getBoolean("categories",true)?editableCategories().size()-disabled.size()+" visible":"off")+" · create, hide, merge, rename",v->categorySettings()),settingRow("scrubber side",prefs.getBoolean("left",false)?"left":"right",v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
+        page.addView(group(settingRow("set as default launcher",null,v->defaultHome()),settingRow("categories & folders",(prefs.getBoolean("categories",true)?editableCategories().size()-disabled.size()+" visible":"off")+" · create, hide, merge, rename",v->categorySettings()),settingRow("category order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
+            settingRow("notification dots",!mediaAccess()?"needs notification access · only app names are read, never content":prefs.getBoolean("dots",true)?"on":"off",v->{
+                if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}
+                prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();if(adapter!=null)adapter.notifyDataSetChanged();sheet.refresh();}),
+            settingRow("hidden apps",hidden.isEmpty()?"none · hold an app to hide it":hidden.size()+" hidden · still in search",v->hiddenAppsSettings()),
+            settingRow("scrubber side",prefs.getBoolean("left",false)?"left":"right",v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
         page.addView(sectionLabel("appearance"));
         String icons=prefs.getString("icons",theme.iconStyle);
         page.addView(group(settingRow("themes",theme.name.toLowerCase(Locale.ROOT)+" · presets, import, export",v->themeSettings()),settingRow("title size",String.valueOf(titleSize),v->menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow("app icons",(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu("app icons",new String[]{"monochrome","original color","text only","icon packs"},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow("glass",theme.glass==0?"off · turn on liquid or frosted glass":(theme.liquid?"liquid":"frosted")+" · blur "+(theme.glassBlur>=0?theme.glassBlur+"dp":"auto")+" · tint "+(theme.glassTint==0?"theme":theme.glassTint<0?"darker":"lighter")+(theme.liquid?" · refraction "+theme.refraction+"%":""),v->glassTuning()),settingRow("effects","blur "+theme.blur+" · glass "+theme.glass+" · waves "+(theme.animated?"on":"off")+(theme.expressive?" · expressive":"")+(theme.dynamic?" · wallpaper colors":""),v->effectsSettings()),settingRow("launcher icon set",theme.uiIconSet,v->menu("launcher icon set",new String[]{"retro","wave","material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
@@ -1335,6 +1395,29 @@ public final class MainActivity extends Activity {
         return page;
     }
     private static final String[] TRI={"any","yes","no"};
+    /** Category order: favorites stays first and all apps last; everything between can move. */
+    private View orderPage(){
+        LinearLayout page=column();
+        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
+        head.addView(iconButton("back","Back",false,v->sheet.back()));
+        TextView title=text("category order",30,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        page.addView(head);
+        TextView note=text("Favorites is always first and all apps last.",13,muted);note.setPadding(dp(26),dp(4),dp(26),dp(8));page.addView(note);
+        ArrayList<String> current=editableCategories();
+        for(int i=0;i<current.size();i++){
+            final int index=i;String c=current.get(i);
+            LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(2),dp(14),dp(2));line.setMinimumHeight(dp(56));
+            TextView label=text(c,18,disabled.contains(c)?muted:fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+            if(index>0){TextView up=chip("↑",false,v->moveCategory(current,index,-1));up.setContentDescription("Move "+c+" up");LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(up,p);}
+            if(index<current.size()-1){TextView down=chip("↓",false,v->moveCategory(current,index,1));down.setContentDescription("Move "+c+" down");line.addView(down);}
+            page.addView(line);
+        }
+        page.addView(settingRow("reset to default order",null,v->{order.clear();saveState();refreshCategories();sheet.refresh();}));
+        return page;
+    }
+    private void moveCategory(ArrayList<String> current,int index,int by){
+        Collections.swap(current,index,index+by);order.clear();order.addAll(current);saveState();refreshCategories();sheet.refresh();
+    }
     private View contextPage(ContextRules.Rule r){
         LinearLayout page=column();
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
@@ -1531,7 +1614,7 @@ public final class MainActivity extends Activity {
                 c.addView(tourTitle("how it works"));
                 c.addView(tourHint("arrow","swipe sideways","Move between categories, or tap and slide along the bar at the bottom."));
                 c.addView(tourHint("all apps","scroll and scrub","Scroll a list, or drag the side alphabet to jump to a letter."));
-                c.addView(tourHint("favorites","hold an app","Add it to favorites, move it to a category, or uninstall it."));
+                c.addView(tourHint("favorites","hold an app","Its shortcuts, favorites, categories, rename, hide, or uninstall."));
                 c.addView(tourHint("search","tap search","The round button finds any app. Hold it, or swipe up on the bar, for settings."));
                 break;}
             case 3:{
@@ -1559,7 +1642,7 @@ public final class MainActivity extends Activity {
                 c.addView(tourTitle("optional access"));
                 c.addView(tourBody("72F has no internet permission. These stay on your phone and are only needed for the features below."));
                 boolean media=mediaAccess(),calendar=calendarAllowed(),home=isDefaultHome();
-                c.addView(settingRow("media controls",media?"allowed":"show what's playing in the top zone",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
+                c.addView(settingRow("notification access",media?"allowed":"media controls and notification dots · app names only, never content",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
                 c.addView(settingRow("calendar",calendar?"allowed":"show upcoming events in the agenda item",v->{if(!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}));
                 c.addView(settingRow("home screen",home?"72F is your home screen":"use 72F when you press Home",v->{if(!isDefaultHome())defaultHome();}));
                 c.addView(tourBody("Hold the round search button any time for quick settings."));
