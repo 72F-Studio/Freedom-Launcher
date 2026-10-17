@@ -345,9 +345,8 @@
     <string name="x_y_dim">%1$s · %2$s%% dim</string>
     <string name="x_y_z_4_s_hold_for_app_options">%1$s%2$s%3$s%4$s. Hold for app options</string>
     <string name="yes">YES</string>
-    <string name="date_period_day">%1$s · %2$s</string>
-    <string name="date_lines">%1$s\n%2$s</string>
-    <string name="date_with_context">%1$s\n● %2$s</string>
+    <string name="date_lines">%1$s, %2$s</string>
+    <string name="date_with_context">%1$s · %2$s</string>
     <string name="widget_x_of_y">Widget %1$d of %2$d</string>
     <string name="quick_settings_label">Quick settings</string>
     <string name="settings_closed">Settings closed</string>

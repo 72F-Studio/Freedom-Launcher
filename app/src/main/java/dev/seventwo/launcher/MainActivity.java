@@ -67,6 +67,10 @@ public final class MainActivity extends Activity {
     private String activeWallpaperMode;
     private EditText search;
     private CategoryRail categoryRail;
+    /** Horizontal position of the app list while paging between categories (follows the finger, then springs). */
+    private Motion.Spring pageSpring;
+    private boolean returningFromApp;
+    private float swapAt; private Runnable pendingSwap;
     // Text legibility over images: photo luminance percentiles (measured off the UI thread) and the resolved level.
     private volatile double photoDark=.05, photoBright=.5;
     private int legibility;
@@ -142,7 +146,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
+    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); if(waves!=null)waves.stop(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
@@ -242,7 +246,7 @@ public final class MainActivity extends Activity {
             if(theme.expressive){t.setTypeface(Typeface.create(theme.typeface,selected?800:500,false));t.setLetterSpacing(-.02f);}
             if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
-            t.setPadding(dp(24),dp(theme.liquid?12:0),dp(12),dp(theme.liquid?14:6));t.setSingleLine(true);t.setLetterSpacing(theme.layout.equals("xmb")?0:-.035f);
+            t.setPadding(dp(26),dp(theme.liquid?12:0),dp(14),dp(theme.liquid?14:8));t.setSingleLine(true);t.setLetterSpacing(theme.layout.equals("xmb")?0:-.035f);
             t.setContentDescription(str(R.string.x_category_y, c, (selected?str(R.string.selected):"")));t.setOnClickListener(v->selectCategory(c,true));
             if(theme.layout.equals("xmb")){
                 LinearLayout item=column();item.setGravity(Gravity.CENTER_HORIZONTAL);item.setPadding(dp(6),dp(8),dp(6),dp(4));
@@ -276,14 +280,14 @@ public final class MainActivity extends Activity {
             // Search: one pill field with the glyph inside and close at its end.
             LinearLayout row = row(); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16), dp(2), dp(4), dp(2));
             row.setBackground(rounded(theme.glass>0||overImage()?MetroArt.alpha(surface(),.82f):mix(bg,fg,Color.luminance(bg)>.5?.06f:.09f),100));
-            MetroArt.Icon glyph = new MetroArt.Icon(this, uiIcons, "search", secondaryInk(), false); glyph.setGlyphSize(20); glyph.setFocusable(false); glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); glyph.setMinimumWidth(0);
+            View glyph = magnifier(secondaryInk(), 7f, 2f); glyph.setFocusable(false); glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); glyph.setMinimumWidth(0);
             row.addView(glyph, new LinearLayout.LayoutParams(dp(28), dp(48)));
             search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); search.setTextSize(20); search.setSingleLine(); search.setHint(str(R.string.find_an_app)); search.setTypeface(theme.typeface); search.setText(query);
             search.setBackground(null); search.setPadding(dp(10), 0, dp(4), 0); search.setHighlightColor(MetroArt.alpha(accent,.35f));
             row.addView(search,new LinearLayout.LayoutParams(0,dp(56),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed()));
             LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.setMargins(dp(16), dp(10), dp(16), dp(10)); root.addView(row, sp);
             search.addTextChangedListener(new TextWatcher() { public void beforeTextChanged(CharSequence s,int a,int c,int f) {} public void onTextChanged(CharSequence s,int a,int b,int c) { query=s.toString(); refreshList(true); } public void afterTextChanged(Editable e) {} });
-            search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0)); return true; });
+            search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0), null); return true; });
         } else {
             buildTopZone();
         }
@@ -292,17 +296,24 @@ public final class MainActivity extends Activity {
         titleScroll.setVisibility(searching ? View.GONE : View.VISIBLE); root.addView(titleScroll);
         SwipeFrame swipe = new SwipeFrame(); root.addView(swipe,new LinearLayout.LayoutParams(-1,0,1));
         listArea = new FrameLayout(this); swipe.addView(listArea,new FrameLayout.LayoutParams(-1,-1));
+        if (pageSpring != null) pageSpring.cancel();
+        final FrameLayout pageView = listArea;
+        pageSpring = new Motion.Spring(theme.expressive ? Motion.SPATIAL_EXPRESSIVE : Motion.SPATIAL, (x, v) -> {
+            pageView.setTranslationX(x); float w = Math.max(1, pageView.getWidth());
+            pageView.setAlpha(1f - Math.min(.7f, Math.abs(x) / w * 1.6f));
+            if (pendingSwap != null && Math.abs(x) >= swapAt) { Runnable swap = pendingSwap; pendingSwap = null; pageView.post(swap); } });
         list = new ListView(this); list.setDivider(null); list.setCacheColorHint(Color.TRANSPARENT); list.setVerticalScrollBarEnabled(false); list.setClipToPadding(false);
-        boolean left = prefs.getBoolean("left",false); list.setPadding(dp(left?48:24),dp(2),dp(left?24:48),dp(12));
+        boolean left = prefs.getBoolean("left",false); list.setPadding(dp(left?48:18),dp(2),dp(left?18:48),dp(12)); // rows add 10dp: icons line up with the clock and titles at 28dp
         list.setVerticalFadingEdgeEnabled(true); list.setFadingEdgeLength(dp(24));
-        list.setSelector(new android.graphics.drawable.InsetDrawable(rounded(MetroArt.alpha(fg,.08f),16),-dp(10),dp(2),-dp(10),dp(2)));
+        list.setSelector(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); // rows animate their own press
         adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list,new FrameLayout.LayoutParams(-1,-1));
-        list.setOnItemClickListener((p,v,pos,id) -> launch(visible.get(pos)));
+        list.setOnItemClickListener((p,v,pos,id) -> launch(visible.get(pos), v));
         list.setOnItemLongClickListener((p,v,pos,id) -> { appMenu(visible.get(pos)); return true; });
         empty = text("",20,secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40),0,dp(40),0); listArea.addView(empty,new FrameLayout.LayoutParams(-1,-1));
-        alphabet = new AlphabetRail(); FrameLayout.LayoutParams railParams = new FrameLayout.LayoutParams(dp(40),-1, left?Gravity.LEFT:Gravity.RIGHT); listArea.addView(alphabet,railParams);
-        letter = text("",64,accent); letter.setGravity(Gravity.CENTER); letter.setBackground(rounded(MetroArt.alpha(surface(),.94f),28));letter.setElevation(dp(6)); letter.setVisibility(View.GONE);
-        FrameLayout.LayoutParams bubble = new FrameLayout.LayoutParams(dp(100),dp(100),Gravity.CENTER); listArea.addView(letter,bubble);
+        alphabet = new AlphabetRail(); FrameLayout.LayoutParams railParams = new FrameLayout.LayoutParams(dp(160),-1, left?Gravity.LEFT:Gravity.RIGHT); listArea.addView(alphabet,railParams);
+        letter = text("",28,onPrimaryContainer); letter.setGravity(Gravity.CENTER); letter.setTypeface(Typeface.create(theme.typeface,500,false)); letter.setIncludeFontPadding(false);
+        letter.setBackground(rounded(primaryContainer,23)); letter.setElevation(dp(4)); letter.setVisibility(View.GONE); letter.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        listArea.addView(letter,new FrameLayout.LayoutParams(dp(46),dp(46),Gravity.TOP|Gravity.START));
         // Dock: a category pill stretching to a floating search button (Niagara-style), both on one surface.
         LinearLayout footer = new SwipeUpFooter(); footer.setOrientation(LinearLayout.HORIZONTAL); footer.setGravity(Gravity.CENTER_VERTICAL);
         footer.setPadding(dp(16),dp(6),dp(16),dp(14)); footer.setClipToPadding(false); footer.setClipChildren(false);
@@ -327,8 +338,7 @@ public final class MainActivity extends Activity {
         Date now = new Date();
         clock.setText(new SimpleDateFormat(is24 ? "HH:mm" : "h:mm",Locale.getDefault()).format(now));
         String day = new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault());
-        String day2 = is24 ? day : str(R.string.date_period_day, new SimpleDateFormat("a",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()), day);
-        String text = str(R.string.date_lines, day2, new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()));
+        String text = str(R.string.date_lines, day, new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()));
         date.setText(activeContext == null || activeContext.fallback ? text : str(R.string.date_with_context, text, activeContext.name));
     }
     private void selectCategory(String next, boolean animate) {
@@ -336,8 +346,52 @@ public final class MainActivity extends Activity {
         if (list != null) scrollPositions.put(category,list.getFirstVisiblePosition());
         int direction = Integer.compare(categories.indexOf(next),categories.indexOf(category));
         category = next; refreshCategories(); refreshList(true);
-        if (animate && theme.motionMs>0 && list != null && android.animation.ValueAnimator.areAnimatorsEnabled()) { list.setTranslationX(dp(32)*direction); list.setAlpha(.25f); list.animate().translationX(0).alpha(1).setDuration(theme.motionMs).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).start(); }
-        if (list != null) list.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        if (animate && list != null) { enterList(direction, 0); }
+        if (list != null) Motion.step(list);
+    }
+    /** New category content arrives from the side it was swiped toward, carrying the gesture's speed. */
+    private void enterList(int direction, float velocity) {
+        if (pageSpring == null || listArea == null) return;
+        float w = Math.max(1, listArea.getWidth());
+        pageSpring.animate(direction * w * .28f, 0, velocity, null);
+        cascadeRows(direction);
+    }
+    /** Letter bubble: pops in on a spring, and gives a small bump on each new letter. */
+    private void popIn(View v){if(!Motion.on())return;new Motion.Spring(Motion.PRESS,(x,s)->{v.setScaleX(x);v.setScaleY(x);v.setAlpha(Math.min(1,x));}).precision(.001f).animate(.6f,1f,0,null);}
+    private void bump(View v){if(!Motion.on())return;new Motion.Spring(Motion.PRESS,(x,s)->{v.setScaleX(x);v.setScaleY(x);}).precision(.001f).animate(1.08f,1f,0,null);}
+    /**
+     * Launch depth: home pushes in toward the tapped icon and dims while the app opens. Recent Android versions
+     * play their own open transition for third-party launchers, so this layer is what keeps launches physical there.
+     */
+    private void pushIn(Rect from){
+        if(root==null||!Motion.on())return;
+        final View content=root;int[] at=new int[2];content.getLocationOnScreen(at);
+        content.setPivotX(from!=null?from.centerX()-at[0]:content.getWidth()/2f);content.setPivotY(from!=null?from.centerY()-at[1]:content.getHeight()/2f);
+        new Motion.Spring(Motion.SPATIAL,(v,s)->{content.setScaleX(v);content.setScaleY(v);}).precision(.0005f).animate(1f,1.06f,0,null);
+        new Motion.Spring(Motion.EFFECT,(v,s)->content.setAlpha(v)).precision(.002f).animate(1f,.55f,0,null);
+    }
+    /** Coming back from an app: home eases in from slightly zoomed out, the way the wallpaper settles. */
+    private void homeEntrance() {
+        if (root == null || !Motion.on()) return;
+        final View content = root;
+        Motion.Spring zoom = new Motion.Spring(Motion.SPATIAL, (v, s) -> { content.setScaleX(v); content.setScaleY(v); }).precision(.0005f);
+        Motion.Spring fade = new Motion.Spring(Motion.EFFECT, (v, s) -> content.setAlpha(v)).precision(.002f);
+        content.setPivotX(content.getWidth() / 2f); content.setPivotY(content.getHeight() * .45f);
+        zoom.animate(.93f, 1f, 0, null); fade.animate(.2f, 1f, 0, null);
+        cascadeRows(0);
+    }
+    /** Rows settle in one after another: a short offset and fade, staggered by position. */
+    private void cascadeRows(int direction) {
+        if (list == null || !Motion.on()) return;
+        list.post(() -> {
+            android.view.animation.PathInterpolator emphasized = new android.view.animation.PathInterpolator(.05f, .7f, .1f, 1f);
+            for (int i = 0; i < list.getChildCount(); i++) {
+                View row = list.getChildAt(i);
+                row.animate().cancel();
+                row.setTranslationX(direction * dp(14 + 5 * i)); row.setAlpha(0f);
+                row.animate().translationX(0).alpha(1).setStartDelay(i * 18L).setDuration(420).setInterpolator(emphasized).start();
+            }
+        });
     }
     private void refreshList(boolean reset) {
         if (adapter == null) return;
@@ -360,7 +414,7 @@ public final class MainActivity extends Activity {
         final View dot;
         AppRow() {
             super(MainActivity.this); setOrientation(HORIZONTAL); setGravity(Gravity.CENTER_VERTICAL);
-            setPadding(dp(2),dp(11),dp(2),dp(11)); setMinimumHeight(dp(theme.liquid?Math.max(72,theme.rowHeight):theme.rowHeight));
+            setPadding(dp(10),dp(8),dp(10),dp(8)); highlight.setAlpha(0); setBackground(highlight); setMinimumHeight(dp(theme.liquid?Math.max(72,theme.rowHeight):theme.rowHeight));
             icon=new ImageView(MainActivity.this); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             if(theme.liquid&&theme.glass>0){icon.setBackground(glassSurface(icon));icon.setPadding(dp(4),dp(4),dp(4),dp(4));}
@@ -374,18 +428,20 @@ public final class MainActivity extends Activity {
             dot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             LinearLayout.LayoutParams dotParams=new LinearLayout.LayoutParams(dp(8),dp(8));dotParams.setMargins(dp(10),0,dp(4),0);addView(dot,dotParams);
         }
+        // Press: the row sinks slightly and dims, then springs back with a small bounce on release.
+        private final GradientDrawable highlight = rounded(MetroArt.alpha(theme.expressive ? secondaryContainer : fg, theme.expressive ? 1f : .10f), 18);
+        private final Motion.Spring press = new Motion.Spring(Motion.PRESS, (v, s) -> {
+            float scale = 1f - .02f * v; setScaleX(scale); setScaleY(scale);
+            highlight.setAlpha(Math.round(255 * Math.max(0, Math.min(1, v)) * (theme.expressive ? .55f : 1f))); }).precision(.001f);
         @Override public void setPressed(boolean pressed) {
-            super.setPressed(pressed);
-            animate().cancel();
-            float shift=pressed?dp(theme.liquid?2:5):0, opacity=pressed?(theme.liquid?.88f:.55f):1;
-            if(theme.motionMs>0&&android.animation.ValueAnimator.areAnimatorsEnabled())
-                animate().translationX(shift).alpha(opacity).setDuration(pressed?100:240)
-                    .setInterpolator(new android.view.animation.PathInterpolator(.2f,0,.2f,1)).start();
-            else {setTranslationX(shift);setAlpha(opacity);}
+            boolean was = isPressed(); super.setPressed(pressed);
+            if (was != pressed) { setPivotX(dp(36)); setPivotY(getHeight() / 2f); press.animateTo(pressed ? 1f : 0f, 0, null); }
         }
-        void bind(App app) {
+        void bind(App app) { bind(app, false); }
+        /** first: the top search result, which Enter opens; it reads bold. */
+        void bind(App app, boolean first) {
             label.setText(app.work ? getString(R.string.work_app,app.name) : app.name);
-            label.setTextColor(fg); legible(label); label.setTypeface(theme.liquid?Typeface.create(theme.typeface,450,false):theme.typeface);
+            label.setTextColor(fg); legible(label); label.setTypeface(Typeface.create(theme.typeface,first?700:theme.liquid?450:400,false));
             String style=prefs.getString("icons",theme.iconStyle);
             icon.setVisibility(style.equals("none")?GONE:VISIBLE); icon.setImageDrawable(app.icon);
             if(style.equals("mono")) { ColorMatrix colors=new ColorMatrix();colors.setSaturation(0);icon.setColorFilter(new ColorMatrixColorFilter(colors));icon.setAlpha(.82f); }
@@ -401,14 +457,13 @@ public final class MainActivity extends Activity {
         public long getItemId(int p){return p;}
         public View getView(int position,View recycled,android.view.ViewGroup parent) {
             AppRow row = recycled instanceof AppRow ? (AppRow)recycled : new AppRow();
-            row.bind(visible.get(position)); return row;
+            row.bind(visible.get(position), searching && position == 0 && !query.trim().isEmpty()); return row;
         }
     }
     /** Category switcher inside the dock pill. Tap or scrub to switch; swipe up for quick settings. */
     private final class CategoryRail extends SeekBar {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         private float shown=-1,downX,downY;private boolean opened;
-        private android.animation.ValueAnimator slide;
         CategoryRail() {
             super(MainActivity.this);
             setThumb(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
@@ -418,13 +473,11 @@ public final class MainActivity extends Activity {
         /** Padding of half a slot puts SeekBar's track ends on the first and last icon centers. */
         void fitSlots(){int n=Math.max(1,categories.size()),w=getWidth();if(w==0)return;int pad=w/(2*n);if(pad!=getPaddingLeft())setPadding(pad,0,pad,0);}
         @Override protected void onSizeChanged(int w,int h,int ow,int oh){super.onSizeChanged(w,h,ow,oh);fitSlots();}
+        private Motion.Spring indicator;
         void moveTo(int index){
-            if(slide!=null)slide.cancel();
-            if(shown<0||theme.motionMs==0||!android.animation.ValueAnimator.areAnimatorsEnabled()){shown=index;invalidate();return;}
-            slide=android.animation.ValueAnimator.ofFloat(shown,index);slide.setDuration(theme.expressive?420:220);
-            // Expressive motion: a spatial spring with a little overshoot.
-            slide.setInterpolator(theme.expressive?new android.view.animation.OvershootInterpolator(1.4f):new android.view.animation.PathInterpolator(.2f,0,0,1));
-            slide.addUpdateListener(a->{shown=(float)a.getAnimatedValue();invalidate();});slide.start();
+            if(indicator==null)indicator=new Motion.Spring(theme.expressive?Motion.SPATIAL_EXPRESSIVE:Motion.SNAPPY,(v,sp)->{shown=v;invalidate();}).precision(.002f);
+            if(shown<0){shown=index;indicator.snap(index);invalidate();return;}
+            indicator.animate(shown,index,0,null);
         }
         @Override public boolean performClick(){return super.performClick();}
         @Override public boolean onTouchEvent(MotionEvent e){
@@ -468,22 +521,32 @@ public final class MainActivity extends Activity {
         View glyph;
         boolean custom;try{custom=theme.uiIcon("search")!=null;}catch(IOException e){custom=false;}
         if(custom){MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,"search",fg,false);icon.setGlyphSize(18);glyph=icon;}
-        else glyph=new View(this){
-            final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-            @Override protected void onDraw(Canvas c){
-                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(theme.expressive?2.6f:2.2f));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(theme.expressive?onPrimaryContainer:fg);
-                float cx=getWidth()/2f-dp(2),cy=getHeight()/2f-dp(2),r=dp(7.5f);
-                c.drawCircle(cx,cy,r,p);float d=r*.7071f;c.drawLine(cx+d+dp(1),cy+d+dp(1),cx+d+dp(6),cy+d+dp(6),p);
-            }
-        };
+        else glyph=magnifier(theme.expressive?onPrimaryContainer:fg,7.5f,theme.expressive?2.6f:2.2f);
         FrameLayout button=new FrameLayout(this);
+        GradientDrawable morph=null;
         if(theme.expressive){
             // M3 Expressive FAB: rounded square in the primary container that morphs toward a circle while pressed.
-            GradientDrawable d=new GradientDrawable();d.setColor(primaryContainer);d.setCornerRadius(dp(18));button.setBackground(d);button.setElevation(dp(3));
-            button.setOnTouchListener((v,e)->{int a=e.getActionMasked();if(a==MotionEvent.ACTION_DOWN||a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
-                float to=a==MotionEvent.ACTION_DOWN?dp(28):dp(18);android.animation.ObjectAnimator.ofFloat(d,"cornerRadius",d.getCornerRadius(),to).setDuration(theme.motionMs>0?260:0).start();}
-                return false;}); // observes only (returns false): the button's own click and long-click handling stays intact
+            morph=new GradientDrawable();morph.setColor(primaryContainer);morph.setCornerRadius(dp(18));button.setBackground(morph);button.setElevation(dp(3));
         }else button.setBackground(dockSurface(button));
+        // Press physics: squash to 0.92, rubber-band toward the finger, stretch along the drag, spring back on release.
+        final GradientDrawable shape=morph;final float[] down=new float[2];
+        Motion.Spring tx=new Motion.Spring(Motion.RUBBER,(x,v)->button.setTranslationX(x)),ty=new Motion.Spring(Motion.RUBBER,(y,v)->button.setTranslationY(y));
+        Motion.Spring sx=new Motion.Spring(Motion.SQUASH,(x,v)->button.setScaleX(x)).precision(.001f),sy=new Motion.Spring(Motion.SQUASH,(y,v)->button.setScaleY(y)).precision(.001f);
+        Motion.Spring corner=shape==null?null:new Motion.Spring(Motion.SQUASH,(r,v)->shape.setCornerRadius(r));
+        button.setOnTouchListener((v,e)->{
+            switch(e.getActionMasked()){
+                case MotionEvent.ACTION_DOWN: down[0]=e.getRawX();down[1]=e.getRawY();sx.animateTo(.92f,0,null);sy.animateTo(.92f,0,null);if(corner!=null)corner.animate(shape.getCornerRadius(),dp(28),0,null);break;
+                case MotionEvent.ACTION_MOVE:{
+                    float dx=e.getRawX()-down[0],dy=e.getRawY()-down[1],dist=(float)Math.hypot(dx,dy),soft=dp(72);
+                    tx.snap(Motion.follow(dx,dist,soft));ty.snap(Motion.follow(dy,dist,soft));
+                    float stretch=.92f+.08f*Math.min(1,dist/soft);
+                    if(Math.abs(dx)>=Math.abs(dy)){sx.snap(stretch);sy.snap(.92f);}else{sy.snap(stretch);sx.snap(.92f);}
+                    break;}
+                case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
+                    tx.animateTo(0,0,null);ty.animateTo(0,0,null);sx.animateTo(1,0,null);sy.animateTo(1,0,null);if(corner!=null)corner.animateTo(dp(18),0,null);break;
+            }
+            return false; // observes only: the button's own click and long-click handling stays intact
+        });
         button.addView(glyph,new FrameLayout.LayoutParams(-1,-1));glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         button.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(theme.expressive?onPrimaryContainer:accent,.16f)),null,theme.expressive?null:new android.graphics.drawable.ShapeDrawable(new android.graphics.drawable.shapes.OvalShape())));
         if(theme.expressive)button.setClipToOutline(true);
@@ -492,14 +555,32 @@ public final class MainActivity extends Activity {
         button.setOnLongClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);openSettings();return true;});
         return button;
     }
-    private void launch(App app) {
+    /** Opens the app zooming out of its icon; home choreographs back in on return. */
+    private void launch(App app, View from) {
         hideKeyboard();
-        try { launcher.startMainActivity(app.component,app.user,null,null); }
+        Rect bounds = null; Bundle options = null;
+        if (from instanceof AppRow) {
+            View icon = ((AppRow) from).icon.getVisibility() == View.VISIBLE ? ((AppRow) from).icon : from;
+            int[] at = new int[2]; icon.getLocationOnScreen(at);
+            bounds = new Rect(at[0], at[1], at[0] + icon.getWidth(), at[1] + icon.getHeight());
+            if (Motion.on()) {
+                ActivityOptions o;
+                try { // Zoom out of a snapshot of the icon as drawn (icon packs, mono filter, glass frame included).
+                    Bitmap shot = Bitmap.createBitmap(Math.max(1, icon.getWidth()), Math.max(1, icon.getHeight()), Bitmap.Config.ARGB_8888);
+                    icon.draw(new Canvas(shot));
+                    o = ActivityOptions.makeThumbnailScaleUpAnimation(icon, shot, 0, 0);
+                } catch (RuntimeException e) { o = ActivityOptions.makeScaleUpAnimation(icon, 0, 0, icon.getWidth(), icon.getHeight()); }
+                if (Build.VERSION.SDK_INT >= 33) o.setSplashScreenStyle(android.window.SplashScreen.SPLASH_SCREEN_STYLE_ICON);
+                options = o.toBundle();
+            }
+        }
+        try { launcher.startMainActivity(app.component,app.user,bounds,options); returningFromApp = true; pushIn(bounds); }
         catch (Exception e) { toast(str(R.string.app_unavailable_its_profile_may_be_pause)); loadApps(); }
     }
     private void openSearch() {
         if (searching) { search.requestFocus(); return; }
         searching=true; query=""; buildUi(); search.requestFocus();
+        if(Motion.on()){View bar=(View)search.getParent();bar.setAlpha(0);new Motion.Spring(Motion.SPATIAL,(y,v)->{bar.setTranslationY(y);bar.setAlpha(Math.max(0,1-Math.abs(y)/dp(24)));}).animate(-dp(24),0,0,null);cascadeRows(0);}
         search.postDelayed(() -> { if (searching && search != null) getSystemService(InputMethodManager.class).showSoftInput(search,InputMethodManager.SHOW_IMPLICIT); },150);
     }
     private void hideKeyboard() { if (root!=null) getSystemService(InputMethodManager.class).hideSoftInputFromWindow(root.getWindowToken(),0); }
@@ -527,39 +608,108 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Category paging that follows the finger, rubber-bands at the ends and springs with the release velocity. */
     private final class SwipeFrame extends FrameLayout {
-        float downX,downY; boolean horizontal;
+        float downX, downY, startX; boolean horizontal, armed; VelocityTracker velocity;
         SwipeFrame(){super(MainActivity.this);}
+        private int neighbor(float dx){int i=categories.indexOf(category)+(dx<0?1:-1);return i>=0&&i<categories.size()?i:-1;}
         @Override public boolean onInterceptTouchEvent(android.view.MotionEvent e) {
             if(searching) return false;
-            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){ downX=e.getX(); downY=e.getY(); horizontal=false; }
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){ downX=e.getX(); downY=e.getY(); horizontal=false; if(velocity!=null)velocity.recycle(); velocity=VelocityTracker.obtain(); }
+            if(velocity!=null)velocity.addMovement(e);
             if(e.getActionMasked()==MotionEvent.ACTION_MOVE){
                 boolean railEdge = prefs.getBoolean("left",false)?downX<dp(44):downX>getWidth()-dp(44);
-                if(!railEdge && Math.abs(e.getX()-downX)>dp(28) && Math.abs(e.getX()-downX)>Math.abs(e.getY()-downY)*1.5f){ horizontal=true; return true; }
+                if(!railEdge && Math.abs(e.getX()-downX)>dp(18) && Math.abs(e.getX()-downX)>Math.abs(e.getY()-downY)*1.4f){
+                    horizontal=true; armed=false; if(pageSpring!=null)pageSpring.cancel();
+                    startX=e.getX()-(pageSpring!=null?listArea.getTranslationX():0); // catch a settling page mid-flight
+                    getParent().requestDisallowInterceptTouchEvent(true); return true; }
             }
             return false;
         }
         @Override public boolean performClick() { super.performClick(); return true; }
         @Override public boolean onTouchEvent(MotionEvent e) {
-            if(e.getActionMasked()==MotionEvent.ACTION_UP && horizontal){ int i=categories.indexOf(category)+(e.getX()<downX?1:-1); if(i>=0&&i<categories.size())selectCategory(categories.get(i),true); horizontal=false; }
-            if(e.getActionMasked()==MotionEvent.ACTION_UP) performClick();
-            if(e.getActionMasked()==MotionEvent.ACTION_CANCEL) horizontal=false;
+            if(velocity!=null)velocity.addMovement(e);
+            if(!horizontal||pageSpring==null){ if(e.getActionMasked()==MotionEvent.ACTION_UP)performClick(); return true; }
+            float w=Math.max(1,getWidth()), dx=e.getX()-startX;
+            switch(e.getActionMasked()){
+                case MotionEvent.ACTION_MOVE:{
+                    float x=neighbor(dx)<0?Motion.rubber(dx,w*.14f):dx;
+                    pageSpring.snap(x);
+                    boolean commit=neighbor(dx)>=0&&Math.abs(dx)>w*.3f;
+                    if(commit!=armed){armed=commit;if(commit)Motion.threshold(this);}
+                    return true;}
+                case MotionEvent.ACTION_UP:{
+                    velocity.computeCurrentVelocity(1000); float vx=velocity.getXVelocity();
+                    int next=neighbor(dx); boolean fling=Math.abs(vx)>dp(700)&&Math.signum(vx)==Math.signum(dx);
+                    if(next>=0&&(Math.abs(dx)>w*.3f||fling)){
+                        int direction=dx<0?1:-1; String target=categories.get(next);
+                        // Carry the release velocity off-screen, swap content, then spring the new list in.
+                        // Hand over to the next category as soon as the old list is a third of the way out.
+                        swapAt=w*.33f; pendingSwap=()->{selectCategory(target,false);enterList(direction,pageSpring.velocity()*.6f);};
+                        pageSpring.animateTo(-direction*w*.6f,vx,null);
+                    } else pageSpring.animateTo(0,vx,null);
+                    horizontal=false; performClick(); return true;}
+                case MotionEvent.ACTION_CANCEL:
+                    pageSpring.animateTo(0,0,null); horizontal=false; return true;
+            }
             return true;
         }
     }
+    /**
+     * A–Z rail anchored low, near the thumb. While scrubbing, letters near the finger bow outward (a Gaussian
+     * wave on a spring) and a round bubble follows the finger. The view is wide enough for the wave, but only
+     * touches that start on the edge strip belong to it; everything else falls through to the list.
+     */
     private final class AlphabetRail extends View {
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); final ArrayList<String> letters = new ArrayList<>(); final ArrayList<Integer> positions=new ArrayList<>(); int selected=-1;
+        float wave, fingerX, fingerY; boolean active;
+        final Motion.Spring waveSpring = new Motion.Spring(Motion.WAVE, (w, v) -> { wave = w; invalidate(); placeBubble(); }).precision(.002f);
         AlphabetRail(){super(MainActivity.this);setContentDescription(str(R.string.alphabet_scrubber_drag_to_jump_to_an_app));setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
         void update(){ letters.clear();positions.clear(); for(int i=0;i<visible.size();i++){String l=CategoryRules.initial(visible.get(i).name);if(!letters.contains(l)){letters.add(l);positions.add(i);}}invalidate(); }
-        @Override protected void onDraw(Canvas c){super.onDraw(c);if(letters.isEmpty())return;paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(10));float step=Math.min(dp(22),(getHeight()-dp(16))/(float)letters.size());float start=(getHeight()-step*letters.size())/2;if(legibility!=Legibility.OFF)paint.setShadowLayer(dp(3),0,dp(.5f),Color.luminance(fg)>=.4?MetroArt.alpha(Color.BLACK,.6f):MetroArt.alpha(Color.WHITE,.7f));else paint.clearShadowLayer();
-            for(int i=0;i<letters.size();i++){paint.setColor(i==selected?accent:secondaryInk());c.drawText(letters.get(i),getWidth()/2f,start+step*(i+.5f)+dp(4),paint);}}
+        private boolean left(){return prefs.getBoolean("left",false);}
+        private float strip(){return dp(40);}
+        private float step(){return Math.min(dp(19),(getHeight()-dp(24))/(float)Math.max(1,letters.size()));}
+        /** Bottom-anchored: the last letter sits at 88% of the list height (within thumb reach). */
+        private float top(){return Math.max(dp(8),getHeight()*.88f-step()*letters.size());}
+        private float railX(){return left()?strip()/2f:getWidth()-strip()/2f;}
+        private float offsetFor(float y){
+            float sigma=dp(82),d=y-fingerY,g=(float)Math.exp(-d*d/(2*sigma*sigma));
+            float extra=Math.max(0,Math.min(dp(50),(strip()-Math.abs(fingerX-railX())*2)*.35f));
+            return (dp(50)+extra)*g*wave*(left()?1:-1);
+        }
+        @Override protected void onDraw(Canvas c){super.onDraw(c);if(letters.isEmpty())return;
+            paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(12));float step=step(),start=top();
+            if(legibility!=Legibility.OFF)paint.setShadowLayer(dp(3),0,dp(.5f),Color.luminance(fg)>=.4?MetroArt.alpha(Color.BLACK,.6f):MetroArt.alpha(Color.WHITE,.7f));else paint.clearShadowLayer();
+            for(int i=0;i<letters.size();i++){
+                float y=start+step*(i+.5f);boolean on=i==selected;
+                paint.setTypeface(Typeface.create(Typeface.SANS_SERIF,on?700:500,false));
+                paint.setColor(on?fg:MetroArt.alpha(fg,legibility==Legibility.OFF?.55f:.75f));
+                c.drawText(letters.get(i),railX()+offsetFor(y),y+dp(4),paint);
+            }}
+        /** The bubble rides left of the rail, centred on the finger, scaling and fading with the wave. */
+        void placeBubble(){
+            if(letter==null)return;
+            float size=dp(46),y=Math.max(top(),Math.min(fingerY,top()+step()*letters.size()))-size/2;
+            float x=left()?railX()+dp(14)+strip()/2+Math.abs(offsetFor(fingerY)):railX()-dp(14)-strip()/2-size-Math.abs(offsetFor(fingerY));
+            letter.setTranslationX(getLeft()+x);letter.setTranslationY(getTop()+y);
+            letter.setAlpha(wave);letter.setScaleX(.85f+.15f*wave);letter.setScaleY(.85f+.15f*wave);
+            letter.setVisibility(wave>.01f?VISIBLE:GONE);
+        }
         @Override public boolean performClick(){super.performClick();return true;}
         @Override public boolean onTouchEvent(MotionEvent e){
             if(letters.isEmpty())return false;
-            if(e.getActionMasked()==MotionEvent.ACTION_UP||e.getActionMasked()==MotionEvent.ACTION_CANCEL){selected=-1;letter.setVisibility(GONE);invalidate();if(e.getActionMasked()==MotionEvent.ACTION_UP)performClick();return true;}
-            getParent().requestDisallowInterceptTouchEvent(true);float step=Math.min(dp(22),(getHeight()-dp(16))/(float)letters.size());float start=(getHeight()-step*letters.size())/2;
-            int i=Math.max(0,Math.min(letters.size()-1,(int)((e.getY()-start)/step)));
-            if(i!=selected){selected=i;list.setSelection(positions.get(i));letter.setText(letters.get(i));letter.setVisibility(VISIBLE);performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);invalidate();}return true;
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){
+                boolean onStrip=left()?e.getX()<=strip():e.getX()>=getWidth()-strip();
+                if(!onStrip)return false; // not ours: rows underneath keep their taps
+                active=true;waveSpring.animateTo(1,0,null);
+            }
+            if(!active)return false;
+            fingerX=e.getX();fingerY=e.getY();
+            if(e.getActionMasked()==MotionEvent.ACTION_UP||e.getActionMasked()==MotionEvent.ACTION_CANCEL){active=false;selected=-1;waveSpring.animateTo(0,0,null);invalidate();if(e.getActionMasked()==MotionEvent.ACTION_UP)performClick();return true;}
+            getParent().requestDisallowInterceptTouchEvent(true);
+            int i=Math.max(0,Math.min(letters.size()-1,(int)((e.getY()-top())/step())));
+            if(i!=selected){selected=i;list.setSelection(positions.get(i));letter.setText(letters.get(i));Motion.tick(this);}
+            invalidate();placeBubble();return true;
         }
     }
 
@@ -656,7 +806,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){fileError(e);}
     });}
     private void applyTheme(JSONObject t)throws Exception {
-        ThemeEngine next=new ThemeEngine(t,BackupStore.themeDirectory(this,prefs));theme=next;uiIcons=new UiIcons(this,next);
+        ThemeEngine next=new ThemeEngine(t,BackupStore.themeDirectory(this,prefs));theme=next;uiIcons=new UiIcons(this,next);Motion.setEnabled(next.motionMs>0);
         bg=next.background;fg=next.text;muted=next.muted;accent=next.accent;font=next.font;titleSize=next.titleSize;
         boolean dark=Color.luminance(bg)<.5;
         if(next.dynamic&&Build.VERSION.SDK_INT>=31){
@@ -908,21 +1058,22 @@ public final class MainActivity extends Activity {
         ContextRules.Rule rule=activeContext;
         int percent=rule!=null&&rule.header>=0?rule.header:prefs.getInt("header",20);
         if(percent<=0||rule==null||rule.widgets.isEmpty())return;
-        LinearLayout header=column(); header.setPadding(dp(26),dp(10),dp(26),dp(12)); header.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout header=column(); header.setPadding(dp(28),dp(10),dp(28),dp(4)); header.setGravity(Gravity.BOTTOM|Gravity.START); // sits just above the categories
         int height=Math.max(90,(int)(getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density*percent/100));
         boolean first=true;WidgetHosting.Stack stack=null;
         for(String item:rule.widgets){
             switch(item){
                 case "clock":{
-                    LinearLayout timeRow=row(); timeRow.setGravity(Gravity.CENTER_VERTICAL);
-                    clock=text("",theme.layout.equals("xmb")?30:percent<=10?34:46,fg);legible(clock); clock.setLetterSpacing(-.045f); clock.setSingleLine(true);
-                    timeRow.addView(clock,new LinearLayout.LayoutParams(0,-2,1.2f));
-                    View divider=new View(this); divider.setBackgroundColor(MetroArt.alpha(accent,.75f));
-                    LinearLayout.LayoutParams lineParams=new LinearLayout.LayoutParams(dp(1),dp(38)); lineParams.setMargins(dp(14),0,dp(18),0); timeRow.addView(divider,lineParams);
-                    date=text("",13,secondaryInk());legible(date); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(5),1); date.setLetterSpacing(.02f);
-                    date.setContentDescription(str(R.string.date_and_active_context_tap_for_quick_se)); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
-                    timeRow.addView(date,new LinearLayout.LayoutParams(0,-2,1)); header.addView(timeRow); updateClock();
+                    // Clock over a single date line: large and light, hugging the list below it.
+                    LinearLayout block=column();
+                    clock=text("",theme.layout.equals("xmb")?40:percent<=10?44:64,fg);legible(clock);
+                    clock.setTypeface(Typeface.create(theme.typeface,300,false)); clock.setLetterSpacing(-.02f); clock.setSingleLine(true);
                     clock.setContentDescription(str(R.string.clock_tap_to_open_alarms)); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
+                    block.addView(clock,new LinearLayout.LayoutParams(-2,-2));
+                    date=text("",16,secondaryInk());legible(date); date.setTypeface(Typeface.create(theme.typeface,400,false)); date.setLetterSpacing(.01f); date.setSingleLine(true);
+                    date.setContentDescription(str(R.string.date_and_active_context_tap_for_quick_se)); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
+                    LinearLayout.LayoutParams dateParams=new LinearLayout.LayoutParams(-2,-2);dateParams.setMargins(0,-dp(6),0,0);block.addView(date,dateParams);
+                    header.addView(block); updateClock();
                     break;}
                 case "alarm":
                     alarmText=text("",13,secondaryInk());legible(alarmText); alarmText.setLetterSpacing(.08f); alarmText.setPadding(0,first?0:dp(12),0,0); alarmText.setSingleLine();
@@ -1576,7 +1727,8 @@ public final class MainActivity extends Activity {
         bottom.addView(next);
         frame.addView(bottom);
         scene.addView(tour,new FrameLayout.LayoutParams(-1,-1));tour.requestApplyInsets();
-        if(direction!=0&&theme.motionMs>0&&android.animation.ValueAnimator.areAnimatorsEnabled()){content.setTranslationX(dp(40)*direction);content.setAlpha(0);content.animate().translationX(0).alpha(1).setDuration(theme.motionMs).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).start();}
+        if(direction!=0&&Motion.on()){final float w=Math.max(1,getResources().getDisplayMetrics().widthPixels);
+            new Motion.Spring(Motion.SPATIAL,(x,v)->{content.setTranslationX(x);content.setAlpha(1-Math.min(1,Math.abs(x)/(w*.3f)));}).animate(direction*w*.3f,0,0,null);}
         content.announceForAccessibility(str(R.string.step_x_of_y, (tourPage+1), TOUR_PAGES));
     }
     private TextView tourTitle(String s){TextView t=text(s,38,fg);t.setTypeface(theme.expressive?Typeface.create(theme.typeface,800,false):theme.typeface);t.setLetterSpacing(-.03f);t.setPadding(dp(26),dp(18),dp(26),dp(10));t.setAccessibilityHeading(true);return t;}
@@ -1688,15 +1840,16 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.setMargins(0,dp(12),0,0);sheet.addView(close,cp);
         track(dialog);dialog.setContentView(sheet);Window window=dialog.getWindow();
         if(window!=null){window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.5f);window.setGravity(Gravity.BOTTOM);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);}
-        dialog.show();if(window!=null)window.setLayout(-1,-2);
+        if(window!=null)window.setWindowAnimations(R.style.SheetMotion);
+        dialog.show();if(window!=null)window.setLayout(-1,-2);riseIn(sheet);
     }
     /** Open dialogs, closed when Home is pressed so Home always lands on a clean home screen. */
     private final ArrayList<Dialog> openDialogs=new ArrayList<>();
     private <T extends Dialog> T track(T d){openDialogs.add(d);d.setOnDismissListener(x->openDialogs.remove(d));return d;}
     private void dismissDialogs(){for(Dialog d:new ArrayList<>(openDialogs))if(d.isShowing())d.dismiss();openDialogs.clear();}
     private void showDialog(AlertDialog d){
-        track(d);d.show();
-        Window window=d.getWindow();
+        track(d);if(d.getWindow()!=null)d.getWindow().setWindowAnimations(R.style.SheetMotion);d.show();
+        Window window=d.getWindow();if(window!=null)riseIn(window.getDecorView());
         if(window!=null){window.setBackgroundDrawable(sheetSurface());window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(14),dp(8),dp(12));tintDialog(window.getDecorView());}
         for(int which:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){android.widget.Button b=d.getButton(which);if(b!=null){b.setTextColor(accent);b.setAllCaps(false);b.setTypeface(Typeface.create(theme.typeface,600,false));}}
     }
@@ -1714,6 +1867,23 @@ public final class MainActivity extends Activity {
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     /** UI text from res/values/strings.xml (translatable); formats only when there are arguments. */
     private String str(int id,Object... args){return args.length==0?getString(id):getString(id,args);}
+    /** The one search mark: a round lens with a short handle, drawn as a thin line (the dock button and the search field). */
+    private View magnifier(int color, float radiusDp, float strokeDp){
+        return new View(this){
+            final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(Canvas c){
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(strokeDp));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(color);
+                float r=dp(radiusDp),cx=getWidth()/2f-r*.27f,cy=getHeight()/2f-r*.27f,d=r*.7071f;
+                c.drawCircle(cx,cy,r,p);c.drawLine(cx+d+dp(1),cy+d+dp(1),cx+d+r*.8f,cy+d+r*.8f,p);
+            }
+        };
+    }
+    /** Sheets and dialogs rise from below on a spring; their dim fades in with the window. */
+    private void riseIn(View content){
+        if(!Motion.on())return;
+        content.post(()->{float from=Math.max(dp(80),content.getHeight()*.35f);
+            new Motion.Spring(Motion.SPATIAL,(y,v)->content.setTranslationY(y)).animate(from,0,0,null);});
+    }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;}

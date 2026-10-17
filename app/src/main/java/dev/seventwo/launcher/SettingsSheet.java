@@ -1,11 +1,9 @@
 package dev.seventwo.launcher;
 
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.*;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.*;
 import java.util.ArrayList;
 
@@ -32,6 +30,7 @@ final class SettingsSheet extends FrameLayout {
     private float downX, downY, startTranslation;
     private boolean dragging, scrimTouch;
     private VelocityTracker velocity;
+    private final Motion.Spring spring;
 
     SettingsSheet(Context context) {
         super(context);
@@ -48,6 +47,7 @@ final class SettingsSheet extends FrameLayout {
         scroller = new ScrollView(context); scroller.setVerticalScrollBarEnabled(false); scroller.setClipToPadding(false);
         panel.addView(scroller, new LinearLayout.LayoutParams(-1, 0, 1));
         addView(panel, new LayoutParams(-1, -1));
+        spring = new Motion.Spring(Motion.SPATIAL, (y, v) -> { panel.setTranslationY(y); updateScrim(); });
         setVisibility(GONE);
         setOnApplyWindowInsetsListener((v, insets) -> {
             topInset = insets.getSystemWindowInsetTop(); bottomInset = insets.getSystemWindowInsetBottom();
@@ -124,20 +124,19 @@ final class SettingsSheet extends FrameLayout {
         return Math.max(0, height - Math.min(peek, height * .78f));
     }
 
-    private void settle(int target) {
-        if (target != HIDDEN && (panel.getHeight() == 0 || peekAnchor != null && peekAnchor.getHeight() == 0)) { post(() -> settle(target)); return; }
+    private void settle(int target) { settle(target, 0); }
+    /** Springs to a resting state, carrying the release velocity (px/s) so a flick feels continuous. */
+    private void settle(int target, float releaseVelocity) {
+        if (target != HIDDEN && (panel.getHeight() == 0 || peekAnchor != null && peekAnchor.getHeight() == 0)) { post(() -> settle(target, releaseVelocity)); return; }
         float to = position(target);
         if (target == HIDDEN && pages.size() > 1) { pages.subList(1, pages.size()).clear(); scrolls.subList(1, scrolls.size()).clear(); }
         int previous = state; state = target;
         if (target != FULL) scroller.scrollTo(0, 0);
-        boolean animate = ValueAnimator.areAnimatorsEnabled();
-        panel.animate().cancel();
-        panel.animate().translationY(to).setDuration(animate ? 260 : 0).setInterpolator(new DecelerateInterpolator(2f))
-            .setUpdateListener(a -> updateScrim()).withEndAction(() -> {
-                updateScrim();
-                if (state == HIDDEN) { setVisibility(GONE); pages.clear(); scrolls.clear(); if (listener != null) listener.onHidden(); }
-            }).start();
-        if (previous != target) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        spring.set(target == HIDDEN ? Motion.SNAPPY : Motion.SPATIAL);
+        spring.animate(panel.getTranslationY(), to, releaseVelocity, () -> {
+            if (state == HIDDEN) { setVisibility(GONE); pages.clear(); scrolls.clear(); if (listener != null) listener.onHidden(); }
+        });
+        if (previous != target) Motion.step(this);
         announceForAccessibility(getContext().getString(target == FULL ? R.string.all_settings : target == PEEK ? R.string.quick_settings_label : R.string.settings_closed));
     }
 
@@ -167,7 +166,7 @@ final class SettingsSheet extends FrameLayout {
 
     private void beginDrag(MotionEvent e) {
         dragging = true; downY = e.getY(); startTranslation = panel.getTranslationY();
-        panel.animate().cancel(); getParent().requestDisallowInterceptTouchEvent(true);
+        spring.cancel(); getParent().requestDisallowInterceptTouchEvent(true);
     }
 
     @Override public boolean onTouchEvent(MotionEvent e) {
@@ -194,7 +193,7 @@ final class SettingsSheet extends FrameLayout {
                         float full = position(FULL), peek = position(PEEK), hidden = position(HIDDEN);
                         target = t < (full + peek) / 2 ? FULL : t < (peek + hidden) / 2 ? PEEK : HIDDEN;
                     }
-                    dragging = false; settle(target);
+                    dragging = false; settle(target, v);
                 } else if (scrimTouch) { performClick(); dismiss(); }
                 return true;
             case MotionEvent.ACTION_CANCEL:

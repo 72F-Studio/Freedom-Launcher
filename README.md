@@ -1,10 +1,10 @@
-# 72F Launcher — v1.0.0 RC5
+# 72F Launcher — v1.0.0 RC6
 
 An original, native Android launcher: Retro typography with horizontal categories and vertical app lists. Android 9+ (API 28). No internet permission, ads, or analytics. The only library is the optional Smartspacer Client SDK, loaded on Android 10+.
 
 ## Install
 
-Install `dist/72F-Launcher-1.0.0-rc5.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
+Install `dist/72F-Launcher-1.0.0-rc6.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
 
 This beta uses a development signing certificate. Keep that certificate for subsequent beta updates; a production certificate will require a separate migration/reinstall. It is not a Play Store release.
 
@@ -92,8 +92,8 @@ The launcher UI is plain Android Views; the Smartspacer SDK (and the AndroidX/Ko
 
 ## Reference boundary
 
-GraceLauncher and focus-launcher were reviewed through public documentation for behavior and architecture ideas. Neither repository was cloned; no source, assets, or classification datasets were imported. The implementation here was written independently.
+GraceLauncher (GPL-3.0) and focus-launcher were used as references. focus-launcher was reviewed through its public documentation. For RC6, GraceLauncher's public source was read to study its motion behavior and layout numbers (spring values, gesture constants, row and type metrics); those behaviors were reimplemented independently in Java Views. Neither repository was cloned, and no source, assets or classification datasets were imported.
 
 ## Known limits
 
-Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. Only English text ships so far; translations go in `values-<language>/strings.xml`. Release builds use the development key until you create a production key with `scripts/make-release-key.sh`. RC5 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC5-NOTES.md` for what was checked and the release gate.
+Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. Only English text ships so far; translations go in `values-<language>/strings.xml`. Release builds use the development key until you create a production key with `scripts/make-release-key.sh`. RC6 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC6-NOTES.md` for what was checked and the release gate.

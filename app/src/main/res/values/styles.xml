@@ -10,4 +10,8 @@
         <item name="android:windowLightNavigationBar">false</item>
     </style>
     <style name="MetroTheme" parent="MetroBaseTheme"/>
+    <style name="SheetMotion">
+        <item name="android:windowEnterAnimation">@anim/scrim_in</item>
+        <item name="android:windowExitAnimation">@anim/sheet_out</item>
+    </style>
 </resources>

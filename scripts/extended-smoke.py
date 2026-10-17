@@ -12,7 +12,9 @@ x1,y1,x2,y2=bounds('favorites category, selected')
 swipe(min(x2-20,850),(y1+y2)//2,100,(y1+y2)//2)
 check('social category, selected'); print('PASS title-strip swipe',flush=True)
 all_apps(); check('all apps category, selected')
-swipe(1025,1150,1025,1750)
+rail=find('Alphabet scrubber', prefix=True); rx1,ry1,rx2,ry2=map(int,re.findall(r'\d+',rail.get('bounds')))
+# Letters sit on the edge strip and end at 88% of the rail's height (thumb-anchored); scrub to the last one.
+swipe(rx2-50,ry1+(ry2-ry1)*.5,rx2-50,ry1+(ry2-ry1)*.875,900)
 assert any(n.get('text')=='YouTube' for n in ui()), 'Alphabet scrub must reach Y'
 print('PASS horizontal and alphabetical scrubbers',flush=True)
 search(); shell('input','text','clock'); time.sleep(.2)

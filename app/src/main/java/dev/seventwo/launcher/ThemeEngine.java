@@ -33,16 +33,16 @@ final class ThemeEngine {
         if (contrast(background,text)<4.5 || contrast(background,muted)<3 || contrast(background,accent)<3)
             throw new IOException("Theme colors need more contrast");
         layout = choice("layout", "metro", "metro", "xmb");
-        uiIconSet = choice("uiIconSet",layout.equals("xmb")?"wave":"retro","retro","wave","material");
+        uiIconSet = choice("uiIconSet",layout.equals("xmb")?"wave":"material","retro","wave","material");
         backdrop = choice("backdrop", "glow", "glow", "solid", "waves");
         font = choice("font", "sans-serif-light", "sans-serif-light", "sans-serif", "sans-serif-thin", "sans-serif-condensed");
         choice("wallpaperMode","solid","solid","photo","system");
         String pack=json.optString("iconPack","");if(pack.length()>200||(!pack.isEmpty()&&!pack.matches("[A-Za-z0-9_.]+")))throw new IOException("Invalid icon pack reference");
         iconStyle = choice("iconStyle", "mono", "mono", "color", "none");
-        titleSize = number("titleSize", layout.equals("xmb")?36:60, 24, 80);
-        appSize = number("appSize", layout.equals("xmb")?24:27, 18, 36);
-        rowHeight = number("rowHeight", 62, 48, 96);
-        iconSize = number("iconSize", layout.equals("xmb")?34:30, 20, 48);
+        titleSize = number("titleSize", layout.equals("xmb")?36:48, 24, 80);
+        appSize = number("appSize", layout.equals("xmb")?22:20, 16, 36);
+        rowHeight = number("rowHeight", 56, 48, 96);
+        iconSize = number("iconSize", 40, 20, 48);
         motionMs = number("motionMs", layout.equals("xmb")?300:230, 0, 600);
         animated = json.optBoolean("animated", true);
         blur = number("blur",0,0,40); glass = number("glass",0,0,90);
@@ -109,7 +109,7 @@ final class ThemeEngine {
             // M3 baseline dark scheme; replaced by the wallpaper's Material You palette on Android 12+.
             t.put("expressive",true);t.put("dynamic",true);t.put("uiIconSet","material");t.put("backdrop","solid");
             t.put("background","#141218");t.put("text","#E6E0E9");t.put("muted","#CAC4D0");t.put("accent","#D0BCFF");
-            t.put("font","sans-serif");t.put("titleSize",44);t.put("appSize",22);t.put("rowHeight",64);t.put("iconSize",40);
+            t.put("font","sans-serif");t.put("titleSize",44);t.put("appSize",20);t.put("rowHeight",56);t.put("iconSize",40);
             t.put("iconStyle","color");t.put("motionMs",350);
         } else if(name.equals("Wave")||name.equals("PS3 native")) {
             t.put("name","Wave");t.put("uiIconSet","wave");t.put("layout","xmb");t.put("backdrop","waves");t.put("background","#071626");

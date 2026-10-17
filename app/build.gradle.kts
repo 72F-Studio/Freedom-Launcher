@@ -14,8 +14,8 @@ android {
         minSdk = 28
         targetSdk = 37
         testInstrumentationRunner = "dev.seventwo.launcher.EngineChecks"
-        versionCode = 8
-        versionName = "1.0.0-rc5"
+        versionCode = 9
+        versionName = "1.0.0-rc6"
     }
     signingConfigs {
         if (releaseKey != null) create("release") {
