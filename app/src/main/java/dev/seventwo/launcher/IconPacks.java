@@ -23,6 +23,8 @@ final class IconPacks {
     private final Resources resources;
     private final String packageName;
     private final Map<String,String> mappings=new HashMap<>();
+    // Icon packs are other apps; their resources can only be found by name (ADW appfilter convention).
+    @android.annotation.SuppressLint("DiscouragedApi")
     IconPacks(Context context,String packageName)throws Exception {
         this.packageName=packageName;resources=context.getPackageManager().getResourcesForApplication(packageName);
         int id=resources.getIdentifier("appfilter","xml",packageName);
@@ -44,9 +46,10 @@ final class IconPacks {
             }
         }
     }
+    @android.annotation.SuppressLint("DiscouragedApi")
     Drawable icon(ComponentName component) {
         String name=mappings.get(component.flattenToString());if(name==null)return null;
         int id=resources.getIdentifier(name,"drawable",packageName);
-        if(id==0)return null;try{return resources.getDrawable(id,null);}catch(Resources.NotFoundException e){return null;}
+        if(id==0)return null;try{return androidx.core.content.res.ResourcesCompat.getDrawable(resources,id,null);}catch(Resources.NotFoundException e){return null;}
     }
 }

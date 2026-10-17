@@ -1,10 +1,10 @@
-# 72F Launcher — v1.0.0 RC4
+# 72F Launcher — v1.0.0 RC5
 
 An original, native Android launcher: Retro typography with horizontal categories and vertical app lists. Android 9+ (API 28). No internet permission, ads, or analytics. The only library is the optional Smartspacer Client SDK, loaded on Android 10+.
 
 ## Install
 
-Install `dist/72F-Launcher-1.0.0-rc4.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
+Install `dist/72F-Launcher-1.0.0-rc5.apk`. Open **72F Launcher**: a five-step tour sets it as Home, picks a look, explains the gestures, sets up the top zone and contexts, and offers optional media and calendar access. Skip it anytime; replay it from settings. Later, hold the round search button for quick settings. Android's Home app setting lets you switch back anytime.
 
 This beta uses a development signing certificate. Keep that certificate for subsequent beta updates; a production certificate will require a separate migration/reinstall. It is not a Play Store release.
 
@@ -50,7 +50,7 @@ All launcher controls use a complete vector icon set: original **Retro**, origin
 
 ## Build
 
-Use JDK 21 (newer JDKs such as Android Studio's bundled JDK 25 are rejected by this Gradle version) and Android SDK 36 / Build Tools 35.0.0 (the app targets SDK 36 and uses predictive back). Set `ANDROID_HOME` or your local `sdk.dir` in untracked `local.properties`.
+Use JDK 21 and Android SDK 37 / Build Tools 37.0.0. The build uses Android Gradle Plugin 9.4.1 and Gradle 9.8.1; the app targets SDK 37 and uses predictive back. Set `ANDROID_HOME` or your local `sdk.dir` in untracked `local.properties`.
 
 ```sh
 ./gradlew :app:assembleDebug :app:lintDebug
@@ -63,12 +63,19 @@ Use JDK 21 (newer JDKs such as Android Studio's bundled JDK 25 are rejected by t
 
 UI suites drive an installed build over ADB: `smoke.py` (navigation, search, categories, settings, dock gestures), `features-smoke.py` (predictive back, app shortcuts, rename, hide, category order, notification dots from a real SMS), `extended-smoke.py` (scrubbers, launching, persistence, merges), `wallpaper-smoke.py`, `theme-smoke.py` (theme/backup round trips through the document picker) and `a11y-smoke.py` (labels and 48dp touch targets). **Each suite clears 72F's app data first** (`pm clear`), so run them only on a test emulator. Set `ANDROID_SERIAL` to pick the device.
 
-Release APK (R8-shrunk), signed with the same development key as the betas so it installs over them:
+Release APK (R8-shrunk), signed and checksummed into `dist/`:
 
 ```sh
-./gradlew :app:assembleRelease
-apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out dist/72F-Launcher-1.0.0-rc4.apk app/build/outputs/apk/release/app-release-unsigned.apk
+./scripts/release.sh
 ```
+
+Without a production key it signs with the development key the betas and RCs used, so it installs over them. To create the production key, run `./scripts/make-release-key.sh` yourself: it prompts for passwords and writes an untracked `keystore.properties`, after which Gradle signs release builds with it. Back up the keystore and passwords. Android won't install a differently signed APK over an existing one, so moving installs from the development key to the production key needs a backup (Settings → backup & restore), an uninstall and a restore.
+
+CI (`.github/workflows/ci.yml`) runs the JVM tests, lint and every build type on push and pull request.
+
+## Translations
+
+All UI text lives in `app/src/main/res/values/strings.xml`, with whole phrases as format strings (`hold %1$s`) and the context-rule words in the `rule_words` and `rule_days` arrays. To add a language, copy that file to `values-<language>/strings.xml` (for example `values-de`) and translate the values. `scripts/extract-strings.py` moves any new UI literals from Java into the file.
 
 ## Implementation
 
@@ -89,4 +96,4 @@ GraceLauncher and focus-launcher were reviewed through public documentation for 
 
 ## Known limits
 
-Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. Settings and labels are English-only (strings are not yet in Android resources). Release builds are signed with the development key; a production key is needed before a store release. RC4 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC4-NOTES.md` for what was checked and the release gate.
+Classification is heuristic and will need corrections for niche apps. Custom folders are flat categories. The app list offers monochrome icons, original-color icons, and text-only layouts. Theme editing is through versioned JSON, asset packages, presets, and effect controls. Work profile availability depends on Android policy. Only English text ships so far; translations go in `values-<language>/strings.xml`. Release builds use the development key until you create a production key with `scripts/make-release-key.sh`. RC5 was verified on an Android 17 emulator only: physical devices, OEM gesture navigation, Android 9–16, live TalkBack use, live media sessions, headphones and real Smartspacer cards still need testing. See `docs/RC5-NOTES.md` for what was checked and the release gate.

@@ -126,6 +126,7 @@ public final class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 31) getSplashScreen().setOnExitAnimationListener(view -> view.remove());
         prefs = getSharedPreferences("launcher", MODE_PRIVATE);
         launcher = getSystemService(LauncherApps.class);
+        ContextRules.localize(getResources().getStringArray(R.array.rule_words), getResources().getStringArray(R.array.rule_days));
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new WidgetHosting.Host(this, 7272);
         readState();
@@ -242,7 +243,7 @@ public final class MainActivity extends Activity {
             if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
             t.setPadding(dp(24),dp(theme.liquid?12:0),dp(12),dp(theme.liquid?14:6));t.setSingleLine(true);t.setLetterSpacing(theme.layout.equals("xmb")?0:-.035f);
-            t.setContentDescription(c+" category"+(selected?", selected":""));t.setOnClickListener(v->selectCategory(c,true));
+            t.setContentDescription(str(R.string.x_category_y, c, (selected?str(R.string.selected):"")));t.setOnClickListener(v->selectCategory(c,true));
             if(theme.layout.equals("xmb")){
                 LinearLayout item=column();item.setGravity(Gravity.CENTER_HORIZONTAL);item.setPadding(dp(6),dp(8),dp(6),dp(4));
                 MetroArt.Icon mark=new MetroArt.Icon(this,uiIcons,c,selected?fg:MetroArt.alpha(muted,.7f),false);mark.setGlyphSize(34);mark.setFocusable(false);mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -251,7 +252,7 @@ public final class MainActivity extends Activity {
             }else titles.addView(t);
         }
         rebuilding = true; categoryRail.setMax(categories.size()-1); categoryRail.setProgress(categories.indexOf(category)); categoryRail.fitSlots(); categoryRail.moveTo(categories.indexOf(category)); rebuilding = false;
-        categoryRail.setContentDescription("Category switcher, "+category+" selected. Swipe up for quick settings");
+        categoryRail.setContentDescription(str(R.string.category_switcher_x_selected_swipe_up_fo, category));
         titleScroll.post(() -> { int i = categories.indexOf(category); if (i >= 0 && i < titles.getChildCount()) titleScroll.smoothScrollTo(Math.max(0,titles.getChildAt(i).getLeft()-dp(8)),0); });
     }
 
@@ -277,7 +278,7 @@ public final class MainActivity extends Activity {
             row.setBackground(rounded(theme.glass>0||overImage()?MetroArt.alpha(surface(),.82f):mix(bg,fg,Color.luminance(bg)>.5?.06f:.09f),100));
             MetroArt.Icon glyph = new MetroArt.Icon(this, uiIcons, "search", secondaryInk(), false); glyph.setGlyphSize(20); glyph.setFocusable(false); glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); glyph.setMinimumWidth(0);
             row.addView(glyph, new LinearLayout.LayoutParams(dp(28), dp(48)));
-            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); search.setTextSize(20); search.setSingleLine(); search.setHint("find an app"); search.setTypeface(theme.typeface); search.setText(query);
+            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); search.setTextSize(20); search.setSingleLine(); search.setHint(str(R.string.find_an_app)); search.setTypeface(theme.typeface); search.setText(query);
             search.setBackground(null); search.setPadding(dp(10), 0, dp(4), 0); search.setHighlightColor(MetroArt.alpha(accent,.35f));
             row.addView(search,new LinearLayout.LayoutParams(0,dp(56),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed()));
             LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.setMargins(dp(16), dp(10), dp(16), dp(10)); root.addView(row, sp);
@@ -325,10 +326,10 @@ public final class MainActivity extends Activity {
         boolean is24 = android.text.format.DateFormat.is24HourFormat(this);
         Date now = new Date();
         clock.setText(new SimpleDateFormat(is24 ? "HH:mm" : "h:mm",Locale.getDefault()).format(now));
-        String period = is24 ? "" : new SimpleDateFormat("a",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + " · ";
-        String context = activeContext == null || activeContext.fallback ? "" : "\n● " + activeContext.name;
-        date.setText(period + new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + "\n"
-            + new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()) + context);
+        String day = new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault());
+        String day2 = is24 ? day : str(R.string.date_period_day, new SimpleDateFormat("a",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()), day);
+        String text = str(R.string.date_lines, day2, new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()));
+        date.setText(activeContext == null || activeContext.fallback ? text : str(R.string.date_with_context, text, activeContext.name));
     }
     private void selectCategory(String next, boolean animate) {
         if (category.equals(next)) return;
@@ -348,7 +349,7 @@ public final class MainActivity extends Activity {
                 : !hidden.contains(a.id) && (category.equals("all apps") || group(a).equals(category))) visible.add(a);
         }
         adapter.notifyDataSetChanged();
-        empty.setText(searching ? "no matches\ntry another name" : category.equals("favorites") ? "no favorites yet\n\nHold an app in all apps\nto add a favorite." : "no apps here\n\nHold an app to move it here.");
+        empty.setText(searching ?str(R.string.no_matches_try_another_name):category.equals("favorites") ?str(R.string.no_favorites_yet_hold_an_app_in_all_apps):str(R.string.no_apps_here_hold_an_app_to_move_it_here));
         empty.setVisibility(visible.isEmpty()?View.VISIBLE:View.GONE);
         alphabet.setVisibility(!searching && category.equals("favorites") || visible.isEmpty()?View.GONE:View.VISIBLE); alphabet.update();
         if (reset) list.setSelection(searching?0:scrollPositions.getOrDefault(category,0));
@@ -391,7 +392,7 @@ public final class MainActivity extends Activity {
             else {icon.clearColorFilter();icon.setAlpha(1f);}
             boolean notified=prefs.getBoolean("dots",true)&&MediaAccessService.hasDot(app.component.getPackageName(),app.user);
             dot.setVisibility(notified?VISIBLE:GONE);
-            setContentDescription(app.name+(app.work?", work profile":"")+(notified?", has notifications":"")+(hidden.contains(app.id)?", hidden from lists":"")+". Hold for app options");
+            setContentDescription(str(R.string.x_y_z_4_s_hold_for_app_options, app.name, (app.work?str(R.string.work_profile):""), (notified?str(R.string.has_notifications):""), (hidden.contains(app.id)?str(R.string.hidden_from_lists):"")));
         }
     }
     private final class AppAdapter extends BaseAdapter {
@@ -425,7 +426,9 @@ public final class MainActivity extends Activity {
             slide.setInterpolator(theme.expressive?new android.view.animation.OvershootInterpolator(1.4f):new android.view.animation.PathInterpolator(.2f,0,0,1));
             slide.addUpdateListener(a->{shown=(float)a.getAnimatedValue();invalidate();});slide.start();
         }
+        @Override public boolean performClick(){return super.performClick();}
         @Override public boolean onTouchEvent(MotionEvent e){
+            if(e.getActionMasked()==MotionEvent.ACTION_UP&&!opened&&Math.hypot(e.getX()-downX,e.getY()-downY)<dp(8))performClick();
             if(e.getActionMasked()==MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();opened=false;}
             if(opened)return true;
             if(e.getActionMasked()==MotionEvent.ACTION_MOVE&&downY-e.getY()>dp(30)&&downY-e.getY()>Math.abs(e.getX()-downX)*1.5f){
@@ -459,6 +462,7 @@ public final class MainActivity extends Activity {
         if(!theme.expressive)d.setStroke(dp(1),MetroArt.alpha(fg,.10f));
         return d;
     }
+    @android.annotation.SuppressLint("ClickableViewAccessibility") // the touch listener only observes; clicks reach the button
     /** Round search button. Tap to search, hold for quick settings. Uses the theme's search mark only if a theme overrides it. */
     private View searchButton(){
         View glyph;
@@ -478,12 +482,12 @@ public final class MainActivity extends Activity {
             GradientDrawable d=new GradientDrawable();d.setColor(primaryContainer);d.setCornerRadius(dp(18));button.setBackground(d);button.setElevation(dp(3));
             button.setOnTouchListener((v,e)->{int a=e.getActionMasked();if(a==MotionEvent.ACTION_DOWN||a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
                 float to=a==MotionEvent.ACTION_DOWN?dp(28):dp(18);android.animation.ObjectAnimator.ofFloat(d,"cornerRadius",d.getCornerRadius(),to).setDuration(theme.motionMs>0?260:0).start();}
-                return false;});
+                return false;}); // observes only (returns false): the button's own click and long-click handling stays intact
         }else button.setBackground(dockSurface(button));
         button.addView(glyph,new FrameLayout.LayoutParams(-1,-1));glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         button.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(theme.expressive?onPrimaryContainer:accent,.16f)),null,theme.expressive?null:new android.graphics.drawable.ShapeDrawable(new android.graphics.drawable.shapes.OvalShape())));
         if(theme.expressive)button.setClipToOutline(true);
-        button.setFocusable(true);button.setClickable(true);button.setContentDescription("Search apps. Hold for settings");
+        button.setFocusable(true);button.setClickable(true);button.setContentDescription(str(R.string.search_apps_hold_for_settings));
         button.setOnClickListener(v->openSearch());
         button.setOnLongClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);openSettings();return true;});
         return button;
@@ -491,7 +495,7 @@ public final class MainActivity extends Activity {
     private void launch(App app) {
         hideKeyboard();
         try { launcher.startMainActivity(app.component,app.user,null,null); }
-        catch (Exception e) { toast("App unavailable. Its profile may be paused."); loadApps(); }
+        catch (Exception e) { toast(str(R.string.app_unavailable_its_profile_may_be_pause)); loadApps(); }
     }
     private void openSearch() {
         if (searching) { search.requestFocus(); return; }
@@ -545,7 +549,7 @@ public final class MainActivity extends Activity {
     }
     private final class AlphabetRail extends View {
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); final ArrayList<String> letters = new ArrayList<>(); final ArrayList<Integer> positions=new ArrayList<>(); int selected=-1;
-        AlphabetRail(){super(MainActivity.this);setContentDescription("Alphabet scrubber. Drag to jump to an app letter");setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
+        AlphabetRail(){super(MainActivity.this);setContentDescription(str(R.string.alphabet_scrubber_drag_to_jump_to_an_app));setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
         void update(){ letters.clear();positions.clear(); for(int i=0;i<visible.size();i++){String l=CategoryRules.initial(visible.get(i).name);if(!letters.contains(l)){letters.add(l);positions.add(i);}}invalidate(); }
         @Override protected void onDraw(Canvas c){super.onDraw(c);if(letters.isEmpty())return;paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(10));float step=Math.min(dp(22),(getHeight()-dp(16))/(float)letters.size());float start=(getHeight()-step*letters.size())/2;if(legibility!=Legibility.OFF)paint.setShadowLayer(dp(3),0,dp(.5f),Color.luminance(fg)>=.4?MetroArt.alpha(Color.BLACK,.6f):MetroArt.alpha(Color.WHITE,.7f));else paint.clearShadowLayer();
             for(int i=0;i<letters.size();i++){paint.setColor(i==selected?accent:secondaryInk());c.drawText(letters.get(i),getWidth()/2f,start+step*(i+.5f)+dp(4),paint);}}
@@ -564,19 +568,19 @@ public final class MainActivity extends Activity {
         ArrayList<String> options=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
         for(ShortcutInfo shortcut:shortcuts(app)){
             CharSequence title=shortcut.getShortLabel()!=null?shortcut.getShortLabel():shortcut.getLongLabel();if(title==null)continue;
-            options.add(title+" · shortcut");actions.add(()->{try{launcher.startShortcut(shortcut,null,null);}catch(RuntimeException e){toast("Shortcut unavailable");}});
+            options.add(str(R.string.x_shortcut, title));actions.add(()->{try{launcher.startShortcut(shortcut,null,null);}catch(RuntimeException e){toast(str(R.string.shortcut_unavailable));}});
         }
         boolean favorite=favorites.contains(app.id),isHidden=hidden.contains(app.id);
-        options.add(favorite?"remove favorite":"add to favorites");actions.add(()->{if(favorite)favorites.remove(app.id);else if(favorites.size()<20){favorites.add(app.id);hidden.remove(app.id);}else{toast("Favorites holds up to 20 apps");return;}saveState();refreshList(false);});
+        options.add(favorite?str(R.string.remove_favorite):str(R.string.add_to_favorites));actions.add(()->{if(favorite)favorites.remove(app.id);else if(favorites.size()<20){favorites.add(app.id);hidden.remove(app.id);}else{toast(str(R.string.favorites_holds_up_to_20_apps));return;}saveState();refreshList(false);});
         if(favorite){
-            options.add("move favorite up");actions.add(()->moveFavorite(app,-1));
-            options.add("move favorite down");actions.add(()->moveFavorite(app,1));
+            options.add(str(R.string.move_favorite_up));actions.add(()->moveFavorite(app,-1));
+            options.add(str(R.string.move_favorite_down));actions.add(()->moveFavorite(app,1));
         }
-        options.add("move to category");actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu("move to",destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
-        options.add("rename"+(app.name.equals(app.label)?"":" · "+app.label));actions.add(()->renameApp(app));
-        options.add(isHidden?"show in lists":"hide from lists · still in search");actions.add(()->{if(isHidden)hidden.remove(app.id);else{hidden.add(app.id);favorites.remove(app.id);}saveState();refreshList(false);toast(isHidden?app.name+" is back in its category":app.name+" hidden. Find it in search");});
-        options.add("app info");actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast("App info unavailable");}});
-        options.add("uninstall");actions.add(()->{if(app.work){toast("Use app info to manage work apps");return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));});
+        options.add(str(R.string.move_to_category));actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu(str(R.string.move_to),destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
+        options.add(str(R.string.rename_x, (app.name.equals(app.label)?"":" · "+app.label)));actions.add(()->renameApp(app));
+        options.add(isHidden?str(R.string.show_in_lists):str(R.string.hide_from_lists_still_in_search));actions.add(()->{if(isHidden)hidden.remove(app.id);else{hidden.add(app.id);favorites.remove(app.id);}saveState();refreshList(false);toast(isHidden?str(R.string.x_is_back_in_its_category, app.name):str(R.string.x_hidden_find_it_in_search, app.name));});
+        options.add(str(R.string.app_info));actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast(str(R.string.app_info_unavailable));}});
+        options.add(str(R.string.uninstall));actions.add(()->{if(app.work){toast(str(R.string.use_app_info_to_manage_work_apps));return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));});
         menu(app.name,options.toArray(new String[0]),i->actions.get(i).run());
     }
     private void moveFavorite(App app,int by){int p=favorites.indexOf(app.id),to=p+by;if(p>=0&&to>=0&&to<favorites.size()){Collections.swap(favorites,p,to);saveState();refreshList(false);}}
@@ -596,35 +600,35 @@ public final class MainActivity extends Activity {
     }
     private void renameApp(App app){
         EditText input=new EditText(this);input.setSingleLine();input.setText(app.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("rename").setView(input).setNegativeButton("cancel",null)
-            .setNeutralButton("original name",(a,b)->{labels.remove(app.id);saveState();loadApps();}).setPositiveButton("save",null).create();showDialog(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError("Enter a name");return;}
+        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.rename)).setView(input).setNegativeButton(str(R.string.cancel),null)
+            .setNeutralButton(str(R.string.original_name),(a,b)->{labels.remove(app.id);saveState();loadApps();}).setPositiveButton(str(R.string.save),null).create();showDialog(d);
+        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError(str(R.string.enter_a_name));return;}
             if(name.equals(app.label))labels.remove(app.id);else labels.put(app.id,name);saveState();d.dismiss();loadApps();});
     }
     private void hiddenAppsSettings(){
         ArrayList<App> list=new ArrayList<>();for(App a:apps)if(hidden.contains(a.id))list.add(a);
-        if(list.isEmpty()){message("hidden apps","No hidden apps. Hold an app and choose “hide from lists”. Hidden apps stay findable in search.");return;}
+        if(list.isEmpty()){message(str(R.string.hidden_apps),str(R.string.no_hidden_apps_hold_an_app_and_choose_hi));return;}
         String[] names=new String[list.size()];for(int i=0;i<names.length;i++)names[i]=list.get(i).name+" · show again";
-        menu("hidden apps",names,i->{hidden.remove(list.get(i).id);saveState();refreshList(false);toast(list.get(i).name+" is back");});
+        menu(str(R.string.hidden_apps),names,i->{hidden.remove(list.get(i).id);saveState();refreshList(false);toast(str(R.string.x_is_back, list.get(i).name));});
     }
     private String version(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(PackageManager.NameNotFoundException e){return "";}}
-    private void aboutSettings(){menu("72F "+version(),new String[]{"about 72F","open-source notices"},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message("open-source notices",new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message("72F "+version(),"Horizontal categories. Vertical app lists.\n\nSwipe sideways for categories; scroll vertically for apps. Hold apps to organize.\n\nOriginal native Android implementation. No ads, analytics, accounts, or internet permission. Theme files stay on your device.\n\nAutomatic categories use local heuristics; your choices take priority.\n\nContexts change the top zone and starting category by time, headphones, charging, Do Not Disturb or playing media. They are checked only while Home is on screen.");});}
-    private void categorySettings(){menu("categories",new String[]{prefs.getBoolean("categories",true)?"turn categories off":"turn categories on","create category","show or hide categories","merge categories","rename custom category","delete custom category"},i->{
+    private void aboutSettings(){menu(str(R.string.s_72f_x, version()),new String[]{str(R.string.about_72f),str(R.string.open_source_notices)},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message(str(R.string.open_source_notices),new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message(str(R.string.s_72f_x, version()),str(R.string.horizontal_categories_vertical_app_lists));});}
+    private void categorySettings(){menu(str(R.string.categories),new String[]{prefs.getBoolean("categories",true)?str(R.string.turn_categories_off):str(R.string.turn_categories_on),str(R.string.create_category),str(R.string.show_or_hide_categories),str(R.string.merge_categories),str(R.string.rename_custom_category),str(R.string.delete_custom_category)},i->{
         if(i==0){prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);}
         if(i==1)nameDialog("new category","",name->{custom.add(name);saveState();refreshCategories();});
-        if(i==2){ArrayList<String> cs=editableCategories();boolean[] checked=new boolean[cs.size()];for(int j=0;j<cs.size();j++)checked[j]=!disabled.contains(cs.get(j));AlertDialog d=new AlertDialog.Builder(this).setTitle("visible categories").setMultiChoiceItems(cs.toArray(new String[0]),checked,(dialog,n,on)->{if(on)disabled.remove(cs.get(n));else disabled.add(cs.get(n));}).setPositiveButton("done",(a,b)->{saveState();refreshCategories();refreshList(true);}).create();d.setOnCancelListener(a->{saveState();refreshCategories();refreshList(true);});showDialog(d);}
-        if(i==3){ArrayList<String> cs=editableCategories();menu("merge from",cs.toArray(new String[0]),n->{String from=cs.remove(n);menu("merge into",cs.toArray(new String[0]),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);toast("Merged into "+target);});});}
-        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast("No custom categories yet");return;}menu(i==4?"rename":"delete",cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{showDialog(new AlertDialog.Builder(this).setTitle("delete "+old+"?").setMessage("Apps remain installed and return to automatic categories.").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).create());}});}
+        if(i==2){ArrayList<String> cs=editableCategories();boolean[] checked=new boolean[cs.size()];for(int j=0;j<cs.size();j++)checked[j]=!disabled.contains(cs.get(j));AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.visible_categories)).setMultiChoiceItems(cs.toArray(new String[0]),checked,(dialog,n,on)->{if(on)disabled.remove(cs.get(n));else disabled.add(cs.get(n));}).setPositiveButton(str(R.string.done),(a,b)->{saveState();refreshCategories();refreshList(true);}).create();d.setOnCancelListener(a->{saveState();refreshCategories();refreshList(true);});showDialog(d);}
+        if(i==3){ArrayList<String> cs=editableCategories();menu(str(R.string.merge_from),cs.toArray(new String[0]),n->{String from=cs.remove(n);menu(str(R.string.merge_into),cs.toArray(new String[0]),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);toast(str(R.string.merged_into_x, target));});});}
+        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast(str(R.string.no_custom_categories_yet));return;}menu(i==4?str(R.string.rename):str(R.string.delete),cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.delete_x, old)).setMessage(str(R.string.apps_remain_installed_and_return_to_auto)).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.delete),(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).create());}});}
     });}
     private interface NameAction{void accept(String s);}
     private void nameDialog(String title,String existing,NameAction action){
         EditText input=new EditText(this);input.setSingleLine();input.setText(existing);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle(title).setView(input).setNegativeButton("cancel",null).setPositiveButton("save",null).create();showDialog(d);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle(title).setView(input).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.save),null).create();showDialog(d);
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);ArrayList<String> used=editableCategories();used.addAll(merges.keySet());used.add("favorites");used.add("all apps");
-            if(name.isEmpty()||!name.equals(existing)&&used.contains(name)){input.setError("Choose a unique category name");return;}action.accept(name);d.dismiss();});
+            if(name.isEmpty()||!name.equals(existing)&&used.contains(name)){input.setError(str(R.string.choose_a_unique_category_name));return;}action.accept(name);d.dismiss();});
     }
-    private void headerSettings(){menu("top zone",new String[]{"default height · "+prefs.getInt("header",20)+"%","media access settings","calendar access"},i->{
-        if(i==0)menu("top zone height",new String[]{"none","10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();buildUi();});
+    private void headerSettings(){menu(str(R.string.top_zone),new String[]{str(R.string.default_height_x, prefs.getInt("header",20)),str(R.string.media_access_settings),str(R.string.calendar_access)},i->{
+        if(i==0)menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();buildUi();});
         if(i==1)safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         if(i==2){if(calendarAllowed())safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}
     });}
@@ -636,19 +640,19 @@ public final class MainActivity extends Activity {
         }catch(SecurityException e){if(controller!=null)controller.unregisterCallback(mediaCallback);controller=null;}
         updateMedia();
     }
-    private void updateMedia(){if(mediaBox==null)return;boolean show=controller!=null;mediaBox.setVisibility(show?View.VISIBLE:View.GONE);if(!show)return;MediaMetadata m=controller.getMetadata();mediaTitle.setText(m==null?"now playing":m.getDescription().getTitle());mediaArtist.setText(m==null?"":m.getDescription().getSubtitle());if(playButton!=null)playButton.setMark(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING?"pause":"play",fg);}
+    private void updateMedia(){if(mediaBox==null)return;boolean show=controller!=null;mediaBox.setVisibility(show?View.VISIBLE:View.GONE);if(!show)return;MediaMetadata m=controller.getMetadata();mediaTitle.setText(m==null?str(R.string.now_playing):m.getDescription().getTitle());mediaArtist.setText(m==null?"":m.getDescription().getSubtitle());if(playButton!=null)playButton.setMark(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING?"pause":"play",fg);}
     private void mediaAction(int action){if(controller==null)return;MediaController.TransportControls c=controller.getTransportControls();if(action==0)c.skipToPrevious();else if(action==2)c.skipToNext();else if(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING)c.pause();else c.play();}
 
-    private void themeSettings(){menu("appearance",new String[]{"retro · cyan","retro · cobalt","retro · magenta","paper · light","wave","liquid retro","material 3 expressive","import theme","export theme package","title size","app icons","app icon packs","effects","launcher icon set"},i->{
+    private void themeSettings(){menu(str(R.string.appearance),new String[]{str(R.string.retro_cyan),str(R.string.retro_cobalt),str(R.string.retro_magenta),str(R.string.paper_light),str(R.string.wave),str(R.string.liquid_retro),str(R.string.material_3_expressive),str(R.string.import_theme),str(R.string.export_theme_package),str(R.string.title_size),str(R.string.app_icons),str(R.string.app_icon_packs),str(R.string.effects),str(R.string.launcher_icon_set)},i->{
         try{
             if(i<7){applyPreset(i);return;}
             i--;
             if(i==6)pickDocument(41,false,"application/octet-stream","72f-theme.72ftheme.zip");
             if(i==7)pickDocument(42,true,"application/zip","72f-theme.72ftheme.zip");
-            if(i==8)menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
-            if(i==9)menu("app icons",new String[]{"monochrome","original color","text only"},n->{prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();});
+            if(i==8)menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
+            if(i==9)menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only)},n->{prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();});
             if(i==10)chooseIconPack();if(i==11)effectsSettings();
-            if(i==12)menu("launcher icon set",new String[]{"retro","wave","material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
+            if(i==12)menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
         }catch(Exception e){fileError(e);}
     });}
     private void applyTheme(JSONObject t)throws Exception {
@@ -678,13 +682,13 @@ public final class MainActivity extends Activity {
     }
     private JSONObject themeJson(){try{return new JSONObject(theme.json.toString());}catch(JSONException e){throw new IllegalStateException(e);}}
     private void persistTheme(){prefs.edit().putString("theme",theme.json.toString()).apply();prepareSoftWallpaper();}
-    private void effectsSettings(){menu("effects",new String[]{"background blur","glass surfaces","glass tuning · blur, tint, refraction","wave animation · "+(theme.animated?"on":"off"),"material 3 expressive · "+(theme.expressive?"on":"off"),"wallpaper colors · "+(Build.VERSION.SDK_INT<31?"Android 12+":theme.dynamic?"on":"off")},i->{
+    private void effectsSettings(){menu(str(R.string.effects),new String[]{str(R.string.background_blur),str(R.string.glass_surfaces),str(R.string.glass_tuning_blur_tint_refraction),str(R.string.wave_animation_x, (theme.animated?str(R.string.on):str(R.string.off))),str(R.string.material_3_expressive_x, (theme.expressive?str(R.string.on):str(R.string.off))),str(R.string.wallpaper_colors_x, (Build.VERSION.SDK_INT<31?str(R.string.android_12):theme.dynamic?str(R.string.on):str(R.string.off)))},i->{
         if(i==2){glassTuning();return;}
         if(i>2)i--;
         if(i==3)changeEffect("expressive",!theme.expressive);
-        if(i==4){if(Build.VERSION.SDK_INT<31){toast("Wallpaper colors need Android 12 or newer");return;}changeEffect("dynamic",!theme.dynamic);}
-        if(i==0)menu("blur",new String[]{"off","soft · 8","frosted · 18","deep · 32"},n->changeEffect("blur",new int[]{0,8,18,32}[n]));
-        if(i==1)menu("glass",new String[]{"off","subtle","frosted","liquid glass"},n->{try{JSONObject t=themeJson();t.put("glass",new int[]{0,20,40,65}[n]);t.put("liquid",n==3);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
+        if(i==4){if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}
+        if(i==0)menu(str(R.string.blur),new String[]{str(R.string.off),str(R.string.soft_8),str(R.string.frosted_18),str(R.string.deep_32)},n->changeEffect("blur",new int[]{0,8,18,32}[n]));
+        if(i==1)menu(str(R.string.glass),new String[]{str(R.string.off),str(R.string.subtle),str(R.string.frosted),str(R.string.liquid_glass)},n->{try{JSONObject t=themeJson();t.put("glass",new int[]{0,20,40,65}[n]);t.put("liquid",n==3);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
         if(i==2)changeEffect("animated",!theme.animated);
     });}
     // Glass tuning: three live sliders. Rebuilds are debounced so dragging stays smooth.
@@ -693,18 +697,18 @@ public final class MainActivity extends Activity {
     private void glassTuning(){
         if(sheet!=null)sheet.dismiss(); // show the whole screen while tuning
         if(theme.glass==0){
-            menu("turn on glass first",new String[]{"liquid glass","frosted glass"},n->{setGlass(n==0?65:40,n==0);glassTuning();});return;
+            menu(str(R.string.turn_on_glass_first),new String[]{str(R.string.liquid_glass),str(R.string.frosted_glass)},n->{setGlass(n==0?65:40,n==0);glassTuning();});return;
         }
         LinearLayout box=column();box.setPadding(dp(24),dp(8),dp(24),dp(12));
-        TextView note=text(theme.liquid?"Liquid glass: blur under the lens, its tint, and how strongly the edges bend.":"Frosted glass: blur and tint. Refraction applies to liquid glass.",14,muted);note.setPadding(0,0,0,dp(8));box.addView(note);
+        TextView note=text(theme.liquid?str(R.string.liquid_glass_blur_under_the_lens_its_tin):str(R.string.frosted_glass_blur_and_tint_refraction_a),14,muted);note.setPadding(0,0,0,dp(8));box.addView(note);
         float autoBlur=theme.liquid?2f+6f*theme.glass/100f:4f+12f*theme.glass/100f;
         int blurNow=theme.glassBlur>=0?theme.glassBlur:Math.round(autoBlur);
-        box.addView(glassSlider("blur",blurNow,0,40,v->v+" dp",v->tuneGlass("glassBlur",v)));
-        box.addView(glassSlider("darker ↔ lighter",theme.glassTint+100,0,200,v->v==100?"theme":v<100?"darker "+(100-v)+"%":"lighter "+(v-100)+"%",v->tuneGlass("glassTint",v-100)));
-        if(theme.liquid)box.addView(glassSlider("refraction",theme.refraction,0,100,v->v==0?"off":v+"%",v->tuneGlass("refraction",v)));
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("glass").setView(box)
-            .setNeutralButton("reset",(a,b)->{try{JSONObject t=themeJson();t.remove("glassBlur");t.remove("glassTint");t.remove("refraction");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})
-            .setPositiveButton("done",null).create();
+        box.addView(glassSlider(str(R.string.blur),blurNow,0,40,v->v+" dp",v->tuneGlass("glassBlur",v)));
+        box.addView(glassSlider(str(R.string.darker_lighter),theme.glassTint+100,0,200,v->v==100?"theme":v<100?"darker "+(100-v)+"%":"lighter "+(v-100)+"%",v->tuneGlass("glassTint",v-100)));
+        if(theme.liquid)box.addView(glassSlider(str(R.string.refraction),theme.refraction,0,100,v->v==0?"off":v+"%",v->tuneGlass("refraction",v)));
+        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.glass)).setView(box)
+            .setNeutralButton(str(R.string.reset),(a,b)->{try{JSONObject t=themeJson();t.remove("glassBlur");t.remove("glassTint");t.remove("refraction");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})
+            .setPositiveButton(str(R.string.done),null).create();
         showDialog(d);
         if(d.getWindow()!=null)d.getWindow().setDimAmount(0f); // keep the glass visible while tuning
     }
@@ -728,17 +732,17 @@ public final class MainActivity extends Activity {
     private void changeEffect(String key,Object value){try{JSONObject t=themeJson();t.put(key,value);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
     private void chooseIconPack(){
         List<IconPacks.Pack> packs=IconPacks.installed(this);ArrayList<String> names=new ArrayList<>();names.add("system icons");for(IconPacks.Pack p:packs)names.add(p.label);
-        if(packs.isEmpty()){message("icon packs","Install an ADW-compatible icon pack, then come back here. System icons are active.");return;}
-        menu("icon packs",names.toArray(new String[0]),i->{if(i==0){prefs.edit().remove("iconPack").apply();loadApps();return;}
-            IconPacks.Pack p=packs.get(i-1);worker.execute(()->{try{new IconPacks(this,p.packageName);prefs.edit().putString("iconPack",p.packageName).apply();handler.post(()->{loadApps();toast(p.label+" applied");});}catch(Exception e){handler.post(()->fileError(e));}});
+        if(packs.isEmpty()){message(str(R.string.icon_packs),str(R.string.install_an_adw_compatible_icon_pack_then));return;}
+        menu(str(R.string.icon_packs),names.toArray(new String[0]),i->{if(i==0){prefs.edit().remove("iconPack").apply();loadApps();return;}
+            IconPacks.Pack p=packs.get(i-1);worker.execute(()->{try{new IconPacks(this,p.packageName);prefs.edit().putString("iconPack",p.packageName).apply();handler.post(()->{loadApps();toast(str(R.string.x_applied, p.label));});}catch(Exception e){handler.post(()->fileError(e));}});
         });
     }
     private void pickDocument(int request,boolean create,String mime,String name){
         Intent intent=new Intent(create?Intent.ACTION_CREATE_DOCUMENT:Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(create?mime:"*/*");
         if(create)intent.putExtra(Intent.EXTRA_TITLE,name);startActivityForResult(intent,request);
     }
-    private void backupSettings(){menu("backup & restore",new String[]{"export launcher backup","restore launcher backup"},i->{try{pickDocument(i==0?45:46,i==0,"application/zip","72f-launcher.72fbackup.zip");}catch(Exception e){fileError(e);}});}
-    private void fileError(Exception error){if(!isDestroyed())message("couldn't use this file",error.getMessage()==null?"Choose a supported 72F file.":error.getMessage());}
+    private void backupSettings(){menu(str(R.string.backup_restore),new String[]{str(R.string.export_launcher_backup),str(R.string.restore_launcher_backup)},i->{try{pickDocument(i==0?45:46,i==0,"application/zip","72f-launcher.72fbackup.zip");}catch(Exception e){fileError(e);}});}
+    private void fileError(Exception error){if(!isDestroyed())message(str(R.string.couldn_t_use_this_file),error.getMessage()==null?str(R.string.choose_a_supported_72f_file):error.getMessage());}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==47||request==48){int id=prefs.getInt("pendingWidget",-1);if(id<0)return;if(result!=RESULT_OK){cancelWidget();return;}if(request==47)configureWidget(id);else placeWidget(id);return;}
@@ -748,7 +752,7 @@ public final class MainActivity extends Activity {
         final ThemeEngine currentTheme=theme;
         worker.execute(()->{
             try{
-                if(request==42||request==45){try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Destination unavailable");if(request==42)currentTheme.exportSnapshot(this,prefs,out);else BackupStore.export(this,prefs,currentTheme,out);}handler.post(()->toast(request==42?"Theme exported":"Backup exported"));}
+                if(request==42||request==45){try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Destination unavailable");if(request==42)currentTheme.exportSnapshot(this,prefs,out);else BackupStore.export(this,prefs,currentTheme,out);}handler.post(()->toast(request==42?str(R.string.theme_exported):str(R.string.backup_exported)));}
                 if(request==41)importTheme(uri);
                 if(request==46){BackupStore.Pending prepared;try(InputStream in=getContentResolver().openInputStream(uri)){prepared=BackupStore.prepare(this,in);}handler.post(()->reviewRestore(prepared));}
             }catch(Exception e){handler.post(()->fileError(e));}
@@ -770,16 +774,16 @@ public final class MainActivity extends Activity {
             else if(next.json.has("wallpaperMode"))edit.putString("wallpaperMode",next.json.getString("wallpaperMode"));
             edit.putString("iconPack",next.json.optString("iconPack",""));
             if(!edit.commit())throw new IOException("Cannot persist theme");
-            handler.post(()->{if(isDestroyed())return;try{applyTheme(next.json);restoreWallpaper();prepareSoftWallpaper();buildUi();loadApps();toast(next.name+" applied");}catch(Exception e){fileError(e);}});
+            handler.post(()->{if(isDestroyed())return;try{applyTheme(next.json);restoreWallpaper();prepareSoftWallpaper();buildUi();loadApps();toast(str(R.string.x_applied, next.name));}catch(Exception e){fileError(e);}});
         }catch(Exception e){ThemeEngine.deleteTree(stage);throw e;}
     }
     private void reviewRestore(BackupStore.Pending prepared){
         if(isDestroyed()){ThemeEngine.deleteTree(prepared.directory);return;}
         pendingRestore=prepared;
         try{
-            AlertDialog d=new AlertDialog.Builder(this).setTitle("restore launcher?").setMessage(prepared.summary())
-                .setNegativeButton("cancel",(a,b)->{ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;})
-                .setPositiveButton("restore",(a,b)->{pendingRestore=null;worker.execute(()->{try{BackupStore.apply(this,prefs,prepared);handler.post(()->{if(isDestroyed())return;pendingRestore=null;wallpaper=null;softWallpaper=null;readState();activeContext=resolveContext();appliedLayout=layoutKey(activeContext);category=startCategory(activeContext);searching=false;query="";scrollPositions.clear();restoreWallpaper();buildUi();loadApps();toast("Launcher restored");});}catch(Exception e){handler.post(()->fileError(e));}});}).create();
+            AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.restore_launcher)).setMessage(prepared.summary())
+                .setNegativeButton(str(R.string.cancel),(a,b)->{ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;})
+                .setPositiveButton(str(R.string.restore),(a,b)->{pendingRestore=null;worker.execute(()->{try{BackupStore.apply(this,prefs,prepared);handler.post(()->{if(isDestroyed())return;pendingRestore=null;wallpaper=null;softWallpaper=null;readState();activeContext=resolveContext();appliedLayout=layoutKey(activeContext);category=startCategory(activeContext);searching=false;query="";scrollPositions.clear();restoreWallpaper();buildUi();loadApps();toast(str(R.string.launcher_restored));});}catch(Exception e){handler.post(()->fileError(e));}});}).create();
             d.setOnCancelListener(a->{ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;});showDialog(d);
         }catch(Exception e){ThemeEngine.deleteTree(prepared.directory);fileError(e);}
     }
@@ -854,7 +858,7 @@ public final class MainActivity extends Activity {
     }
     private void importWallpaper(Uri uri) {
         final int request=++wallpaperGeneration;
-        toast("Preparing wallpaper…");
+        toast(str(R.string.preparing_wallpaper));
         worker.execute(() -> {
             File incoming=null;
             try {
@@ -870,31 +874,31 @@ public final class MainActivity extends Activity {
                 try { output=saved.startWrite();if(!image.compress(Bitmap.CompressFormat.JPEG,92,output))throw new IOException("Couldn't save image");saved.finishWrite(output); }
                 catch(IOException error){if(output!=null)saved.failWrite(output);image.recycle();throw error;}
                 prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
-                handler.post(() -> { if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast("Wallpaper set");}else image.recycle(); });
+                handler.post(() -> { if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast(str(R.string.wallpaper_set));}else image.recycle(); });
             } catch(Exception error) {
-                handler.post(() -> {if(!isDestroyed())message("couldn't open wallpaper","Choose a readable photo or image, up to 32 MB.");});
+                handler.post(() -> {if(!isDestroyed())message(str(R.string.couldn_t_open_wallpaper),str(R.string.choose_a_readable_photo_or_image_up_to_3));});
             } finally { if(incoming!=null)incoming.delete(); }
         });
     }
     private void wallpaperSettings() {
-        menu("wallpaper",new String[]{"choose a photo","use phone wallpaper","solid background","wallpaper dimming","use saved photo","text legibility · "+legibilitySummary()},i -> {
+        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary())},i -> {
             if(i==5){legibilitySettings();return;}
-            if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast("No image picker available");}}
+            if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast(str(R.string.no_image_picker_available));}}
             if(i==1||i==2){prefs.edit().putString("wallpaperMode",i==1?"system":"solid").apply();buildUi();}
             if(i==3){
                 LinearLayout box=column();box.setPadding(dp(24),dp(12),dp(24),dp(18));
-                TextView value=text(prefs.getInt("wallpaperDim",60)+"% dim",24,fg);box.addView(value);
-                TextView explanation=text("Adjust the wallpaper brightness behind apps.",14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
-                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription("Wallpaper dimming");dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
+                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",60)),24,fg);box.addView(value);
+                TextView explanation=text(str(R.string.adjust_the_wallpaper_brightness_behind_a),14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
+                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
                 styleSlider(dimmer);
                 dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                    public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(amount+"% dim");updateBackdrop();}
+                    public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(str(R.string.x_dim, amount));updateBackdrop();}
                     public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}
                 });
                 box.addView(dimmer,new LinearLayout.LayoutParams(-1,dp(48)));
-                showDialog(new AlertDialog.Builder(this).setTitle("wallpaper dimming").setView(box).setPositiveButton("done",null).create());
+                showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.wallpaper_dimming)).setView(box).setPositiveButton(str(R.string.done),null).create());
             }
-            if(i==4){if(!BackupStore.wallpaperFile(this,prefs).exists()){toast("Choose a photo first");return;}prefs.edit().putString("wallpaperMode","photo").apply();if(wallpaper==null)restoreWallpaper();else buildUi();}
+            if(i==4){if(!BackupStore.wallpaperFile(this,prefs).exists()){toast(str(R.string.choose_a_photo_first));return;}prefs.edit().putString("wallpaperMode","photo").apply();if(wallpaper==null)restoreWallpaper();else buildUi();}
         });
     }
 
@@ -916,9 +920,9 @@ public final class MainActivity extends Activity {
                     View divider=new View(this); divider.setBackgroundColor(MetroArt.alpha(accent,.75f));
                     LinearLayout.LayoutParams lineParams=new LinearLayout.LayoutParams(dp(1),dp(38)); lineParams.setMargins(dp(14),0,dp(18),0); timeRow.addView(divider,lineParams);
                     date=text("",13,secondaryInk());legible(date); date.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); date.setLineSpacing(dp(5),1); date.setLetterSpacing(.02f);
-                    date.setContentDescription("Date and active context. Tap for quick settings"); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
+                    date.setContentDescription(str(R.string.date_and_active_context_tap_for_quick_se)); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
                     timeRow.addView(date,new LinearLayout.LayoutParams(0,-2,1)); header.addView(timeRow); updateClock();
-                    clock.setContentDescription("Clock. Tap to open alarms"); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
+                    clock.setContentDescription(str(R.string.clock_tap_to_open_alarms)); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
                     break;}
                 case "alarm":
                     alarmText=text("",13,secondaryInk());legible(alarmText); alarmText.setLetterSpacing(.08f); alarmText.setPadding(0,first?0:dp(12),0,0); alarmText.setSingleLine();
@@ -932,7 +936,7 @@ public final class MainActivity extends Activity {
                     break;}
                 case "media":{
                     mediaBox=column(); mediaBox.setPadding(0,first?0:dp(18),0,0);
-                    TextView playing=text("now playing",9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
+                    TextView playing=text(str(R.string.now_playing),9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
                     LinearLayout mediaRow=row(); mediaRow.setGravity(Gravity.CENTER_VERTICAL);
                     LinearLayout metadata=column(); metadata.setPadding(0,dp(6),dp(8),0);
                     mediaTitle=text("",18,fg); mediaArtist=text("",12,secondaryInk()); legible(mediaTitle); legible(mediaArtist);
@@ -953,7 +957,7 @@ public final class MainActivity extends Activity {
             }
             first=false;
         }
-        if(stack!=null){final String id=rule.id;stack.setPage(stackPages.getOrDefault(id,0),page->stackPages.put(id,page));stack.setContentDescription(stack.count()+" widgets. Swipe sideways to switch, hold for options");}
+        if(stack!=null){final String id=rule.id;stack.setPage(stackPages.getOrDefault(id,0),page->stackPages.put(id,page));stack.setContentDescription(str(R.string.x_widgets_swipe_sideways_to_switch_hold, stack.count()));}
         if(theme.glass>0){header.setBackground(glassSurface(header));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,dp(height));hp.setMargins(dp(16),dp(8),dp(16),dp(8));root.addView(header,hp);}
         else root.addView(header,new LinearLayout.LayoutParams(-1,dp(height)));
     }
@@ -963,9 +967,9 @@ public final class MainActivity extends Activity {
     private View smartspaceView(boolean first){
         if(Build.VERSION.SDK_INT<29)return null;
         if(!smartspacerInstalled()){
-            TextView hint=text("install Smartspacer for At a Glance cards",13,muted);hint.setPadding(0,first?0:dp(12),0,0);
+            TextView hint=text(str(R.string.install_smartspacer_for_at_a_glance_card),13,muted);hint.setPadding(0,first?0:dp(12),0,0);
             hint.setOnClickListener(v->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("market://details?id="+SMARTSPACER))));
-            hint.setContentDescription("Smartspacer is not installed. Tap to find it in your app store");return hint;
+            hint.setContentDescription(str(R.string.smartspacer_is_not_installed_tap_to_find));return hint;
         }
         try{
             View view=getLayoutInflater().inflate(R.layout.smartspacer_view,root,false);
@@ -979,14 +983,14 @@ public final class MainActivity extends Activity {
         AlarmManager.AlarmClockInfo next=getSystemService(AlarmManager.class).getNextAlarmClock();
         if(next==null){alarmText.setVisibility(View.GONE);return;}
         String pattern=android.text.format.DateFormat.is24HourFormat(this)?"EEE HH:mm":"EEE h:mm a";
-        alarmText.setVisibility(View.VISIBLE);alarmText.setText("alarm  "+new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault()));
-        alarmText.setContentDescription("Next alarm "+alarmText.getText()+". Tap to open alarms");
+        alarmText.setVisibility(View.VISIBLE);alarmText.setText(str(R.string.alarm_x, new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault())));
+        alarmText.setContentDescription(str(R.string.next_alarm_x_tap_to_open_alarms, alarmText.getText()));
     }
     private boolean calendarAllowed(){return checkSelfPermission(android.Manifest.permission.READ_CALENDAR)==PackageManager.PERMISSION_GRANTED;}
     private void updateAgenda(){
         if(agendaText==null)return;
         agendaLoaded=System.currentTimeMillis();
-        if(!calendarAllowed()){agendaText.setTextColor(secondaryInk());agendaText.setText("tap to show your calendar here");agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));return;}
+        if(!calendarAllowed()){agendaText.setTextColor(secondaryInk());agendaText.setText(str(R.string.tap_to_show_your_calendar_here));agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));return;}
         final TextView target=agendaText;final boolean is24=android.text.format.DateFormat.is24HourFormat(this);
         target.setOnClickListener(v->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("content://com.android.calendar/time/"+System.currentTimeMillis()))));
         worker.execute(()->{
@@ -1056,10 +1060,10 @@ public final class MainActivity extends Activity {
     }
     private void contextOverride(){
         ArrayList<String> names=new ArrayList<>();names.add("automatic");for(ContextRules.Rule r:contexts)names.add(r.name);
-        menu("use context",names.toArray(new String[0]),i->{
-            if(i==0){prefs.edit().remove("contextPin").remove("contextPinUntil").apply();contextsChanged();toast("Contexts are automatic");return;}
+        menu(str(R.string.use_context),names.toArray(new String[0]),i->{
+            if(i==0){prefs.edit().remove("contextPin").remove("contextPinUntil").apply();contextsChanged();toast(str(R.string.contexts_are_automatic));return;}
             ContextRules.Rule r=contexts.get(i-1);
-            menu("hold "+r.name,new String[]{"for 1 hour","for 3 hours","until tomorrow morning"},n->{
+            menu(str(R.string.hold_x, r.name),new String[]{str(R.string.for_1_hour),str(R.string.for_3_hours),str(R.string.until_tomorrow_morning)},n->{
                 long until;Calendar c=Calendar.getInstance();
                 if(n<2)until=System.currentTimeMillis()+(n==0?1:3)*3600000L;
                 else{c.add(Calendar.DAY_OF_YEAR,c.get(Calendar.HOUR_OF_DAY)<4?0:1);c.set(Calendar.HOUR_OF_DAY,4);c.set(Calendar.MINUTE,0);until=c.getTimeInMillis();}
@@ -1081,7 +1085,7 @@ public final class MainActivity extends Activity {
             AppWidgetHostView view=widgetHost.createView(this,id,info);
             if(Build.VERSION.SDK_INT>=31)view.setColorResources(widgetColors());
             view.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol||b-t!=ob-ot){float d=getResources().getDisplayMetrics().density;int w=Math.round((r-l)/d),h=Math.round((b-t)/d);view.updateAppWidgetSize(new Bundle(),w,h,w,h);}});
-            view.setContentDescription(info.loadLabel(getPackageManager())+" widget. Hold for options");
+            view.setContentDescription(str(R.string.x_widget_hold_for_options, info.loadLabel(getPackageManager())));
             if(view instanceof WidgetHosting.HostedView)((WidgetHosting.HostedView)view).onLongPress=()->widgetMenu(rule,item);
             return view;
         }catch(RuntimeException e){return null;}
@@ -1102,21 +1106,21 @@ public final class MainActivity extends Activity {
     }
     private static int mix(int a,int b,float t){return Color.rgb(Math.round(Color.red(a)+(Color.red(b)-Color.red(a))*t),Math.round(Color.green(a)+(Color.green(b)-Color.green(a))*t),Math.round(Color.blue(a)+(Color.blue(b)-Color.blue(a))*t));}
     private void addAppWidget(ContextRules.Rule target){
-        if(target.widgets.size()>=ContextStore.MAX_WIDGETS){toast("This context is full");return;}
+        if(target.widgets.size()>=ContextStore.MAX_WIDGETS){toast(str(R.string.this_context_is_full));return;}
         PackageManager pm=getPackageManager();
         ArrayList<AppWidgetProviderInfo> providers=new ArrayList<>(widgetManager.getInstalledProvidersForProfile(android.os.Process.myUserHandle()));
-        if(providers.isEmpty()){toast("No widgets installed");return;}
+        if(providers.isEmpty()){toast(str(R.string.no_widgets_installed));return;}
         HashMap<AppWidgetProviderInfo,String> labels=new HashMap<>();
         for(AppWidgetProviderInfo info:providers){String app;try{app=pm.getApplicationLabel(pm.getApplicationInfo(info.provider.getPackageName(),0)).toString();}catch(Exception e){app=info.provider.getPackageName();}labels.put(info,app+" · "+info.loadLabel(pm));}
         Collator collator=Collator.getInstance();providers.sort((a,b)->collator.compare(labels.get(a),labels.get(b)));
         String[] names=new String[providers.size()];for(int i=0;i<names.length;i++)names[i]=labels.get(providers.get(i));
-        menu("add widget",names,i->{
+        menu(str(R.string.add_widget),names,i->{
             AppWidgetProviderInfo info=providers.get(i);int id=widgetHost.allocateAppWidgetId();
             prefs.edit().putInt("pendingWidget",id).putString("pendingWidgetContext",target.id).apply();
             if(widgetManager.bindAppWidgetIdIfAllowed(id,info.getProfile(),info.provider,null)){configureWidget(id);return;}
             Intent bind=new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER,info.provider).putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE,info.getProfile());
-            try{startActivityForResult(bind,47);}catch(Exception e){cancelWidget();toast("This phone doesn't allow adding widgets here");}
+            try{startActivityForResult(bind,47);}catch(Exception e){cancelWidget();toast(str(R.string.this_phone_doesn_t_allow_adding_widgets));}
         });
     }
     private void widgetMenu(ContextRules.Rule rule,String item){
@@ -1124,12 +1128,12 @@ public final class MainActivity extends Activity {
         boolean reconfigurable=Build.VERSION.SDK_INT>=31&&info!=null&&info.configure!=null&&(info.widgetFeatures&AppWidgetProviderInfo.WIDGET_FEATURE_RECONFIGURABLE)!=0;
         int height=rule.header>=0?rule.header:prefs.getInt("header",20);
         ArrayList<String> options=new ArrayList<>(Arrays.asList("remove from "+rule.name,"top zone · "+height+"%","edit "+rule.name+" context"));
-        if(reconfigurable)options.add("widget settings");
+        if(reconfigurable)options.add(str(R.string.widget_settings));
         menu(itemLabel(item),options.toArray(new String[0]),i->{
-            if(i==0){removeContextItem(rule,item);contextsChanged();toast("Widget removed");}
-            if(i==1)menu("top zone height",new String[]{"20%","30%","40%"},n->{rule.header=new int[]{20,30,40}[n];contextsChanged();});
+            if(i==0){removeContextItem(rule,item);contextsChanged();toast(str(R.string.widget_removed));}
+            if(i==1)menu(str(R.string.top_zone_height),new String[]{"20%","30%","40%"},n->{rule.header=new int[]{20,30,40}[n];contextsChanged();});
             if(i==2){sheet.open(this::quickPage);sheet.push(()->contextPage(rule));}
-            if(i==3)try{widgetHost.startAppWidgetConfigureActivityForResult(this,id,0,50,null);}catch(Exception e){toast("Widget settings unavailable");}
+            if(i==3)try{widgetHost.startAppWidgetConfigureActivityForResult(this,id,0,50,null);}catch(Exception e){toast(str(R.string.widget_settings_unavailable));}
         });
     }
     private void configureWidget(int id){
@@ -1140,7 +1144,7 @@ public final class MainActivity extends Activity {
     private void placeWidget(int id){
         String target=prefs.getString("pendingWidgetContext","");prefs.edit().remove("pendingWidget").remove("pendingWidgetContext").apply();
         for(ContextRules.Rule r:contexts)if(r.id.equals(target)){if(r.widgets.size()<ContextStore.MAX_WIDGETS){r.widgets.add("widget:"+id);if(r.header==0||r.header<0&&prefs.getInt("header",20)<30)r.header=30;contextsChanged();return;}}
-        widgetHost.deleteAppWidgetId(id);toast("Couldn't place that widget");
+        widgetHost.deleteAppWidgetId(id);toast(str(R.string.couldn_t_place_that_widget));
     }
     private void cancelWidget(){int id=prefs.getInt("pendingWidget",-1);if(id>=0)widgetHost.deleteAppWidgetId(id);prefs.edit().remove("pendingWidget").remove("pendingWidgetContext").apply();}
     private void removeContextItem(ContextRules.Rule rule,String item){
@@ -1293,7 +1297,7 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.setMargins(dp(2),dp(2),dp(2),dp(2));ring.addView(swatch,sp);
             item.addView(ring,new LinearLayout.LayoutParams(dp(54),dp(54)));
             TextView name=text(PRESETS[i].replace("retro · ","").toLowerCase(Locale.ROOT),11.5f,selected?fg:muted);name.setPadding(0,dp(6),0,0);if(selected)name.setTypeface(Typeface.create(theme.typeface,600,false));item.addView(name);
-            item.setFocusable(true);item.setContentDescription(PRESETS[i].toLowerCase(Locale.ROOT)+" theme"+(selected?", active":""));item.setOnClickListener(v->applyPreset(index));
+            item.setFocusable(true);item.setContentDescription(str(R.string.x_theme_y, PRESETS[i].toLowerCase(Locale.ROOT), (selected?str(R.string.active):"")));item.setOnClickListener(v->applyPreset(index));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(72),-2);line.addView(item,p);
         }
         scroll.addView(line);return scroll;
@@ -1303,13 +1307,13 @@ public final class MainActivity extends Activity {
         // Active context and why.
         LinearLayout ctx=row();ctx.setGravity(Gravity.CENTER_VERTICAL);ctx.setPadding(dp(18),dp(14),dp(12),dp(14));
         LinearLayout words=column();
-        TextView over=text("context",13,mix(accent,muted,.3f));over.setTypeface(Typeface.create(theme.typeface,600,false));words.addView(over);
+        TextView over=text(str(R.string.context),13,mix(accent,muted,.3f));over.setTypeface(Typeface.create(theme.typeface,600,false));words.addView(over);
         String name=activeContext==null?"everyday":activeContext.name;
         TextView title=text(name,26,fg);title.setPadding(0,dp(6),0,dp(4));words.addView(title);
         String pinned=pinSummary();
-        TextView why=text(pinned!=null?pinned:activeContext==null||activeContext.fallback?"used when no other context matches":"because "+ContextRules.describe(activeContext),13,muted);why.setMaxLines(2);words.addView(why);
+        TextView why=text(pinned!=null?pinned:activeContext==null||activeContext.fallback?str(R.string.used_when_no_other_context_matches):str(R.string.because_x, ContextRules.describe(activeContext)),13,muted);why.setMaxLines(2);words.addView(why);
         ctx.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-        ctx.addView(chip(pinned!=null?"held":"auto",pinned!=null,v->contextOverride()));
+        ctx.addView(chip(pinned!=null?str(R.string.held):str(R.string.auto),pinned!=null,v->contextOverride()));
         ctx.setOnClickListener(v->{if(activeContext!=null)sheet.push(()->contextPage(activeContext));});pressFeedback(ctx);
         LinearLayout ctxCard=group(ctx);((LinearLayout.LayoutParams)ctxCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));
         page.addView(ctxCard);
@@ -1319,36 +1323,36 @@ public final class MainActivity extends Activity {
         boolean media=activeContext!=null&&activeContext.widgets.contains("media");
         boolean isDefault=Build.VERSION.SDK_INT>=29&&getSystemService(RoleManager.class).isRoleHeld(RoleManager.ROLE_HOME);
         page.addView(tileGrid(
-            tile("categories",prefs.getBoolean("categories",true)?"ON":"OFF",prefs.getBoolean("categories",true),v->{prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);sheet.refresh();}),
-            tile("app icons",icons.equals("mono")?"MONO":icons.equals("color")?"COLOR":"TEXT",!icons.equals("none"),v->{prefs.edit().putString("icons",icons.equals("mono")?"color":icons.equals("color")?"none":"mono").apply();buildUi();}),
-            tile("scrubber",prefs.getBoolean("left",false)?"LEFT":"RIGHT",true,v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();}),
-            tile("media here",media?"ON":"OFF",media,v->{if(activeContext==null)return;if(media)removeContextItem(activeContext,"media");else{activeContext.widgets.add(0<activeContext.widgets.size()?1:0,"media");if(!mediaAccess())message("media controls","Enable 72F media controls in notification access so the top zone can show what's playing.");}contextsChanged();}),
-            tile("blur",theme.blur==0?"OFF":theme.blur<=8?"SOFT":theme.blur<=18?"FROSTED":"DEEP",theme.blur>0,v->changeEffect("blur",theme.blur==0?8:theme.blur<=8?18:theme.blur<=18?32:0)),
-            tile("glass",theme.glass==0?"OFF":theme.liquid?"LIQUID":theme.glass<=20?"SUBTLE":"FROSTED",theme.glass>0,v->{int next=theme.glass==0?20:theme.liquid?0:theme.glass<=20?40:65;try{JSONObject t=themeJson();t.put("glass",next);t.put("liquid",next==65);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}),
-            tile("top zone",effective==0?"OFF":effective+"%",effective>0,v->{int next=(effective+10)%50;if(activeContext!=null&&activeContext.header>=0){activeContext.header=next;contextsChanged();}else{prefs.edit().putInt("header",next).apply();appliedLayout="";buildUi();}}),
-            tile("default home",isDefault?"YES":"SET",isDefault,v->defaultHome()),
-            tile("expressive",theme.expressive?"ON":"OFF",theme.expressive,v->changeEffect("expressive",!theme.expressive)),
-            tile("wallpaper colors",Build.VERSION.SDK_INT<31?"12+":theme.dynamic?"ON":"OFF",theme.dynamic,v->{if(Build.VERSION.SDK_INT<31){toast("Wallpaper colors need Android 12 or newer");return;}changeEffect("dynamic",!theme.dynamic);}),
-            tile("waves",theme.animated?"ON":"OFF",theme.animated,v->changeEffect("animated",!theme.animated)),
-            tile("title size",titleSize<=40?"S":titleSize<=62?"M":"L",true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
+            tile(str(R.string.categories),prefs.getBoolean("categories",true)?str(R.string.on_2):str(R.string.off_2),prefs.getBoolean("categories",true),v->{prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);sheet.refresh();}),
+            tile(str(R.string.app_icons),icons.equals("mono")?str(R.string.mono):icons.equals("color")?str(R.string.color):str(R.string.text),!icons.equals("none"),v->{prefs.edit().putString("icons",icons.equals("mono")?"color":icons.equals("color")?"none":"mono").apply();buildUi();}),
+            tile(str(R.string.scrubber),prefs.getBoolean("left",false)?str(R.string.left):str(R.string.right),true,v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();}),
+            tile(str(R.string.media_here),media?str(R.string.on_2):str(R.string.off_2),media,v->{if(activeContext==null)return;if(media)removeContextItem(activeContext,"media");else{activeContext.widgets.add(0<activeContext.widgets.size()?1:0,"media");if(!mediaAccess())message(str(R.string.media_controls),str(R.string.enable_72f_media_controls_in_notificatio));}contextsChanged();}),
+            tile(str(R.string.blur),theme.blur==0?str(R.string.off_2):theme.blur<=8?str(R.string.soft):theme.blur<=18?str(R.string.frosted_2):str(R.string.deep),theme.blur>0,v->changeEffect("blur",theme.blur==0?8:theme.blur<=8?18:theme.blur<=18?32:0)),
+            tile(str(R.string.glass),theme.glass==0?str(R.string.off_2):theme.liquid?str(R.string.liquid):theme.glass<=20?str(R.string.subtle_2):str(R.string.frosted_2),theme.glass>0,v->{int next=theme.glass==0?20:theme.liquid?0:theme.glass<=20?40:65;try{JSONObject t=themeJson();t.put("glass",next);t.put("liquid",next==65);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}),
+            tile(str(R.string.top_zone),effective==0?str(R.string.off_2):effective+"%",effective>0,v->{int next=(effective+10)%50;if(activeContext!=null&&activeContext.header>=0){activeContext.header=next;contextsChanged();}else{prefs.edit().putInt("header",next).apply();appliedLayout="";buildUi();}}),
+            tile(str(R.string.default_home),isDefault?str(R.string.yes):str(R.string.set),isDefault,v->defaultHome()),
+            tile(str(R.string.expressive),theme.expressive?str(R.string.on_2):str(R.string.off_2),theme.expressive,v->changeEffect("expressive",!theme.expressive)),
+            tile(str(R.string.wallpaper_colors),Build.VERSION.SDK_INT<31?"12+":theme.dynamic?str(R.string.on_2):str(R.string.off_2),theme.dynamic,v->{if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}),
+            tile(str(R.string.waves),theme.animated?str(R.string.on_2):str(R.string.off_2),theme.animated,v->changeEffect("animated",!theme.animated)),
+            tile(str(R.string.title_size),titleSize<=40?str(R.string.s):titleSize<=62?str(R.string.m):str(R.string.l),true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
         // Wallpaper dimming.
         LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
-        TextView dimLabel=text("dim "+prefs.getInt("wallpaperDim",60)+"%",14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
-        SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription("Wallpaper dimming");dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
+        TextView dimLabel=text(str(R.string.dim_x, prefs.getInt("wallpaperDim",60)),14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
+        SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
         styleSlider(dimmer);
         dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();dimLabel.setText("dim "+amount+"%");updateBackdrop();}
+            public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();dimLabel.setText(str(R.string.dim_x, amount));updateBackdrop();}
             public void onStartTrackingTouch(SeekBar bar){bar.getParent().requestDisallowInterceptTouchEvent(true);}public void onStopTrackingTouch(SeekBar bar){}
         });
         dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(52),1));
         LinearLayout dimCard=group(dim);((LinearLayout.LayoutParams)dimCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));page.addView(dimCard);
-        if(theme.glass>0){View tune=chipRow(chip("tune glass · blur, tint"+(theme.liquid?", refraction":""),false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);}
+        if(theme.glass>0){View tune=chipRow(chip(str(R.string.tune_glass_blur_tint_x, (theme.liquid?str(R.string.refraction_2):"")),false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);}
         // Anchor: everything below is revealed by swiping the sheet up.
         LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
         MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         more.addView(up,new LinearLayout.LayoutParams(dp(24),dp(24)));
-        TextView moreLabel=text("swipe up for all settings",13,muted);moreLabel.setPadding(dp(6),0,0,0);more.addView(moreLabel);
-        more.setFocusable(true);more.setContentDescription("All settings");more.setOnClickListener(v->sheet.expand());pressFeedback(more);
+        TextView moreLabel=text(str(R.string.swipe_up_for_all_settings),13,muted);moreLabel.setPadding(dp(6),0,0,0);more.addView(moreLabel);
+        more.setFocusable(true);more.setContentDescription(str(R.string.all_settings));more.setOnClickListener(v->sheet.expand());pressFeedback(more);
         page.addView(more,new LinearLayout.LayoutParams(-1,dp(48)));
         sheet.setPeekAnchor(more);
         page.addView(fullSettings());
@@ -1356,42 +1360,42 @@ public final class MainActivity extends Activity {
     }
     private View fullSettings(){
         LinearLayout page=column();
-        page.addView(sectionLabel("contexts"));
-        TextView intro=text("the first matching context sets the top zone and where home opens · checked only while home is on screen",13,muted);intro.setPadding(dp(34),0,dp(30),dp(12));intro.setLineSpacing(dp(2),1);page.addView(intro);
+        page.addView(sectionLabel(str(R.string.contexts)));
+        TextView intro=text(str(R.string.the_first_matching_context_sets_the_top),13,muted);intro.setPadding(dp(34),0,dp(30),dp(12));intro.setLineSpacing(dp(2),1);page.addView(intro);
         ArrayList<View> contextRows=new ArrayList<>();
         for(ContextRules.Rule r:contexts){
             String summary=(r.enabled||r.fallback?ContextRules.describe(r):"off")+" → "+(r.widgets.isEmpty()?"no top zone":r.widgets.size()+" item"+(r.widgets.size()==1?"":"s"))+(r.category.isEmpty()?"":", opens "+r.category);
             boolean active=activeContext!=null&&r.id.equals(activeContext.id);
             LinearLayout row=settingRow(r.name,summary,v->sheet.push(()->contextPage(r)));
-            if(active){TextView badge=text("active",11.5f,tintInk());badge.setTypeface(Typeface.create(theme.typeface,600,false));badge.setPadding(dp(10),dp(4),dp(10),dp(4));badge.setBackground(rounded(tint(.30f),100));
-                LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-2,-2);bp.setMargins(dp(8),0,dp(4),0);row.addView(badge,row.getChildCount()-1,bp);row.setContentDescription(r.name+", active. "+summary);}
+            if(active){TextView badge=text(str(R.string.active_2),11.5f,tintInk());badge.setTypeface(Typeface.create(theme.typeface,600,false));badge.setPadding(dp(10),dp(4),dp(10),dp(4));badge.setBackground(rounded(tint(.30f),100));
+                LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-2,-2);bp.setMargins(dp(8),0,dp(4),0);row.addView(badge,row.getChildCount()-1,bp);row.setContentDescription(str(R.string.x_active_y, r.name, summary));}
             if(!r.enabled&&!r.fallback)row.setAlpha(.55f);
             contextRows.add(row);
         }
-        contextRows.add(settingRow("add context","morning, work, headphones, night, charging or blank",v->{
-            if(contexts.size()>=ContextStore.MAX_RULES){toast("Up to "+ContextStore.MAX_RULES+" contexts");return;}
+        contextRows.add(settingRow(str(R.string.add_context),str(R.string.morning_work_headphones_night_charging_o),v->{
+            if(contexts.size()>=ContextStore.MAX_RULES){toast(str(R.string.up_to_x_contexts, ContextStore.MAX_RULES));return;}
             String[] kinds={"morning","work","headphones","night","charging","blank"};
-            menu("add context",kinds,i->{ContextRules.Rule r=ContextRules.template(kinds[i].equals("blank")?"new context":kinds[i],ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(Math.max(0,contexts.size()-1),r);contextsChanged();sheet.push(()->contextPage(r));});
+            menu(str(R.string.add_context),kinds,i->{ContextRules.Rule r=ContextRules.template(kinds[i].equals("blank")?"new context":kinds[i],ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(Math.max(0,contexts.size()-1),r);contextsChanged();sheet.push(()->contextPage(r));});
         }));
-        contextRows.add(settingRow("override","hold a context for a while, or return to automatic",v->contextOverride()));
+        contextRows.add(settingRow(str(R.string.override),str(R.string.hold_a_context_for_a_while_or_return_to),v->contextOverride()));
         page.addView(group(contextRows.toArray(new View[0])));
-        page.addView(sectionLabel("home & categories"));
-        page.addView(group(settingRow("set as default launcher",null,v->defaultHome()),settingRow("categories & folders",(prefs.getBoolean("categories",true)?editableCategories().size()-disabled.size()+" visible":"off")+" · create, hide, merge, rename",v->categorySettings()),settingRow("category order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
-            settingRow("notification dots",!mediaAccess()?"needs notification access · only app names are read, never content":prefs.getBoolean("dots",true)?"on":"off",v->{
+        page.addView(sectionLabel(str(R.string.home_categories)));
+        page.addView(group(settingRow(str(R.string.set_as_default_launcher),null,v->defaultHome()),settingRow(str(R.string.categories_folders),str(R.string.x_create_hide_merge_rename, (prefs.getBoolean("categories",true)?str(R.string.x_visible, editableCategories().size()-disabled.size()):str(R.string.off))),v->categorySettings()),settingRow(str(R.string.category_order),String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
+            settingRow(str(R.string.notification_dots),!mediaAccess()?str(R.string.needs_notification_access_only_app_names):prefs.getBoolean("dots",true)?str(R.string.on):str(R.string.off),v->{
                 if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}
                 prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();if(adapter!=null)adapter.notifyDataSetChanged();sheet.refresh();}),
-            settingRow("hidden apps",hidden.isEmpty()?"none · hold an app to hide it":hidden.size()+" hidden · still in search",v->hiddenAppsSettings()),
-            settingRow("scrubber side",prefs.getBoolean("left",false)?"left":"right",v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
-        page.addView(sectionLabel("appearance"));
+            settingRow(str(R.string.hidden_apps),hidden.isEmpty()?str(R.string.none_hold_an_app_to_hide_it):str(R.string.x_hidden_still_in_search, hidden.size()),v->hiddenAppsSettings()),
+            settingRow(str(R.string.scrubber_side),prefs.getBoolean("left",false)?str(R.string.left_2):str(R.string.right_2),v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
+        page.addView(sectionLabel(str(R.string.appearance)));
         String icons=prefs.getString("icons",theme.iconStyle);
-        page.addView(group(settingRow("themes",theme.name.toLowerCase(Locale.ROOT)+" · presets, import, export",v->themeSettings()),settingRow("title size",String.valueOf(titleSize),v->menu("title size",new String[]{"compact · 32","retro · 60","oversized · 72"},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow("app icons",(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu("app icons",new String[]{"monochrome","original color","text only","icon packs"},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow("glass",theme.glass==0?"off · turn on liquid or frosted glass":(theme.liquid?"liquid":"frosted")+" · blur "+(theme.glassBlur>=0?theme.glassBlur+"dp":"auto")+" · tint "+(theme.glassTint==0?"theme":theme.glassTint<0?"darker":"lighter")+(theme.liquid?" · refraction "+theme.refraction+"%":""),v->glassTuning()),settingRow("effects","blur "+theme.blur+" · glass "+theme.glass+" · waves "+(theme.animated?"on":"off")+(theme.expressive?" · expressive":"")+(theme.dynamic?" · wallpaper colors":""),v->effectsSettings()),settingRow("launcher icon set",theme.uiIconSet,v->menu("launcher icon set",new String[]{"retro","wave","material"},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
-        page.addView(sectionLabel("top zone"));
-        page.addView(group(settingRow("default height",prefs.getInt("header",20)==0?"off":prefs.getInt("header",20)+"% of the screen · contexts can override",v->menu("top zone height",new String[]{"none","10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow("media access",mediaAccess()?"allowed":"needed for media controls and the media-playing condition",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow("calendar access",calendarAllowed()?"allowed":"needed for the agenda item",v->headerSettings())));
-        page.addView(sectionLabel("background"));
+        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow(str(R.string.glass),theme.glass==0?str(R.string.off_turn_on_liquid_or_frosted_glass):str(R.string.x_blur_y_tint_z_4_s, (theme.liquid?str(R.string.liquid_2):str(R.string.frosted)), (theme.glassBlur>=0?str(R.string.x_dp, theme.glassBlur):str(R.string.auto)), (theme.glassTint==0?str(R.string.theme):theme.glassTint<0?str(R.string.darker):str(R.string.lighter)), (theme.liquid?str(R.string.refraction_x, theme.refraction):"")),v->glassTuning()),settingRow(str(R.string.effects),str(R.string.blur_x_glass_y_waves_z_4_s_5_s, theme.blur, theme.glass, (theme.animated?str(R.string.on):str(R.string.off)), (theme.expressive?str(R.string.expressive_2):""), (theme.dynamic?str(R.string.wallpaper_colors_2):"")),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
+        page.addView(sectionLabel(str(R.string.top_zone)));
+        page.addView(group(settingRow(str(R.string.default_height),prefs.getInt("header",20)==0?str(R.string.off):str(R.string.x_of_the_screen_contexts_can_override, prefs.getInt("header",20)),v->menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow(str(R.string.media_access),mediaAccess()?str(R.string.allowed):str(R.string.needed_for_media_controls_and_the_media),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow(str(R.string.calendar_access),calendarAllowed()?str(R.string.allowed):str(R.string.needed_for_the_agenda_item),v->headerSettings())));
+        page.addView(sectionLabel(str(R.string.background)));
         String mode=prefs.getString("wallpaperMode","solid");
-        page.addView(group(settingRow("wallpaper",(mode.equals("photo")?"photo":mode.equals("system")?"phone wallpaper":"solid")+" · "+prefs.getInt("wallpaperDim",60)+"% dim",v->wallpaperSettings()),settingRow("text legibility",legibilitySummary(),v->legibilitySettings())));
-        page.addView(sectionLabel("backup & about"));
-        page.addView(group(settingRow("backup & restore","favorites, categories, contexts, theme and photo",v->backupSettings()),settingRow("replay the tour","the five-step introduction from first launch",v->startTour(0)),settingRow("about 72F",version()+" · open-source notices",v->aboutSettings())));
+        page.addView(group(settingRow(str(R.string.wallpaper),str(R.string.x_y_dim, (mode.equals("photo")?str(R.string.photo):mode.equals("system")?str(R.string.phone_wallpaper):str(R.string.solid)), prefs.getInt("wallpaperDim",60)),v->wallpaperSettings()),settingRow(str(R.string.text_legibility),legibilitySummary(),v->legibilitySettings())));
+        page.addView(sectionLabel(str(R.string.backup_about)));
+        page.addView(group(settingRow(str(R.string.backup_restore),str(R.string.favorites_categories_contexts_theme_and),v->backupSettings()),settingRow(str(R.string.replay_the_tour),str(R.string.the_five_step_introduction_from_first_la),v->startTour(0)),settingRow(str(R.string.about_72f),str(R.string.x_open_source_notices, version()),v->aboutSettings())));
         return page;
     }
     private static final String[] TRI={"any","yes","no"};
@@ -1400,19 +1404,19 @@ public final class MainActivity extends Activity {
         LinearLayout page=column();
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
         head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text("category order",30,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        TextView title=text(str(R.string.category_order),30,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         page.addView(head);
-        TextView note=text("Favorites is always first and all apps last.",13,muted);note.setPadding(dp(26),dp(4),dp(26),dp(8));page.addView(note);
+        TextView note=text(str(R.string.favorites_is_always_first_and_all_apps_l),13,muted);note.setPadding(dp(26),dp(4),dp(26),dp(8));page.addView(note);
         ArrayList<String> current=editableCategories();
         for(int i=0;i<current.size();i++){
             final int index=i;String c=current.get(i);
             LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(2),dp(14),dp(2));line.setMinimumHeight(dp(56));
             TextView label=text(c,18,disabled.contains(c)?muted:fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            if(index>0){TextView up=chip("↑",false,v->moveCategory(current,index,-1));up.setContentDescription("Move "+c+" up");LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(up,p);}
-            if(index<current.size()-1){TextView down=chip("↓",false,v->moveCategory(current,index,1));down.setContentDescription("Move "+c+" down");line.addView(down);}
+            if(index>0){TextView up=chip("↑",false,v->moveCategory(current,index,-1));up.setContentDescription(str(R.string.move_x_up, c));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(up,p);}
+            if(index<current.size()-1){TextView down=chip("↓",false,v->moveCategory(current,index,1));down.setContentDescription(str(R.string.move_x_down, c));line.addView(down);}
             page.addView(line);
         }
-        page.addView(settingRow("reset to default order",null,v->{order.clear();saveState();refreshCategories();sheet.refresh();}));
+        page.addView(settingRow(str(R.string.reset_to_default_order),null,v->{order.clear();saveState();refreshCategories();sheet.refresh();}));
         return page;
     }
     private void moveCategory(ArrayList<String> current,int index,int by){
@@ -1423,72 +1427,72 @@ public final class MainActivity extends Activity {
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
         head.addView(iconButton("back","Back",false,v->sheet.back()));
         TextView title=text(r.name,28,fg);title.setPadding(dp(4),0,0,0);title.setMinHeight(dp(48));title.setGravity(Gravity.CENTER_VERTICAL);
-        if(!r.fallback){title.setOnClickListener(v->renameContext(r));title.setContentDescription(r.name+". Tap to rename");}
+        if(!r.fallback){title.setOnClickListener(v->renameContext(r));title.setContentDescription(str(R.string.x_tap_to_rename, r.name));}
         head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        if(!r.fallback)head.addView(chip(r.enabled?"on":"off",r.enabled,v->{r.enabled=!r.enabled;contextsChanged();}));
+        if(!r.fallback)head.addView(chip(r.enabled?str(R.string.on):str(R.string.off),r.enabled,v->{r.enabled=!r.enabled;contextsChanged();}));
         page.addView(head);
-        TextView why=text(r.fallback?"used when no other context matches":ContextRules.describe(r),13,muted);why.setPadding(dp(66),0,dp(26),dp(4));page.addView(why);
+        TextView why=text(r.fallback?str(R.string.used_when_no_other_context_matches):ContextRules.describe(r),13,muted);why.setPadding(dp(66),0,dp(26),dp(4));page.addView(why);
 
         if(!r.fallback){
-            page.addView(sectionLabel("when · days"));
+            page.addView(sectionLabel(str(R.string.when_days)));
             View[] days=new View[8];
-            days[0]=chip("every day",r.days==0,v->{r.days=0;contextsChanged();});
-            for(int d=0;d<7;d++){final int bit=1<<d;days[d+1]=chip(ContextRules.DAYS[d],r.days!=0&&(r.days&bit)!=0,v->{r.days^=bit;if(r.days==127)r.days=0;contextsChanged();});}
+            days[0]=chip(str(R.string.every_day),r.days==0,v->{r.days=0;contextsChanged();});
+            for(int d=0;d<7;d++){final int bit=1<<d;days[d+1]=chip(ContextRules.dayNames[d],r.days!=0&&(r.days&bit)!=0,v->{r.days^=bit;if(r.days==127)r.days=0;contextsChanged();});}
             page.addView(chipRow(days));
-            page.addView(sectionLabel("when · time"));
+            page.addView(sectionLabel(str(R.string.when_time)));
             page.addView(chipRow(
-                chip("all day",r.allDay(),v->{r.start=0;r.end=0;contextsChanged();}),
-                chip(r.allDay()?"from …":"from "+ContextRules.time(r.start),!r.allDay(),v->pickTime(r,true)),
-                chip(r.allDay()?"until …":"until "+ContextRules.time(r.end),!r.allDay(),v->pickTime(r,false))));
-            page.addView(sectionLabel("when · conditions"));
+                chip(str(R.string.all_day),r.allDay(),v->{r.start=0;r.end=0;contextsChanged();}),
+                chip(r.allDay()?str(R.string.from):str(R.string.from_x, ContextRules.time(r.start)),!r.allDay(),v->pickTime(r,true)),
+                chip(r.allDay()?str(R.string.until):str(R.string.until_x, ContextRules.time(r.end)),!r.allDay(),v->pickTime(r,false))));
+            page.addView(sectionLabel(str(R.string.when_conditions)));
             page.addView(group(
                 conditionRow("headphones",r.headphones,n->{r.headphones=n;contextsChanged();}),
                 conditionRow("charging",r.charging,n->{r.charging=n;contextsChanged();}),
                 conditionRow("do not disturb",r.dnd,n->{r.dnd=n;contextsChanged();}),
-                conditionRow("media playing",r.playing,n->{r.playing=n;if(n!=0&&!mediaAccess())message("media playing","Enable 72F media controls in notification access so this condition can see playback.");contextsChanged();})));
+                conditionRow("media playing",r.playing,n->{r.playing=n;if(n!=0&&!mediaAccess())message(str(R.string.media_playing),str(R.string.enable_72f_media_controls_in_notificatio_2));contextsChanged();})));
         }
 
-        page.addView(sectionLabel("then · open on"));
+        page.addView(sectionLabel(str(R.string.then_open_on)));
         ArrayList<String> targets=new ArrayList<>();targets.add("");targets.addAll(editableCategories());targets.add("all apps");
         View[] cats=new View[targets.size()];
-        for(int i=0;i<cats.length;i++){String c=targets.get(i);cats[i]=chip(c.isEmpty()?"favorites":c,r.category.equals(c),v->{r.category=c;contextsChanged();});}
+        for(int i=0;i<cats.length;i++){String c=targets.get(i);cats[i]=chip(c.isEmpty()?str(R.string.favorites):c,r.category.equals(c),v->{r.category=c;contextsChanged();});}
         page.addView(chipRow(cats));
 
-        page.addView(sectionLabel("then · top zone height"));
+        page.addView(sectionLabel(str(R.string.then_top_zone_height)));
         int[] heights={-1,0,10,20,30,40};View[] hs=new View[heights.length];
-        for(int i=0;i<heights.length;i++){int h=heights[i];hs[i]=chip(h<0?"default":h==0?"off":h+"%",r.header==h,v->{r.header=h;contextsChanged();});}
+        for(int i=0;i<heights.length;i++){int h=heights[i];hs[i]=chip(h<0?str(R.string.default_label):h==0?str(R.string.off):h+"%",r.header==h,v->{r.header=h;contextsChanged();});}
         page.addView(chipRow(hs));
 
-        page.addView(sectionLabel("then · top zone items"));
+        page.addView(sectionLabel(str(R.string.then_top_zone_items)));
         ArrayList<View> itemRows=new ArrayList<>();
         for(int i=0;i<r.widgets.size();i++){
             final int index=i;String item=r.widgets.get(i);
             LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(18),dp(4),dp(8),dp(4));line.setMinimumHeight(dp(56));
             TextView label=text(itemLabel(item),17,fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            if(index>0){TextView upButton=chip("↑",false,v->{Collections.swap(r.widgets,index,index-1);contextsChanged();});upButton.setContentDescription("Move "+itemLabel(item)+" up");LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(upButton,p);}
-            TextView remove=chip("remove",false,v->{removeContextItem(r,item);contextsChanged();});remove.setContentDescription("Remove "+itemLabel(item));line.addView(remove);
+            if(index>0){TextView upButton=chip("↑",false,v->{Collections.swap(r.widgets,index,index-1);contextsChanged();});upButton.setContentDescription(str(R.string.move_x_up, itemLabel(item)));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(upButton,p);}
+            TextView remove=chip(str(R.string.remove),false,v->{removeContextItem(r,item);contextsChanged();});remove.setContentDescription(str(R.string.remove_x, itemLabel(item)));line.addView(remove);
             itemRows.add(line);
         }
         ArrayList<String> addable=new ArrayList<>();for(String w:ContextRules.WIDGETS)if(!r.widgets.contains(w)&&(Build.VERSION.SDK_INT>=29||!w.equals("smartspace")))addable.add(w);
-        itemRows.add(settingRow("add item",r.widgets.size()>=ContextStore.MAX_WIDGETS?"this context is full":"clock, alarm, agenda, media, Smartspacer or any app widget",v->{
-            if(r.widgets.size()>=ContextStore.MAX_WIDGETS){toast("This context is full");return;}
+        itemRows.add(settingRow(str(R.string.add_item),r.widgets.size()>=ContextStore.MAX_WIDGETS?str(R.string.this_context_is_full_2):str(R.string.clock_alarm_agenda_media_smartspacer_or),v->{
+            if(r.widgets.size()>=ContextStore.MAX_WIDGETS){toast(str(R.string.this_context_is_full));return;}
             ArrayList<String> labels=new ArrayList<>();for(String w:addable)labels.add(itemLabel(w));labels.add("app widget…");
-            menu("add to top zone",labels.toArray(new String[0]),n->{
+            menu(str(R.string.add_to_top_zone),labels.toArray(new String[0]),n->{
                 if(n==addable.size()){addAppWidget(r);return;}
                 String w=addable.get(n);r.widgets.add(w);
                 if(w.equals("agenda")&&!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);
-                if(w.equals("media")&&!mediaAccess())message("media controls","Enable 72F media controls in notification access so the top zone can show what's playing.");
+                if(w.equals("media")&&!mediaAccess())message(str(R.string.media_controls),str(R.string.enable_72f_media_controls_in_notificatio));
                 contextsChanged();
             });
         }));
         page.addView(group(itemRows.toArray(new View[0])));
 
         if(!r.fallback){
-            page.addView(sectionLabel("order"));
+            page.addView(sectionLabel(str(R.string.order)));
             int position=contexts.indexOf(r);
-            page.addView(group(settingRow("priority",(position+1)+" of "+(contexts.size()-1)+" · the first match wins",v->menu("priority",new String[]{"move up","move down"},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})),
-            settingRow("hold this context","use it now, regardless of conditions",v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(r.name+" held for 1 hour");}),
-            settingRow("delete context",null,v->showDialog(new AlertDialog.Builder(this).setTitle("delete "+r.name+"?").setNegativeButton("cancel",null).setPositiveButton("delete",(a,b)->{
+            page.addView(group(settingRow(str(R.string.priority),str(R.string.x_of_y_the_first_match_wins, (position+1), (contexts.size()-1)),v->menu(str(R.string.priority),new String[]{str(R.string.move_up),str(R.string.move_down)},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})),
+            settingRow(str(R.string.hold_this_context),str(R.string.use_it_now_regardless_of_conditions),v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(str(R.string.x_held_for_1_hour, r.name));}),
+            settingRow(str(R.string.delete_context),null,v->showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.delete_x, r.name)).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.delete),(a,b)->{
                 for(String item:new ArrayList<>(r.widgets))if(item.startsWith("widget:")){r.widgets.remove(item);removeContextItem(r,item);}
                 contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).create()))));
             View bottom=new View(this);page.addView(bottom,new LinearLayout.LayoutParams(-1,dp(12)));
@@ -1514,8 +1518,8 @@ public final class MainActivity extends Activity {
     }
     private void renameContext(ContextRules.Rule r){
         EditText input=new EditText(this);input.setSingleLine();input.setText(r.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("rename context").setView(input).setNegativeButton("cancel",null).setPositiveButton("save",null).create();showDialog(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);if(name.isEmpty()){input.setError("Enter a name");return;}r.name=name;d.dismiss();contextsChanged();});
+        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.rename_context)).setView(input).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.save),null).create();showDialog(d);
+        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);if(name.isEmpty()){input.setError(str(R.string.enter_a_name));return;}r.name=name;d.dismiss();contextsChanged();});
     }
 
     private String legibilitySummary(){
@@ -1524,9 +1528,9 @@ public final class MainActivity extends Activity {
         return mode.equals("auto")?"auto · "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper":mode;
     }
     private void legibilitySettings(){
-        menu("text legibility",new String[]{"auto · measures your wallpaper","subtle · soft halo, lifted grey text","strong · stronger halo and a little extra dimming","off"},n->{
+        menu(str(R.string.text_legibility),new String[]{str(R.string.auto_measures_your_wallpaper),str(R.string.subtle_soft_halo_lifted_grey_text),str(R.string.strong_stronger_halo_and_a_little_extra),str(R.string.off)},n->{
             prefs.edit().putString("legibility",Legibility.MODES[n]).apply();buildUi();
-            if(n==0&&overImage())toast("Auto picked "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper");
+            if(n==0&&overImage())toast(str(R.string.auto_picked_x_for_this_wallpaper, (legibility==Legibility.STRONG?str(R.string.strong):str(R.string.subtle))));
         });
     }
     private void defaultHome(){try{if(Build.VERSION.SDK_INT>=29){RoleManager rm=getSystemService(RoleManager.class);if(rm.isRoleAvailable(RoleManager.ROLE_HOME)&&!rm.isRoleHeld(RoleManager.ROLE_HOME)){startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME),43);return;}}safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}}
@@ -1556,24 +1560,24 @@ public final class MainActivity extends Activity {
         for(int i=0;i<TOUR_PAGES;i++){View dot=new View(this);GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(3));d.setColor(i==tourPage?accent:MetroArt.alpha(muted,.35f));dot.setBackground(d);
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(i==tourPage?22:6),dp(6));p.setMargins(0,0,dp(6),0);top.addView(dot,p);}
         top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        if(tourPage<TOUR_PAGES-1){TextView skip=text("skip",15,muted);skip.setGravity(Gravity.CENTER);skip.setMinHeight(dp(48));skip.setMinWidth(dp(64));skip.setContentDescription("Skip setup");skip.setOnClickListener(v->endTour());skip.setFocusable(true);top.addView(skip);}
+        if(tourPage<TOUR_PAGES-1){TextView skip=text(str(R.string.skip),15,muted);skip.setGravity(Gravity.CENTER);skip.setMinHeight(dp(48));skip.setMinWidth(dp(64));skip.setContentDescription(str(R.string.skip_setup));skip.setOnClickListener(v->endTour());skip.setFocusable(true);top.addView(skip);}
         frame.addView(top,new LinearLayout.LayoutParams(-1,dp(56)));
         ScrollView scroll=new ScrollView(this);scroll.setVerticalScrollBarEnabled(false);scroll.setFillViewport(true);
         View content=tourContent(tourPage);scroll.addView(content);
         frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         // Bottom: back and the primary action.
         LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER_VERTICAL);bottom.setPadding(dp(18),dp(8),dp(18),dp(18));
-        if(tourPage>0){TextView back=text("back",16,fg);back.setGravity(Gravity.CENTER);back.setMinHeight(dp(52));back.setMinWidth(dp(72));back.setOnClickListener(v->tourStep(-1));back.setFocusable(true);back.setContentDescription("Previous step");bottom.addView(back);}
+        if(tourPage>0){TextView back=text(str(R.string.back),16,fg);back.setGravity(Gravity.CENTER);back.setMinHeight(dp(52));back.setMinWidth(dp(72));back.setOnClickListener(v->tourStep(-1));back.setFocusable(true);back.setContentDescription(str(R.string.previous_step));bottom.addView(back);}
         bottom.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         boolean last=tourPage==TOUR_PAGES-1;
-        TextView next=text(last?"let’s go":"next",17,onPrimaryContainer);next.setGravity(Gravity.CENTER);next.setPadding(dp(28),0,dp(28),0);next.setMinHeight(dp(52));
+        TextView next=text(last?str(R.string.let_s_go):str(R.string.next),17,onPrimaryContainer);next.setGravity(Gravity.CENTER);next.setPadding(dp(28),0,dp(28),0);next.setMinHeight(dp(52));
         GradientDrawable fill=new GradientDrawable();fill.setColor(primaryContainer);fill.setCornerRadius(theme.layout.equals("xmb")||theme.expressive||theme.liquid?dp(26):dp(2));next.setBackground(fill);
-        next.setOnClickListener(v->tourStep(1));next.setFocusable(true);next.setContentDescription(last?"Finish setup":"Next step");
+        next.setOnClickListener(v->tourStep(1));next.setFocusable(true);next.setContentDescription(last?str(R.string.finish_setup):str(R.string.next_step));
         bottom.addView(next);
         frame.addView(bottom);
         scene.addView(tour,new FrameLayout.LayoutParams(-1,-1));tour.requestApplyInsets();
         if(direction!=0&&theme.motionMs>0&&android.animation.ValueAnimator.areAnimatorsEnabled()){content.setTranslationX(dp(40)*direction);content.setAlpha(0);content.animate().translationX(0).alpha(1).setDuration(theme.motionMs).setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).start();}
-        content.announceForAccessibility("Step "+(tourPage+1)+" of "+TOUR_PAGES);
+        content.announceForAccessibility(str(R.string.step_x_of_y, (tourPage+1), TOUR_PAGES));
     }
     private TextView tourTitle(String s){TextView t=text(s,38,fg);t.setTypeface(theme.expressive?Typeface.create(theme.typeface,800,false):theme.typeface);t.setLetterSpacing(-.03f);t.setPadding(dp(26),dp(18),dp(26),dp(10));t.setAccessibilityHeading(true);return t;}
     private TextView tourBody(String s){TextView t=text(s,16,muted);t.setLineSpacing(dp(4),1);t.setPadding(dp(26),0,dp(26),dp(12));return t;}
@@ -1589,46 +1593,46 @@ public final class MainActivity extends Activity {
         LinearLayout c=column();c.setPadding(0,dp(12),0,dp(12));
         switch(page){
             case 0:{
-                TextView mark=text("72F",76,fg);mark.setTypeface(theme.titleTypeface);mark.setLetterSpacing(-.04f);mark.setPadding(dp(26),dp(24),dp(26),0);c.addView(mark);
-                c.addView(tourBody("Horizontal categories. Vertical app lists. A top zone that follows your day."));
-                c.addView(tourBody("This takes a minute. Everything here can be changed later in settings, and you can skip at any time."));
+                TextView mark=text(str(R.string.s_72f),76,fg);mark.setTypeface(theme.titleTypeface);mark.setLetterSpacing(-.04f);mark.setPadding(dp(26),dp(24),dp(26),0);c.addView(mark);
+                c.addView(tourBody(str(R.string.horizontal_categories_vertical_app_lists_2)));
+                c.addView(tourBody(str(R.string.this_takes_a_minute_everything_here_can)));
                 boolean home=isDefaultHome();
-                c.addView(chipRow(chip(home?"72F is your home screen":"make 72F your home screen",home,v->{if(!isDefaultHome())defaultHome();})));
+                c.addView(chipRow(chip(home?str(R.string.s_72f_is_your_home_screen):str(R.string.make_72f_your_home_screen),home,v->{if(!isDefaultHome())defaultHome();})));
                 break;}
             case 1:{
-                c.addView(tourTitle("pick a look"));
-                c.addView(tourBody("Palettes and layouts. Styles combine with any of them."));
+                c.addView(tourTitle(str(R.string.pick_a_look)));
+                c.addView(tourBody(str(R.string.palettes_and_layouts_styles_combine_with)));
                 c.addView(swatches());
-                c.addView(sectionLabel("style"));
+                c.addView(sectionLabel(str(R.string.style)));
                 ArrayList<View> styles=new ArrayList<>();
-                styles.add(chip("expressive",theme.expressive,v->changeEffect("expressive",!theme.expressive)));
-                if(Build.VERSION.SDK_INT>=31)styles.add(chip("wallpaper colors",theme.dynamic,v->changeEffect("dynamic",!theme.dynamic)));
-                styles.add(chip("glass",theme.glass>0&&!theme.liquid,v->setGlass(theme.glass>0&&!theme.liquid?0:40,false)));
-                styles.add(chip("liquid glass",theme.liquid,v->setGlass(theme.liquid?0:65,!theme.liquid)));
+                styles.add(chip(str(R.string.expressive),theme.expressive,v->changeEffect("expressive",!theme.expressive)));
+                if(Build.VERSION.SDK_INT>=31)styles.add(chip(str(R.string.wallpaper_colors),theme.dynamic,v->changeEffect("dynamic",!theme.dynamic)));
+                styles.add(chip(str(R.string.glass),theme.glass>0&&!theme.liquid,v->setGlass(theme.glass>0&&!theme.liquid?0:40,false)));
+                styles.add(chip(str(R.string.liquid_glass),theme.liquid,v->setGlass(theme.liquid?0:65,!theme.liquid)));
                 c.addView(chipRow(styles.toArray(new View[0])));
-                c.addView(sectionLabel("app icons"));
+                c.addView(sectionLabel(str(R.string.app_icons)));
                 String icons=prefs.getString("icons",theme.iconStyle);
-                c.addView(chipRow(chip("monochrome",icons.equals("mono"),v->setIcons("mono")),chip("color",icons.equals("color"),v->setIcons("color")),chip("text only",icons.equals("none"),v->setIcons("none"))));
+                c.addView(chipRow(chip(str(R.string.monochrome),icons.equals("mono"),v->setIcons("mono")),chip(str(R.string.color_2),icons.equals("color"),v->setIcons("color")),chip(str(R.string.text_only),icons.equals("none"),v->setIcons("none"))));
                 break;}
             case 2:{
-                c.addView(tourTitle("how it works"));
-                c.addView(tourHint("arrow","swipe sideways","Move between categories, or tap and slide along the bar at the bottom."));
-                c.addView(tourHint("all apps","scroll and scrub","Scroll a list, or drag the side alphabet to jump to a letter."));
-                c.addView(tourHint("favorites","hold an app","Its shortcuts, favorites, categories, rename, hide, or uninstall."));
-                c.addView(tourHint("search","tap search","The round button finds any app. Hold it, or swipe up on the bar, for settings."));
+                c.addView(tourTitle(str(R.string.how_it_works)));
+                c.addView(tourHint("arrow",str(R.string.swipe_sideways),str(R.string.move_between_categories_or_tap_and_slide)));
+                c.addView(tourHint("all apps",str(R.string.scroll_and_scrub),str(R.string.scroll_a_list_or_drag_the_side_alphabet)));
+                c.addView(tourHint("favorites",str(R.string.hold_an_app),str(R.string.its_shortcuts_favorites_categories_renam)));
+                c.addView(tourHint("search",str(R.string.tap_search),str(R.string.the_round_button_finds_any_app_hold_it_o)));
                 break;}
             case 3:{
-                c.addView(tourTitle("the top zone"));
-                c.addView(tourBody("The space above your apps. Contexts change it through the day, and can choose which category Home opens on."));
+                c.addView(tourTitle(str(R.string.the_top_zone)));
+                c.addView(tourBody(str(R.string.the_space_above_your_apps_contexts_chang)));
                 ContextRules.Rule everyday=contexts.get(contexts.size()-1);
-                c.addView(sectionLabel("usually show"));
+                c.addView(sectionLabel(str(R.string.usually_show)));
                 String[][] layouts={{"clock"},{"clock","media"},{"clock","agenda"},{}};String[] names={"clock","clock + media","clock + agenda","nothing"};
                 View[] options=new View[layouts.length];
                 for(int i=0;i<layouts.length;i++){final String[] items=layouts[i];boolean on=everyday.widgets.equals(Arrays.asList(items));
                     options[i]=chip(names[i],on,v->{everyday.widgets.clear();everyday.widgets.addAll(Arrays.asList(items));if(items.length==0)everyday.header=0;else if(everyday.header==0)everyday.header=-1;
                         if(Arrays.asList(items).contains("agenda")&&!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);contextsChanged();attachTour(0);});}
                 c.addView(chipRow(options));
-                c.addView(sectionLabel("add contexts"));
+                c.addView(sectionLabel(str(R.string.add_contexts)));
                 String[] kinds={"morning","work","headphones","night"};View[] adds=new View[kinds.length];
                 for(int i=0;i<kinds.length;i++){final String kind=kinds[i];ContextRules.Rule existing=null;for(ContextRules.Rule r:contexts)if(r.name.equals(kind))existing=r;final ContextRules.Rule found=existing;
                     adds[i]=chip(kind,found!=null,v->{
@@ -1636,16 +1640,16 @@ public final class MainActivity extends Activity {
                         else if(contexts.size()<ContextStore.MAX_RULES){ContextRules.Rule r=ContextRules.template(kind,ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(contexts.size()-1,r);}
                         contextsChanged();attachTour(0);});}
                 c.addView(chipRow(adds));
-                c.addView(tourBody("Morning and work follow weekday hours, headphones switches to music, night slims the top zone. Edit them anytime under settings → contexts."));
+                c.addView(tourBody(str(R.string.morning_and_work_follow_weekday_hours_he)));
                 break;}
             default:{
-                c.addView(tourTitle("optional access"));
-                c.addView(tourBody("72F has no internet permission. These stay on your phone and are only needed for the features below."));
+                c.addView(tourTitle(str(R.string.optional_access)));
+                c.addView(tourBody(str(R.string.s_72f_has_no_internet_permission_these_sta)));
                 boolean media=mediaAccess(),calendar=calendarAllowed(),home=isDefaultHome();
-                c.addView(settingRow("notification access",media?"allowed":"media controls and notification dots · app names only, never content",v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
-                c.addView(settingRow("calendar",calendar?"allowed":"show upcoming events in the agenda item",v->{if(!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}));
-                c.addView(settingRow("home screen",home?"72F is your home screen":"use 72F when you press Home",v->{if(!isDefaultHome())defaultHome();}));
-                c.addView(tourBody("Hold the round search button any time for quick settings."));
+                c.addView(settingRow(str(R.string.notification_access),media?str(R.string.allowed):str(R.string.media_controls_and_notification_dots_app),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
+                c.addView(settingRow(str(R.string.calendar),calendar?str(R.string.allowed):str(R.string.show_upcoming_events_in_the_agenda_item),v->{if(!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}));
+                c.addView(settingRow(str(R.string.home_screen),home?str(R.string.s_72f_is_your_home_screen):str(R.string.use_72f_when_you_press_home),v->{if(!isDefaultHome())defaultHome();}));
+                c.addView(tourBody(str(R.string.hold_the_round_search_button_any_time_fo)));
             }
         }
         return c;
@@ -1657,7 +1661,7 @@ public final class MainActivity extends Activity {
     private GradientDrawable sheetSurface(){GradientDrawable d=new GradientDrawable();d.setColor(surface());float r=dp(28);d.setCornerRadii(new float[]{r,r,r,r,0,0,0,0});return d;}
     private View sheetHandle(){View h=new View(this);h.setBackground(rounded(MetroArt.alpha(muted,.4f),2));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(32),dp(4));p.gravity=Gravity.CENTER_HORIZONTAL;p.setMargins(0,0,0,dp(14));h.setLayoutParams(p);return h;}
     private void menu(String title,String[] options,Choice action){
-        if(options.length==0){toast("No categories available");return;}
+        if(options.length==0){toast(str(R.string.no_categories_available));return;}
         Dialog dialog=new Dialog(this);
         LinearLayout sheet=column();sheet.setPadding(dp(12),dp(10),dp(12),dp(16));
         sheet.setBackground(sheetSurface());sheet.addView(sheetHandle());
@@ -1679,7 +1683,7 @@ public final class MainActivity extends Activity {
         int maxHeight=(int)(getResources().getDisplayMetrics().heightPixels*.60f);
         choices.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(24),View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
         sheet.addView(scroller,new LinearLayout.LayoutParams(-1,Math.min(maxHeight,choices.getMeasuredHeight())));
-        TextView close=text("close",15,fg);close.setGravity(Gravity.CENTER);close.setMinHeight(dp(52));close.setBackground(rounded(MetroArt.alpha(fg,.07f),100));foregroundRipple(close);
+        TextView close=text(str(R.string.close),15,fg);close.setGravity(Gravity.CENTER);close.setMinHeight(dp(52));close.setBackground(rounded(MetroArt.alpha(fg,.07f),100));foregroundRipple(close);
         close.setOnClickListener(v->dialog.dismiss());close.setFocusable(true);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.setMargins(0,dp(12),0,0);sheet.addView(close,cp);
         track(dialog);dialog.setContentView(sheet);Window window=dialog.getWindow();
@@ -1705,9 +1709,11 @@ public final class MainActivity extends Activity {
     private MetroArt.Icon iconButton(String mark,String description,boolean ring,View.OnClickListener click){
         MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,mark,fg,ring);icon.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));icon.setContentDescription(description);icon.setOnClickListener(click);pressFeedback(icon);return icon;
     }
-    private void message(String title,String body){showDialog(new AlertDialog.Builder(this).setTitle(title).setMessage(body).setPositiveButton("okay",null).create());}
-    private void safeStart(Intent intent){try{startActivity(intent);}catch(Exception e){toast("No app available for this action");}}
+    private void message(String title,String body){showDialog(new AlertDialog.Builder(this).setTitle(title).setMessage(body).setPositiveButton(str(R.string.okay),null).create());}
+    private void safeStart(Intent intent){try{startActivity(intent);}catch(Exception e){toast(str(R.string.no_app_available_for_this_action));}}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
+    /** UI text from res/values/strings.xml (translatable); formats only when there are arguments. */
+    private String str(int id,Object... args){return args.length==0?getString(id):getString(id,args);}
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;}

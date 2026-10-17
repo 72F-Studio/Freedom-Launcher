@@ -97,6 +97,8 @@ final class BackupStore {
         JSONArray order=new JSONArray(p.optString("order","[]"));if(order.length()>200)throw new IOException("Invalid category order");
         for(int i=0;i<order.length();i++)if(!groups.contains(order.getString(i)))throw new IOException("Invalid category order");
     }
+    // Restore must know whether the write landed (and roll back if not), so commit() is intentional.
+    @android.annotation.SuppressLint("ApplySharedPref")
     static void apply(Context context,SharedPreferences prefs,Pending pending)throws Exception {
         // Files already reside in a unique immutable directory; readers switch via one commit.
         String relative="imports/"+pending.directory.getName();

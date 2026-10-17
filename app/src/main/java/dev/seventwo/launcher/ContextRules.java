@@ -8,6 +8,15 @@ final class ContextRules {
     static final String[] DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
     static final String[] WIDGETS = {"clock", "alarm", "agenda", "media", "smartspace"};
     static final int WEEKDAYS = 0b0011111, WEEKEND = 0b1100000;
+    // Display words. English defaults keep this class testable off-device; the app replaces them from resources.
+    static String everyDay = "every day", weekdays = "weekdays", weekends = "weekends", fallbackText = "when nothing else matches",
+        always = "always", headphonesWord = "headphones", chargingWord = "charging", dndWord = "do not disturb", playingWord = "media playing", notFormat = "no %s";
+    static String[] dayNames = DAYS.clone();
+    static void localize(String[] words, String[] days) {
+        everyDay = words[0]; weekdays = words[1]; weekends = words[2]; fallbackText = words[3]; always = words[4];
+        headphonesWord = words[5]; chargingWord = words[6]; dndWord = words[7]; playingWord = words[8]; notFormat = words[9];
+        if (days.length == 7) dayNames = days.clone();
+    }
 
     static final class Rule {
         String id, name, category = "";
@@ -67,31 +76,31 @@ final class ContextRules {
     static String time(int minute) { return String.format(Locale.ROOT, "%02d:%02d", minute / 60, minute % 60); }
 
     static String days(int mask) {
-        if (mask == 0 || mask == 0b1111111) return "every day";
-        if (mask == WEEKDAYS) return "weekdays";
-        if (mask == WEEKEND) return "weekends";
+        if (mask == 0 || mask == 0b1111111) return everyDay;
+        if (mask == WEEKDAYS) return weekdays;
+        if (mask == WEEKEND) return weekends;
         StringBuilder b = new StringBuilder();
-        for (int i = 0; i < 7; i++) if ((mask & (1 << i)) != 0) { if (b.length() > 0) b.append(' '); b.append(DAYS[i]); }
+        for (int i = 0; i < 7; i++) if ((mask & (1 << i)) != 0) { if (b.length() > 0) b.append(' '); b.append(dayNames[i]); }
         return b.toString();
     }
 
     /** Human-readable "why": "weekdays 07:00–09:00 · headphones". */
     static String describe(Rule r) {
-        if (r.fallback) return "when nothing else matches";
+        if (r.fallback) return fallbackText;
         ArrayList<String> parts = new ArrayList<>();
         String when = r.days == 0 ? "" : days(r.days);
         if (!r.allDay()) when = (when.isEmpty() ? "" : when + " ") + time(r.start) + "–" + time(r.end);
         if (!when.isEmpty()) parts.add(when);
-        condition(parts, r.headphones, "headphones");
-        condition(parts, r.charging, "charging");
-        condition(parts, r.dnd, "do not disturb");
-        condition(parts, r.playing, "media playing");
-        return parts.isEmpty() ? "always" : String.join(" · ", parts);
+        condition(parts, r.headphones, headphonesWord);
+        condition(parts, r.charging, chargingWord);
+        condition(parts, r.dnd, dndWord);
+        condition(parts, r.playing, playingWord);
+        return parts.isEmpty() ? always : String.join(" · ", parts);
     }
 
     private static void condition(List<String> parts, int value, String label) {
         if (value == YES) parts.add(label);
-        if (value == NO) parts.add("no " + label);
+        if (value == NO) parts.add(String.format(notFormat, label));
     }
 
     /** Templates offered by "add context". */

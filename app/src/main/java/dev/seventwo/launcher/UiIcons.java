@@ -44,7 +44,7 @@ final class UiIcons {
             File custom=theme.uiIcon(key);
             if(custom!=null){Bitmap bitmap=ImageDecoder.decodeBitmap(ImageDecoder.createSource(custom),(decoder,info,source)->{float scale=Math.min(1f,256f/Math.max(info.getSize().getWidth(),info.getSize().getHeight()));decoder.setTargetSize(Math.max(1,Math.round(info.getSize().getWidth()*scale)),Math.max(1,Math.round(info.getSize().getHeight()*scale)));});drawable=new BitmapDrawable(context.getResources(),bitmap);}
         }catch(Exception ignored){}
-        if(drawable==null){int resource=RESOURCES.get(key)[theme.uiIconSet.equals("wave")?1:theme.uiIconSet.equals("material")?2:0];drawable=context.getDrawable(resource).mutate();}
+        if(drawable==null){int resource=RESOURCES.get(key)[theme.uiIconSet.equals("wave")?1:theme.uiIconSet.equals("material")?2:0];drawable=java.util.Objects.requireNonNull(androidx.core.content.ContextCompat.getDrawable(context,resource)).mutate();}
         cache.put(key,drawable);return drawable;
     }
     void draw(Canvas canvas,String name,float x,float y,float size,int color){

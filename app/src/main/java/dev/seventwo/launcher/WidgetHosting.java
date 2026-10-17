@@ -38,6 +38,9 @@ final class WidgetHosting {
             }
             return fired;
         }
+        @Override public boolean performClick() { return super.performClick(); }
+        // Taps belong to the hosted widget's own views; this only tracks long-press and paging.
+        @android.annotation.SuppressLint("ClickableViewAccessibility")
         @Override public boolean onTouchEvent(MotionEvent e) {
             if (fired) { if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) fired = false; return true; }
             return super.onTouchEvent(e);
@@ -45,7 +48,8 @@ final class WidgetHosting {
         @Override protected void onDetachedFromWindow() { removeCallbacks(check); super.onDetachedFromWindow(); }
     }
 
-    /** Horizontal, page-snapping stack with dots. */
+    /** Horizontal, page-snapping stack with dots. Created in code only, so no XML constructors. */
+    @android.annotation.SuppressLint("ViewConstructor")
     static final class Stack extends LinearLayout {
         private final Pager pager;
         private final LinearLayout pages;
@@ -82,6 +86,8 @@ final class WidgetHosting {
                 if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { downX = e.getX(); downScroll = getScrollX(); }
                 return children.size() > 1 && super.onInterceptTouchEvent(e);
             }
+            // Taps belong to the hosted widget's own views; this only tracks long-press and paging.
+            @android.annotation.SuppressLint("ClickableViewAccessibility")
             @Override public boolean onTouchEvent(MotionEvent e) {
                 boolean handled = super.onTouchEvent(e);
                 int action = e.getActionMasked();
@@ -91,14 +97,16 @@ final class WidgetHosting {
                     page = Math.max(0, Math.min(children.size() - 1, target));
                     smoothScrollTo(page * w, 0);
                     if (listener != null) listener.onPage(page);
-                    announceForAccessibility("Widget " + (page + 1) + " of " + children.size());
+                    announceForAccessibility(getContext().getString(R.string.widget_x_of_y, page + 1, children.size()));
                 }
                 return handled;
             }
             @Override public void fling(int velocity) { /* Snapping replaces free flings. */ }
+            @Override public boolean performClick() { return super.performClick(); }
         }
     }
 
+    @android.annotation.SuppressLint("ViewConstructor") // created in code only
     static final class Dots extends View {
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         final int active, inactive;

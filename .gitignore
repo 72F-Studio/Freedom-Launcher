@@ -6,3 +6,5 @@ local.properties
 __pycache__/
 docs/beta2-*.png
 docs/wallpaper-restored.png
+keystore.properties
+*.keystore

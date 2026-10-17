@@ -61,4 +61,4 @@ The context editor is a page inside the sheet: day chips, a time window, conditi
 
 The `smartspace` item inflates the official Client SDK's `BcSmartspaceView` (`res/layout-v29/smartspacer_view.xml`), tinted with the theme's text color. It's offered and inflated only on API 29+, and shows an install hint when Smartspacer isn't installed. The SDK manages its own session; `SmartspacerClient.close()` runs in `onDestroy`.
 
-SDK 1.1.2 is pinned: 1.2 requires AGP 9.1 and compileSdk 37. Release builds enable R8 (`app/proguard-rules.pro` keeps the SDK), cutting the APK from about 9 MB to 1.6 MB.
+The build uses SDK 1.2 (it needs AGP 9.1+ and compileSdk 37). Release builds enable R8 (`app/proguard-rules.pro` keeps the SDK), cutting the APK from about 9 MB to 1.6 MB.

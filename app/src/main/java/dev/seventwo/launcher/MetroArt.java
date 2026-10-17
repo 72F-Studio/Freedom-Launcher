@@ -11,6 +11,7 @@ final class MetroArt {
         return (Math.round(255 * amount) << 24) | (color & 0x00ffffff);
     }
 
+    @android.annotation.SuppressLint("ViewConstructor") // created in code only
     static final class Icon extends View {
         private final UiIcons pack;
         private String name;

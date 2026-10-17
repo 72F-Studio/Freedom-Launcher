@@ -159,7 +159,7 @@ final class GlassSurface extends Drawable implements Runnable {
     }
 
     /** Android 12+: live RenderNode replay of the backdrop through a GPU effect chain. */
-    @android.annotation.TargetApi(31)
+    @androidx.annotation.RequiresApi(31)
     private final class Live {
         private final RenderNode node = new RenderNode("glass");
         private final RuntimeShader lens = Build.VERSION.SDK_INT >= 33 ? Shaders.lens() : null;
@@ -178,7 +178,7 @@ final class GlassSurface extends Drawable implements Runnable {
                 effectW = w; effectH = h; effectRadius = radius;
                 RenderEffect chain = RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(vibrancy(saturation())));
                 if (blur > 0) chain = RenderEffect.createBlurEffect(blur, blur, chain, Shader.TileMode.CLAMP);
-                if (lens != null && theme.liquid && theme.refraction > 0) chain = RenderEffect.createChainEffect(lensEffect(w, h, radius, pad), chain);
+                if (Build.VERSION.SDK_INT >= 33 && lens != null && theme.liquid && theme.refraction > 0) chain = RenderEffect.createChainEffect(lensEffect(w, h, radius, pad), chain);
                 node.setRenderEffect(chain);
             }
             canvas.save(); canvas.translate(-pad, -pad);
@@ -186,7 +186,7 @@ final class GlassSurface extends Drawable implements Runnable {
             canvas.restore();
         }
 
-        @android.annotation.TargetApi(33)
+        @androidx.annotation.RequiresApi(33)
         private RenderEffect lensEffect(int w, int h, float radius, int pad) {
             float side = Math.min(w, h), r = theme.refraction / 50f; // 1 = reference strength, 2 = double
             // Sized like the reference: 48dp button 12/24dp, 64dp bar 24/24dp; capped for large panels.
@@ -209,7 +209,7 @@ final class GlassSurface extends Drawable implements Runnable {
      * refraction with seven-tap dispersion, and the angle-shaded rim highlight. Modified for a single
      * corner radius and a runtime dispersion switch. See third-party/android-liquid-glass/LICENSE.
      */
-    @android.annotation.TargetApi(33)
+    @androidx.annotation.RequiresApi(33)
     static final class Shaders {
         static final String SDF =
             "float sdRoundedRect(float2 c,float2 h,float r){float2 q=abs(c)-(h-float2(r));" +

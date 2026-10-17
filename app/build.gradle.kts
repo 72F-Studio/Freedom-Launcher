@@ -1,17 +1,33 @@
+import java.util.Properties
+
 plugins { id("com.android.application") }
+
+// Production signing: create it with scripts/make-release-key.sh. keystore.properties and the .jks stay
+// out of git; without them, release builds are unsigned and scripts/release.sh signs with the dev key.
+val releaseKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file -> Properties().apply { file.inputStream().use(::load) } }
+
 android {
     namespace = "dev.seventwo.launcher"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "dev.seventwo.launcher"
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 37
         testInstrumentationRunner = "dev.seventwo.launcher.EngineChecks"
-        versionCode = 7
-        versionName = "1.0.0-rc4"
+        versionCode = 8
+        versionName = "1.0.0-rc5"
+    }
+    signingConfigs {
+        if (releaseKey != null) create("release") {
+            storeFile = rootProject.file(releaseKey.getProperty("storeFile"))
+            storePassword = releaseKey.getProperty("storePassword")
+            keyAlias = releaseKey.getProperty("keyAlias")
+            keyPassword = releaseKey.getProperty("keyPassword")
+        }
     }
     buildTypes {
         release {
+            if (releaseKey != null) signingConfig = signingConfigs.getByName("release")
             // R8 keeps the Smartspacer SDK's AndroidX/Kotlin footprint small.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -29,7 +45,7 @@ android {
 }
 dependencies {
     // Optional Smartspacer top-zone item. The SDK needs API 29+; every call site is guarded.
-    // 1.2 needs AGP 9.1 and compileSdk 37; 1.1.2 is the newest release that builds with this toolchain.
-    implementation("com.kieronquinn.smartspacer:sdk-client:1.1.2")
-    implementation("androidx.viewpager:viewpager:1.0.0") // referenced directly by layout-v29/smartspacer_view.xml
+    // Smartspacer Client SDK (Apache-2.0); 1.2 needs AGP 9.1+ and compileSdk 37.
+    implementation("com.kieronquinn.smartspacer:sdk-client:1.2")
+    implementation("androidx.viewpager:viewpager:1.1.0") // referenced directly by layout-v29/smartspacer_view.xml
 }

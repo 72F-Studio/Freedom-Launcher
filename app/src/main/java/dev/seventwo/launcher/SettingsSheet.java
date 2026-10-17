@@ -138,7 +138,7 @@ final class SettingsSheet extends FrameLayout {
                 if (state == HIDDEN) { setVisibility(GONE); pages.clear(); scrolls.clear(); if (listener != null) listener.onHidden(); }
             }).start();
         if (previous != target) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-        announceForAccessibility(target == FULL ? "All settings" : target == PEEK ? "Quick settings" : "Settings closed");
+        announceForAccessibility(getContext().getString(target == FULL ? R.string.all_settings : target == PEEK ? R.string.quick_settings_label : R.string.settings_closed));
     }
 
     private void updateScrim() {

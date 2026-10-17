@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- 72F's copy is deliberately lowercase ("cancel", "save"), including dialog buttons. -->
+    <issue id="ButtonCase" severity="ignore" />
+</lint>
