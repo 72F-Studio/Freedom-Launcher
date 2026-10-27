@@ -1,10 +1,11 @@
 package com.studio72f.freedom;
 
-import android.content.ComponentName;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
@@ -23,10 +24,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Ratio × Minimaa Frosted Grid Homescreen Layout.
+ * Ratio × Kelvin Frosted Grid Homescreen Layout.
  *
- * Implements Ratio's collapsible category drawers with 4-column frosted app tiles,
- * paired with Minimaa's clean typographic discipline.
+ * Implements Ratio's iconic design language aligned with 72F-Kelvin guidelines:
+ * - Clean section category drawers ("Messaging –", "Creativity –") without harsh outer bounding boxes
+ * - Pure squircle app tiles (radius 18dp) with translucent frosted fill and ZERO stroke outlines
+ * - Notification dots (Ratio signal yellow/accent) on active tiles
+ * - Bottom floating search capsule (sunken glass pill)
  */
 public final class RatioGridHomescreen extends LinearLayout {
     public interface AppLaunchListener {
@@ -44,8 +48,9 @@ public final class RatioGridHomescreen extends LinearLayout {
     private ScrollView scrollView;
     private AppLaunchListener launchListener;
 
-    private int fgColor = Color.WHITE;
-    private int accentColor = 0xFF39B9D4;
+    private int fgColor = 0xFFF1F2F3;
+    private int accentColor = 0xFFFFEA00; // Ratio signature yellow / Kelvin accent
+    private boolean monochromeIcons = true;
     private float density;
 
     public RatioGridHomescreen(Context context) {
@@ -65,12 +70,13 @@ public final class RatioGridHomescreen extends LinearLayout {
     private void init() {
         setOrientation(VERTICAL);
         density = getResources().getDisplayMetrics().density;
-        setPadding(dp(16), dp(8), dp(16), dp(12));
+        setPadding(dp(16), dp(4), dp(16), dp(12));
 
-        // Default open categories
+        // Default open drawers
         expandedCategories.add("favorites");
         expandedCategories.add("social");
         expandedCategories.add("messaging");
+        expandedCategories.add("creativity");
 
         scrollView = new ScrollView(getContext());
         scrollView.setVerticalScrollBarEnabled(false);
@@ -82,22 +88,24 @@ public final class RatioGridHomescreen extends LinearLayout {
         scrollView.addView(drawerContainer, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
         addView(scrollView, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
 
-        // Bottom Persistent Search Bar ("Tap to search 🔍")
+        // Bottom Persistent Search Capsule ("Tap to search 🔍")
         LinearLayout searchBar = new LinearLayout(getContext());
         searchBar.setOrientation(HORIZONTAL);
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
-        searchBar.setPadding(dp(16), dp(12), dp(16), dp(12));
-        FrostedCard.applyInteractive(searchBar, 24);
+        searchBar.setPadding(dp(20), dp(13), dp(20), dp(13));
+        FrostedCard.applySunken(searchBar, FrostedCard.RADIUS_PILL_DP);
 
         TextView searchLabel = new TextView(getContext());
         searchLabel.setText("Tap to search");
         searchLabel.setTextSize(14);
-        searchLabel.setTextColor(0x99FFFFFF);
+        searchLabel.setTextColor(0x88F1F2F3);
+        searchLabel.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         searchBar.addView(searchLabel, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
 
         TextView searchIcon = new TextView(getContext());
         searchIcon.setText("🔍");
         searchIcon.setTextSize(14);
+        searchIcon.setAlpha(0.65f);
         searchBar.addView(searchIcon);
 
         searchBar.setOnClickListener(v -> {
@@ -105,7 +113,7 @@ public final class RatioGridHomescreen extends LinearLayout {
         });
 
         LayoutParams searchParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-        searchParams.setMargins(0, dp(10), 0, dp(4));
+        searchParams.setMargins(dp(4), dp(10), dp(4), dp(4));
         addView(searchBar, searchParams);
     }
 
@@ -114,8 +122,12 @@ public final class RatioGridHomescreen extends LinearLayout {
     }
 
     public void setColors(int fg, int accent) {
-        this.fgColor = fg;
-        this.accentColor = accent;
+        this.fgColor = fg != 0 ? fg : 0xFFF1F2F3;
+        this.accentColor = accent != 0 ? accent : 0xFFFFEA00;
+    }
+
+    public void setMonochromeIcons(boolean mono) {
+        this.monochromeIcons = mono;
     }
 
     public void setApps(List<MainActivity.App> apps, List<String> categories, Map<String, String> assignments, Map<String, String> merges) {
@@ -175,7 +187,7 @@ public final class RatioGridHomescreen extends LinearLayout {
 
             View drawerView = createCategoryDrawer(cat, appsInCat);
             LayoutParams lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-            lp.setMargins(0, 0, 0, dp(12));
+            lp.setMargins(0, 0, 0, dp(14));
             drawerContainer.addView(drawerView, lp);
         }
     }
@@ -183,34 +195,34 @@ public final class RatioGridHomescreen extends LinearLayout {
     private View createCategoryDrawer(String categoryName, List<MainActivity.App> apps) {
         LinearLayout drawer = new LinearLayout(getContext());
         drawer.setOrientation(VERTICAL);
-        FrostedCard.apply(drawer, 18);
 
         boolean isExpanded = expandedCategories.contains(categoryName);
 
-        // Header Row
+        // Header Row - clean typographic section without harsh bounding boxes
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(14), dp(16), dp(14));
+        header.setPadding(dp(8), dp(12), dp(8), dp(6));
 
         TextView title = new TextView(getContext());
-        title.setText(categoryName.substring(0, 1).toUpperCase(Locale.ROOT) + categoryName.substring(1));
-        title.setTextSize(17);
+        String displayTitle = categoryName.substring(0, 1).toUpperCase(Locale.ROOT) + categoryName.substring(1) + " –";
+        title.setText(displayTitle);
+        title.setTextSize(20);
         title.setTextColor(fgColor);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         header.addView(title, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
 
         TextView count = new TextView(getContext());
-        count.setText(String.valueOf(apps.size()));
+        count.setText(apps.size() + " apps");
         count.setTextSize(13);
-        count.setTextColor(0x77FFFFFF);
-        count.setPadding(0, 0, dp(10), 0);
+        count.setTextColor(0xAA97989B);
+        count.setPadding(0, 0, dp(8), 0);
         header.addView(count);
 
         TextView chevron = new TextView(getContext());
-        chevron.setText(isExpanded ? "▾" : "▸");
+        chevron.setText(isExpanded ? "−" : "+");
         chevron.setTextSize(16);
-        chevron.setTextColor(0xAAFFFFFF);
+        chevron.setTextColor(0x8897989B);
         header.addView(chevron);
 
         header.setOnClickListener(v -> {
@@ -228,7 +240,7 @@ public final class RatioGridHomescreen extends LinearLayout {
         if (isExpanded) {
             GridLayout grid = new GridLayout(getContext());
             grid.setColumnCount(4);
-            grid.setPadding(dp(10), 0, dp(10), dp(14));
+            grid.setPadding(dp(4), dp(4), dp(4), dp(8));
 
             for (MainActivity.App app : apps) {
                 View tile = createAppTile(app);
@@ -247,37 +259,68 @@ public final class RatioGridHomescreen extends LinearLayout {
     }
 
     private View createAppTile(MainActivity.App app) {
-        LinearLayout tile = new LinearLayout(getContext());
-        tile.setOrientation(VERTICAL);
-        tile.setGravity(Gravity.CENTER_HORIZONTAL);
-        tile.setPadding(dp(6), dp(10), dp(6), dp(8));
-        FrostedCard.applyInteractive(tile, 12);
+        FrameLayout tileFrame = new FrameLayout(getContext());
+        FrostedCard.applyInteractive(tileFrame, FrostedCard.RADIUS_TILE_DP);
+
+        LinearLayout tileContent = new LinearLayout(getContext());
+        tileContent.setOrientation(VERTICAL);
+        tileContent.setGravity(Gravity.CENTER_HORIZONTAL);
+        tileContent.setPadding(dp(6), dp(10), dp(6), dp(8));
+        tileContent.setMinimumHeight(dp(76));
 
         ImageView iconView = new ImageView(getContext());
         iconView.setImageDrawable(app.icon);
-        LayoutParams iconParams = new LayoutParams(dp(42), dp(42));
-        iconParams.setMargins(0, 0, 0, dp(6));
-        tile.addView(iconView, iconParams);
+        if (monochromeIcons) {
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(0);
+            iconView.setColorFilter(new ColorMatrixColorFilter(cm));
+            iconView.setAlpha(0.92f);
+        } else {
+            iconView.clearColorFilter();
+            iconView.setAlpha(1f);
+        }
+
+        LayoutParams iconParams = new LayoutParams(dp(34), dp(34));
+        iconParams.setMargins(0, dp(2), 0, dp(6));
+        tileContent.addView(iconView, iconParams);
 
         TextView label = new TextView(getContext());
         CharSequence appTitle = app.name != null ? app.name : app.label;
         label.setText(appTitle);
         label.setTextSize(11);
-        label.setTextColor(0xEEFFFFFF);
+        label.setTextColor(0xEEF1F2F3);
+        label.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         label.setGravity(Gravity.CENTER_HORIZONTAL);
         label.setSingleLine(true);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        tile.addView(label);
+        tileContent.addView(label);
 
-        tile.setOnClickListener(v -> {
+        tileFrame.addView(tileContent, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+
+        // Notification Indicator Dot (Ratio Yellow / Kelvin Accent)
+        boolean hasNotification = MediaAccessService.hasDot(app.component.getPackageName(), app.user);
+        if (hasNotification) {
+            View dot = new View(getContext());
+            GradientDrawable dotBg = new GradientDrawable();
+            dotBg.setShape(GradientDrawable.OVAL);
+            dotBg.setColor(accentColor);
+            dot.setBackground(dotBg);
+
+            FrameLayout.LayoutParams dotParams = new FrameLayout.LayoutParams(dp(6), dp(6));
+            dotParams.gravity = Gravity.TOP | Gravity.END;
+            dotParams.setMargins(0, dp(6), dp(6), 0);
+            tileFrame.addView(dot, dotParams);
+        }
+
+        tileFrame.setOnClickListener(v -> {
             if (launchListener != null) launchListener.onLaunchApp(app, v);
         });
 
-        tile.setOnLongClickListener(v -> {
+        tileFrame.setOnLongClickListener(v -> {
             if (launchListener != null) launchListener.onAppMenu(app);
             return true;
         });
 
-        return tile;
+        return tileFrame;
     }
 }

@@ -146,12 +146,12 @@ public final class TreePageView extends LinearLayout implements MediaAccessServi
 
             boolean selected = f.equals(currentFilter);
             if (selected) {
-                chip.setBackground(FrostedCard.create(0x44FFFFFF, 0xFFFFFFFF, 16, 1.2f, density));
+                chip.setBackground(FrostedCard.create(0x44FFFFFF, 16, density));
                 chip.setTextColor(Color.WHITE);
                 chip.setTypeface(Typeface.DEFAULT_BOLD);
             } else {
-                chip.setBackground(FrostedCard.create(0x18FFFFFF, 0x44FFFFFF, 16, 1f, density));
-                chip.setTextColor(0xAAFFFFFF);
+                chip.setBackground(FrostedCard.create(FrostedCard.COLOR_SUNKEN, 16, density));
+                chip.setTextColor(0xAA97989B);
                 chip.setTypeface(Typeface.DEFAULT);
             }
 

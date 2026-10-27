@@ -138,6 +138,7 @@ public final class MainActivity extends Activity {
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new WidgetHosting.Host(this, 7272);
         readState();
+        FrostedCard.setGlassLevel(prefs.getFloat("glass_level", 0.30f));
         restoreWallpaper();
         activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext);
         if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); tourPage = state.getInt("tour", -1); }
@@ -327,6 +328,7 @@ public final class MainActivity extends Activity {
             buildTopZone();
             ratioGrid = new RatioGridHomescreen(this);
             ratioGrid.setColors(fg, accent);
+            ratioGrid.setMonochromeIcons(prefs.getString("icons", "mono").equals("mono"));
             ratioGrid.setLaunchListener(new RatioGridHomescreen.AppLaunchListener() {
                 @Override public void onLaunchApp(App app, View view) { launch(app, view); }
                 @Override public void onAppMenu(App app) { appMenu(app); }
@@ -854,23 +856,68 @@ public final class MainActivity extends Activity {
     // Glass tuning: three live sliders. Rebuilds are debounced so dragging stays smooth.
     private JSONObject pendingGlass;
     private final Runnable applyGlass=()->{if(pendingGlass==null)return;try{applyTheme(pendingGlass);persistTheme();buildUi();}catch(Exception e){fileError(e);}pendingGlass=null;};
+    private String getGlassLabel(float level) {
+        if (level < 0.15f) return "Opaque (0.0)";
+        if (level < 0.45f) return "Frosted (0.3)";
+        if (level < 0.70f) return "Glass (0.55)";
+        if (level < 0.90f) return "Liquid (0.8)";
+        return "Clear (1.0)";
+    }
     private void glassTuning(){
         if(sheet!=null)sheet.dismiss(); // show the whole screen while tuning
-        if(theme.glass==0){
-            menu(str(R.string.turn_on_glass_first),new String[]{str(R.string.liquid_glass),str(R.string.frosted_glass)},n->{setGlass(n==0?65:40,n==0);glassTuning();});return;
-        }
         LinearLayout box=column();box.setPadding(dp(24),dp(8),dp(24),dp(12));
-        TextView note=text(theme.liquid?str(R.string.liquid_glass_blur_under_the_lens_its_tin):str(R.string.frosted_glass_blur_and_tint_refraction_a),14,muted);note.setPadding(0,0,0,dp(8));box.addView(note);
-        float autoBlur=theme.liquid?2f+6f*theme.glass/100f:4f+12f*theme.glass/100f;
-        int blurNow=theme.glassBlur>=0?theme.glassBlur:Math.round(autoBlur);
-        box.addView(glassSlider(str(R.string.blur),blurNow,0,40,v->v+" dp",v->tuneGlass("glassBlur",v)));
-        box.addView(glassSlider(str(R.string.darker_lighter),theme.glassTint+100,0,200,v->v==100?"theme":v<100?"darker "+(100-v)+"%":"lighter "+(v-100)+"%",v->tuneGlass("glassTint",v-100)));
-        if(theme.liquid)box.addView(glassSlider(str(R.string.refraction),theme.refraction,0,100,v->v==0?"off":v+"%",v->tuneGlass("refraction",v)));
-        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.glass)).setView(box)
-            .setNeutralButton(str(R.string.reset),(a,b)->{try{JSONObject t=themeJson();t.remove("glassBlur");t.remove("glassTint");t.remove("refraction");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})
+        TextView note=text("Stepless Kelvin glass setting (0.0 Opaque to 1.0 Clear). Frosted (0.30) is the accessible default.",14,muted);
+        note.setPadding(0,0,0,dp(8));box.addView(note);
+
+        float currentGlass = prefs.getFloat("glass_level", 0.30f);
+        TextView shown = text("Level: " + getGlassLabel(currentGlass) + " (" + String.format(Locale.ROOT, "%.2f", currentGlass) + ")", 16, fg);
+        shown.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        shown.setPadding(0, dp(6), 0, dp(6));
+        box.addView(shown);
+
+        SeekBar bar = new SeekBar(this);
+        bar.setMax(100);
+        bar.setProgress(Math.round(currentGlass * 100));
+        styleSlider(bar);
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar b, int p, boolean user){
+                if (!user) return;
+                float lvl = p / 100f;
+                prefs.edit().putFloat("glass_level", lvl).apply();
+                FrostedCard.setGlassLevel(lvl);
+                shown.setText("Level: " + getGlassLabel(lvl) + " (" + String.format(Locale.ROOT, "%.2f", lvl) + ")");
+                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                updateBackdrop();
+            }
+            public void onStartTrackingTouch(SeekBar b){}
+            public void onStopTrackingTouch(SeekBar b){}
+        });
+        box.addView(bar, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        // Preset quick chips: Opaque (0), Frosted (0.3), Glass (0.55), Liquid (0.8), Clear (1.0)
+        LinearLayout chips = row();
+        chips.setPadding(0, dp(10), 0, dp(4));
+        chips.addView(chip("Opaque", false, v -> bar.setProgress(0)));
+        chips.addView(chip("Frosted", false, v -> bar.setProgress(30)));
+        chips.addView(chip("Glass", false, v -> bar.setProgress(55)));
+        chips.addView(chip("Liquid", false, v -> bar.setProgress(80)));
+        chips.addView(chip("Clear", false, v -> bar.setProgress(100)));
+        box.addView(chips);
+
+        TextView warning = text("Clear glass has no contrast protection.", 12, 0x88F1F2F3);
+        warning.setPadding(0, dp(8), 0, 0);
+        box.addView(warning);
+
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Glass Settings (Kelvin)").setView(box)
+            .setNeutralButton("Reset (0.30)",(a,b)->{
+                prefs.edit().putFloat("glass_level", 0.30f).apply();
+                FrostedCard.setGlassLevel(0.30f);
+                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                updateBackdrop();
+            })
             .setPositiveButton(str(R.string.done),null).create();
         showDialog(d);
-        if(d.getWindow()!=null)d.getWindow().setDimAmount(0f); // keep the glass visible while tuning
+        if(d.getWindow()!=null)d.getWindow().setDimAmount(0f);
     }
     private interface Label{String of(int v);}
     private View glassSlider(String name,int value,int min,int max,Label label,IntChoice change){
@@ -986,7 +1033,9 @@ public final class MainActivity extends Activity {
         Bitmap image=Build.VERSION.SDK_INT<31&&softWallpaper!=null?softWallpaper:wallpaper;
         boolean system=activeWallpaperMode.equals("system");
         backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",60)/100f+(float)Legibility.extraDim(legibility)),system));
-        if(Build.VERSION.SDK_INT>=31){backdropView.setRenderEffect(theme.blur>0?RenderEffect.createBlurEffect(dp(theme.blur),dp(theme.blur),Shader.TileMode.CLAMP):null);getWindow().setBackgroundBlurRadius(system?dp(theme.blur):0);}
+        float gLvl = prefs.getFloat("glass_level", 0.30f);
+        int blurAmount = theme.blur > 0 ? theme.blur : Math.round(24f * Math.max(0f, 1f - gLvl * 0.8f));
+        if(Build.VERSION.SDK_INT>=31){backdropView.setRenderEffect(blurAmount>0?RenderEffect.createBlurEffect(dp(blurAmount),dp(blurAmount),Shader.TileMode.CLAMP):null);getWindow().setBackgroundBlurRadius(system?dp(blurAmount):0);}
     }
     private void prepareSoftWallpaper(){
         final int request=++effectGeneration;final Bitmap source=wallpaper;final int amount=theme.blur;
@@ -1496,13 +1545,50 @@ public final class MainActivity extends Activity {
             tile(str(R.string.app_icons),icons.equals("mono")?str(R.string.mono):icons.equals("color")?str(R.string.color):str(R.string.text),!icons.equals("none"),v->{prefs.edit().putString("icons",icons.equals("mono")?"color":icons.equals("color")?"none":"mono").apply();buildUi();}),
             tile(str(R.string.scrubber),prefs.getBoolean("left",false)?str(R.string.left):str(R.string.right),true,v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();}),
             tile(str(R.string.media_here),media?str(R.string.on_2):str(R.string.off_2),media,v->{if(activeContext==null)return;if(media)removeContextItem(activeContext,"media");else{activeContext.widgets.add(0<activeContext.widgets.size()?1:0,"media");if(!mediaAccess())message(str(R.string.media_controls),str(R.string.enable_72f_media_controls_in_notificatio));}contextsChanged();}),
-            tile(str(R.string.blur),theme.blur==0?str(R.string.off_2):theme.blur<=8?str(R.string.soft):theme.blur<=18?str(R.string.frosted_2):str(R.string.deep),theme.blur>0,v->changeEffect("blur",theme.blur==0?8:theme.blur<=8?18:theme.blur<=18?32:0)),
-            tile(str(R.string.glass),theme.glass==0?str(R.string.off_2):theme.liquid?str(R.string.liquid):theme.glass<=20?str(R.string.subtle_2):str(R.string.frosted_2),theme.glass>0,v->{int next=theme.glass==0?20:theme.liquid?0:theme.glass<=20?40:65;try{JSONObject t=themeJson();t.put("glass",next);t.put("liquid",next==65);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}),
             tile(str(R.string.top_zone),effective==0?str(R.string.off_2):effective+"%",effective>0,v->{int next=(effective+10)%50;if(activeContext!=null&&activeContext.header>=0){activeContext.header=next;contextsChanged();}else{prefs.edit().putInt("header",next).apply();appliedLayout="";buildUi();}}),
             tile(str(R.string.default_home),isDefault?str(R.string.yes):str(R.string.set),isDefault,v->defaultHome()),
             tile(str(R.string.expressive),theme.expressive?str(R.string.on_2):str(R.string.off_2),theme.expressive,v->changeEffect("expressive",!theme.expressive)),
             tile(str(R.string.wallpaper_colors),Build.VERSION.SDK_INT<31?"12+":theme.dynamic?str(R.string.on_2):str(R.string.off_2),theme.dynamic,v->{if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}),
             tile(str(R.string.title_size),titleSize<=40?str(R.string.s):titleSize<=62?str(R.string.m):str(R.string.l),true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
+
+        // Kelvin Stepless Glass Slider
+        float currentGlass = prefs.getFloat("glass_level", 0.30f);
+        FrostedCard.setGlassLevel(currentGlass);
+        LinearLayout glassBox = column();
+        glassBox.setPadding(dp(18), dp(6), dp(18), dp(6));
+        LinearLayout glassHead = row();
+        glassHead.setGravity(Gravity.CENTER_VERTICAL);
+        TextView glassLabel = text("Glass: " + getGlassLabel(currentGlass), 14, fg);
+        glassLabel.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        glassHead.addView(glassLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView glassVal = text(String.format(Locale.ROOT, "%.2f", currentGlass), 13, muted);
+        glassHead.addView(glassVal);
+        glassBox.addView(glassHead);
+
+        SeekBar glassBar = new SeekBar(this);
+        glassBar.setContentDescription("Glass setting");
+        glassBar.setMax(100);
+        glassBar.setProgress(Math.round(currentGlass * 100));
+        styleSlider(glassBar);
+        glassBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar bar, int amount, boolean user){
+                if (!user) return;
+                float level = amount / 100f;
+                prefs.edit().putFloat("glass_level", level).apply();
+                FrostedCard.setGlassLevel(level);
+                glassLabel.setText("Glass: " + getGlassLabel(level));
+                glassVal.setText(String.format(Locale.ROOT, "%.2f", level));
+                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                updateBackdrop();
+            }
+            public void onStartTrackingTouch(SeekBar bar){ bar.getParent().requestDisallowInterceptTouchEvent(true); }
+            public void onStopTrackingTouch(SeekBar bar){}
+        });
+        glassBox.addView(glassBar, new LinearLayout.LayoutParams(-1, dp(48)));
+        LinearLayout glassCard = group(glassBox);
+        ((LinearLayout.LayoutParams)glassCard.getLayoutParams()).setMargins(dp(16), dp(4), dp(16), dp(4));
+        page.addView(glassCard);
+
         // Wallpaper dimming.
         LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
         TextView dimLabel=text(str(R.string.dim_x, prefs.getInt("wallpaperDim",60)),14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
@@ -1514,7 +1600,7 @@ public final class MainActivity extends Activity {
         });
         dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(52),1));
         LinearLayout dimCard=group(dim);((LinearLayout.LayoutParams)dimCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));page.addView(dimCard);
-        if(theme.glass>0){View tune=chipRow(chip(str(R.string.tune_glass_blur_tint_x, (theme.liquid?str(R.string.refraction_2):"")),false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);}
+        View tune=chipRow(chip("Tune Glass Presets (Opaque · Frosted · Clear)",false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);
         // Anchor: everything below is revealed by swiping the sheet up.
         LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
         MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1549,7 +1635,6 @@ public final class MainActivity extends Activity {
         page.addView(group(contextRows.toArray(new View[0])));
         page.addView(sectionLabel(str(R.string.home_categories)));
         page.addView(group(
-            settingRow(str(R.string.homescreen_layout),prefs.getString("layout_mode","grid").equals("grid")?str(R.string.layout_grid_ratio):str(R.string.layout_list_ps3),v->menu(str(R.string.homescreen_layout),new String[]{str(R.string.layout_list_ps3),str(R.string.layout_grid_ratio)},n->{prefs.edit().putString("layout_mode",n==1?"grid":"list").apply();buildUi();sheet.refresh();})),
             settingRow(str(R.string.clock_style),prefs.getString("clock_face","binary").equals("binary")?str(R.string.clock_binary):str(R.string.clock_digital),v->menu(str(R.string.clock_style),new String[]{str(R.string.clock_digital),str(R.string.clock_binary)},n->{prefs.edit().putString("clock_face",n==1?"binary":"digital").apply();buildUi();sheet.refresh();})),
             settingRow(str(R.string.set_as_default_launcher),null,v->defaultHome()),settingRow(str(R.string.categories_folders),str(R.string.x_create_hide_merge_rename, (prefs.getBoolean("categories",true)?str(R.string.x_visible, editableCategories().size()-disabled.size()):str(R.string.off))),v->categorySettings()),settingRow(str(R.string.category_order),String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
             settingRow(str(R.string.notification_dots),!mediaAccess()?str(R.string.needs_notification_access_only_app_names):prefs.getBoolean("dots",true)?str(R.string.on):str(R.string.off),v->{
@@ -1559,7 +1644,7 @@ public final class MainActivity extends Activity {
             settingRow(str(R.string.scrubber_side),prefs.getBoolean("left",false)?str(R.string.left_2):str(R.string.right_2),v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
         page.addView(sectionLabel(str(R.string.appearance)));
         String icons=prefs.getString("icons",theme.iconStyle);
-        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow(str(R.string.glass),theme.glass==0?str(R.string.off_turn_on_liquid_or_frosted_glass):str(R.string.x_blur_y_tint_z_4_s, (theme.liquid?str(R.string.liquid_2):str(R.string.frosted)), (theme.glassBlur>=0?str(R.string.x_dp, theme.glassBlur):str(R.string.auto)), (theme.glassTint==0?str(R.string.theme):theme.glassTint<0?str(R.string.darker):str(R.string.lighter)), (theme.liquid?str(R.string.refraction_x, theme.refraction):"")),v->glassTuning()),settingRow(str(R.string.effects),"blur " + theme.blur + " · glass " + theme.glass + (theme.expressive ? " · expressive" : "") + (theme.dynamic ? " · dynamic" : ""),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
+        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow("Glass","level " + String.format(Locale.ROOT, "%.2f", prefs.getFloat("glass_level", 0.30f)) + " · " + getGlassLabel(prefs.getFloat("glass_level", 0.30f)),v->glassTuning()),settingRow(str(R.string.effects),"blur " + theme.blur + " · glass " + theme.glass + (theme.expressive ? " · expressive" : "") + (theme.dynamic ? " · dynamic" : ""),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
         page.addView(sectionLabel(str(R.string.top_zone)));
         page.addView(group(settingRow(str(R.string.default_height),prefs.getInt("header",20)==0?str(R.string.off):str(R.string.x_of_the_screen_contexts_can_override, prefs.getInt("header",20)),v->menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow(str(R.string.media_access),mediaAccess()?str(R.string.allowed):str(R.string.needed_for_media_controls_and_the_media),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow(str(R.string.calendar_access),calendarAllowed()?str(R.string.allowed):str(R.string.needed_for_the_agenda_item),v->headerSettings())));
         page.addView(sectionLabel(str(R.string.background)));
