@@ -1,4 +1,4 @@
-package dev.seventwo.launcher;
+package com.studio72f.freedom;
 
 public class LegibilityTest {
     static int passed;

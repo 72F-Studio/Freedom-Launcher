@@ -1,4 +1,4 @@
-package dev.seventwo.launcher;
+package com.studio72f.freedom;
 
 import java.util.*;
 

@@ -1,4 +1,4 @@
-import dev.seventwo.launcher.CategoryRules;
+import com.studio72f.freedom.CategoryRules;
 import java.util.Map;
 public class CategoryRulesTest {
     public static void main(String[] args) {

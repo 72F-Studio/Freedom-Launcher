@@ -7,15 +7,15 @@ plugins { id("com.android.application") }
 val releaseKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
-    namespace = "dev.seventwo.launcher"
+    namespace = "com.studio72f.freedom"
     compileSdk = 37
     defaultConfig {
-        applicationId = "dev.seventwo.launcher"
+        applicationId = "com.studio72f.freedom"
         minSdk = 28
         targetSdk = 37
-        testInstrumentationRunner = "dev.seventwo.launcher.EngineChecks"
-        versionCode = 9
-        versionName = "1.0.0-rc6"
+        testInstrumentationRunner = "com.studio72f.freedom.EngineChecks"
+        versionCode = 1
+        versionName = "1.0.0"
     }
     signingConfigs {
         if (releaseKey != null) create("release") {

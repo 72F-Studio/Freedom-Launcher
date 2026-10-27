@@ -1,6 +1,6 @@
 <resources>
     <string name="work_app">%1$s · work</string>
-    <string name="about_72f">about 72F</string>
+    <string name="about_72f">about 72Freedom</string>
     <string name="active">, active</string>
     <string name="active_2">active</string>
     <string name="add_context">add context</string>
@@ -45,7 +45,7 @@
     <string name="choose_a_photo">choose a photo</string>
     <string name="choose_a_photo_first">Choose a photo first</string>
     <string name="choose_a_readable_photo_or_image_up_to_3">Choose a readable photo or image, up to 32 MB.</string>
-    <string name="choose_a_supported_72f_file">Choose a supported 72F file.</string>
+    <string name="choose_a_supported_72f_file">Choose a supported 72Freedom file.</string>
     <string name="choose_a_unique_category_name">Choose a unique category name</string>
     <string name="clock_alarm_agenda_media_smartspacer_or">clock, alarm, agenda, media, Smartspacer or any app widget</string>
     <string name="clock_tap_to_open_alarms">Clock. Tap to open alarms</string>
@@ -76,8 +76,8 @@
     <string name="dim_x">dim %1$s%%</string>
     <string name="done">done</string>
     <string name="effects">effects</string>
-    <string name="enable_72f_media_controls_in_notificatio">Enable 72F media controls in notification access so the top zone can show what\'s playing.</string>
-    <string name="enable_72f_media_controls_in_notificatio_2">Enable 72F media controls in notification access so this condition can see playback.</string>
+    <string name="enable_72f_media_controls_in_notificatio">Enable 72Freedom media controls in notification access so the top zone can show what\'s playing.</string>
+    <string name="enable_72f_media_controls_in_notificatio_2">Enable 72Freedom media controls in notification access so this condition can see playback.</string>
     <string name="enter_a_name">Enter a name</string>
     <string name="every_day">every day</string>
     <string name="export_launcher_backup">export launcher backup</string>
@@ -135,7 +135,7 @@
     <string name="liquid_glass_blur_under_the_lens_its_tin">Liquid glass: blur under the lens, its tint, and how strongly the edges bend.</string>
     <string name="liquid_retro">liquid retro</string>
     <string name="m">M</string>
-    <string name="make_72f_your_home_screen">make 72F your home screen</string>
+    <string name="make_72f_your_home_screen">make 72Freedom your home screen</string>
     <string name="material">material</string>
     <string name="material_3_expressive">material 3 expressive</string>
     <string name="material_3_expressive_x">material 3 expressive · %1$s</string>
@@ -227,10 +227,10 @@
     <string name="right">RIGHT</string>
     <string name="right_2">right</string>
     <string name="s">S</string>
-    <string name="s_72f">72F</string>
-    <string name="s_72f_has_no_internet_permission_these_sta">72F has no internet permission. These stay on your phone and are only needed for the features below.</string>
-    <string name="s_72f_is_your_home_screen">72F is your home screen</string>
-    <string name="s_72f_x">72F %1$s</string>
+    <string name="s_72f">72Freedom</string>
+    <string name="s_72f_has_no_internet_permission_these_sta">72Freedom has no internet permission. These stay on your phone and are only needed for the features below.</string>
+    <string name="s_72f_is_your_home_screen">72Freedom is your home screen</string>
+    <string name="s_72f_x">72Freedom %1$s</string>
     <string name="save">save</string>
     <string name="scroll_a_list_or_drag_the_side_alphabet">Scroll a list, or drag the side alphabet to jump to a letter.</string>
     <string name="scroll_and_scrub">scroll and scrub</string>
@@ -293,7 +293,7 @@
     <string name="until_tomorrow_morning">until tomorrow morning</string>
     <string name="until_x">until %1$s</string>
     <string name="up_to_x_contexts">Up to %1$s contexts</string>
-    <string name="use_72f_when_you_press_home">use 72F when you press Home</string>
+    <string name="use_72f_when_you_press_home">use 72Freedom when you press Home</string>
     <string name="use_app_info_to_manage_work_apps">Use app info to manage work apps</string>
     <string name="use_context">use context</string>
     <string name="use_it_now_regardless_of_conditions">use it now, regardless of conditions</string>
@@ -358,4 +358,12 @@
     <string-array name="rule_days">
         <item>mon</item><item>tue</item><item>wed</item><item>thu</item><item>fri</item><item>sat</item><item>sun</item>
     </string-array>
+    <string name="homescreen_layout">homescreen layout</string>
+    <string name="layout_list_ps3">PS3 XMB / Grace List</string>
+    <string name="layout_grid_ratio">Ratio × Minimaa Grid</string>
+    <string name="clock_style">clock style</string>
+    <string name="clock_digital">Minimal Digital</string>
+    <string name="clock_binary">Minimaa Binary Dot Matrix</string>
+    <string name="root_widgets">Root Widgets</string>
+    <string name="tree_conversations">Conversations Timeline</string>
 </resources>

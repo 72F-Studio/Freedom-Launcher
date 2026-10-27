@@ -10,12 +10,12 @@
         <intent><action android:name="com.novalauncher.THEME"/></intent>
         <intent><action android:name="com.anddoes.launcher.THEME"/></intent>
     </queries>
-    <application android:label="72F Launcher" android:theme="@style/MetroTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" tools:targetApi="33">
+    <application android:label="72Freedom Launcher" android:theme="@style/MetroTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" tools:targetApi="33">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
-        <service android:name=".MediaAccessService" android:label="72F media controls and notification dots" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
+        <service android:name=".MediaAccessService" android:label="72Freedom conversations and notifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
         </service>
     </application>
