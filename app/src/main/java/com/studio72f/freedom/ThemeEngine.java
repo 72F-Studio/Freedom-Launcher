@@ -32,18 +32,18 @@ final class ThemeEngine {
         muted = color("muted", "#898989"); accent = color("accent", "#39B9D4");
         if (contrast(background,text)<4.5 || contrast(background,muted)<3 || contrast(background,accent)<3)
             throw new IOException("Theme colors need more contrast");
-        layout = choice("layout", "metro", "metro", "xmb");
-        uiIconSet = choice("uiIconSet",layout.equals("xmb")?"wave":"material","retro","wave","material");
-        backdrop = choice("backdrop", "glow", "glow", "solid", "waves");
+        layout = choice("layout", "grid", "grid", "metro");
+        uiIconSet = choice("uiIconSet","material","retro","wave","material");
+        backdrop = choice("backdrop", "solid", "solid", "glow", "frosted");
         font = choice("font", "sans-serif-light", "sans-serif-light", "sans-serif", "sans-serif-thin", "sans-serif-condensed");
         choice("wallpaperMode","solid","solid","photo","system");
         String pack=json.optString("iconPack","");if(pack.length()>200||(!pack.isEmpty()&&!pack.matches("[A-Za-z0-9_.]+")))throw new IOException("Invalid icon pack reference");
         iconStyle = choice("iconStyle", "mono", "mono", "color", "none");
-        titleSize = number("titleSize", layout.equals("xmb")?36:48, 24, 80);
-        appSize = number("appSize", layout.equals("xmb")?22:20, 16, 36);
+        titleSize = number("titleSize", 36, 24, 80);
+        appSize = number("appSize", 20, 14, 36);
         rowHeight = number("rowHeight", 56, 48, 96);
         iconSize = number("iconSize", 40, 20, 48);
-        motionMs = number("motionMs", layout.equals("xmb")?300:230, 0, 600);
+        motionMs = number("motionMs", 230, 0, 600);
         animated = json.optBoolean("animated", true);
         blur = number("blur",0,0,40); glass = number("glass",0,0,90);
         glassBlur = number("glassBlur",-1,-1,40); glassTint = number("glassTint",0,-100,100); refraction = number("refraction",50,0,100);
@@ -111,11 +111,14 @@ final class ThemeEngine {
             t.put("background","#141218");t.put("text","#E6E0E9");t.put("muted","#CAC4D0");t.put("accent","#D0BCFF");
             t.put("font","sans-serif");t.put("titleSize",44);t.put("appSize",20);t.put("rowHeight",56);t.put("iconSize",40);
             t.put("iconStyle","color");t.put("motionMs",350);
-        } else if(name.equals("Wave")||name.equals("PS3 native")) {
-            t.put("name","Wave");t.put("uiIconSet","wave");t.put("layout","xmb");t.put("backdrop","waves");t.put("background","#071626");
-            t.put("text","#FFFFFF");t.put("muted","#ACBDCE");t.put("accent","#DCEBFF");
-            t.put("font","sans-serif-light");t.put("titleSize",24);t.put("appSize",24);
-            t.put("iconSize",34);t.put("rowHeight",66);t.put("iconStyle","mono");t.put("motionMs",300);
+        } else if(name.equals("Ratio Frosted")) {
+            t.put("name","Ratio Frosted");t.put("uiIconSet","material");t.put("layout","grid");t.put("backdrop","solid");t.put("background","#0A0A0A");
+            t.put("text","#FFFFFF");t.put("muted","#888888");t.put("accent","#FFFFFF");t.put("glass",60);t.put("blur",25);
+            t.put("font","sans-serif");t.put("titleSize",24);t.put("appSize",14);t.put("iconSize",42);t.put("rowHeight",64);t.put("iconStyle","mono");
+        } else if(name.equals("Minimaa Pure")) {
+            t.put("name","Minimaa Pure");t.put("uiIconSet","material");t.put("layout","grid");t.put("backdrop","solid");t.put("background","#000000");
+            t.put("text","#FFFFFF");t.put("muted","#666666");t.put("accent","#39B9D4");t.put("glass",20);t.put("blur",0);
+            t.put("font","sans-serif-light");t.put("titleSize",24);t.put("appSize",14);t.put("iconSize",40);t.put("rowHeight",64);t.put("iconStyle","mono");
         } else {
             if(name.equals("Liquid Retro")||name.equals("Liquid Metro")){t.put("name","Liquid Retro");t.put("blur",18);t.put("glass",50);t.put("liquid",true);t.put("background","#06151D");}
             boolean paper=name.equals("paper · light");

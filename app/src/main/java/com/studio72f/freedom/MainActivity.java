@@ -55,7 +55,6 @@ public final class MainActivity extends Activity {
     private Bitmap wallpaper, softWallpaper;
     private ThemeEngine theme;
     private IconPacks iconPack;
-    private Ps3Backdrop waves;
     private View backdropView;
     private FrameLayout scene;
     private int effectGeneration, wallpaperGeneration;
@@ -151,9 +150,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; if(waves!=null&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start(); handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
-    @Override protected void onPause() { foreground = false; unregisterSignals(); if(waves!=null)waves.stop(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
-    @Override protected void onDestroy() { MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
+    @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
+    @Override protected void onDestroy() { MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
@@ -251,14 +250,9 @@ public final class MainActivity extends Activity {
             if(theme.expressive){t.setTypeface(Typeface.create(theme.typeface,selected?800:500,false));t.setLetterSpacing(-.02f);}
             if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
-            t.setPadding(dp(26),dp(theme.liquid?12:0),dp(14),dp(theme.liquid?14:8));t.setSingleLine(true);t.setLetterSpacing(theme.layout.equals("xmb")?0:-.035f);
+            t.setPadding(dp(26),dp(theme.liquid?12:0),dp(14),dp(theme.liquid?14:8));t.setSingleLine(true);t.setLetterSpacing(-.035f);
             t.setContentDescription(str(R.string.x_category_y, c, (selected?str(R.string.selected):"")));t.setOnClickListener(v->selectCategory(c,true));
-            if(theme.layout.equals("xmb")){
-                LinearLayout item=column();item.setGravity(Gravity.CENTER_HORIZONTAL);item.setPadding(dp(6),dp(8),dp(6),dp(4));
-                MetroArt.Icon mark=new MetroArt.Icon(this,uiIcons,c,selected?fg:MetroArt.alpha(muted,.7f),false);mark.setGlyphSize(34);mark.setFocusable(false);mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                item.addView(mark,new LinearLayout.LayoutParams(dp(52),dp(52)));t.setPadding(dp(12),0,dp(12),dp(6));item.addView(t,new LinearLayout.LayoutParams(-2,-2));item.setOnClickListener(v->selectCategory(c,true));
-                if(selected)t.setShadowLayer(dp(8),0,0,MetroArt.alpha(accent,.55f));titles.addView(item,new LinearLayout.LayoutParams(-2,-2));
-            }else titles.addView(t);
+            titles.addView(t);
         }
         rebuilding = true;
         if (categoryRail != null) {
@@ -275,7 +269,7 @@ public final class MainActivity extends Activity {
     @android.annotation.SuppressLint("RtlHardcoded")
     private void buildUi() {
         rebuilding = true;
-        if(waves!=null)waves.stop();for(GlassSurface glass:glassSurfaces)glass.stop();glassSurfaces.clear();glassBackdrop.clear();
+        for(GlassSurface glass:glassSurfaces)glass.stop();glassSurfaces.clear();glassBackdrop.clear();
         root=column();scene=new FrameLayout(this);backdropView=new View(this);
         scene.addView(backdropView,new FrameLayout.LayoutParams(-1,-1));
 
@@ -320,12 +314,17 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.setMargins(dp(16), dp(10), dp(16), dp(10)); root.addView(row, sp);
             search.addTextChangedListener(new TextWatcher() { public void beforeTextChanged(CharSequence s,int a,int c,int f) {} public void onTextChanged(CharSequence s,int a,int b,int c) { query=s.toString(); refreshList(true); } public void afterTextChanged(Editable e) {} });
             search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0), null); return true; });
+
+            listArea = new FrameLayout(this);
+            list = new ListView(this); list.setDivider(null); list.setCacheColorHint(Color.TRANSPARENT); list.setVerticalScrollBarEnabled(false); list.setClipToPadding(false);
+            list.setPadding(dp(18), dp(2), dp(18), dp(12));
+            adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list, new FrameLayout.LayoutParams(-1, -1));
+            list.setOnItemClickListener((p, v, pos, id) -> launch(visible.get(pos), v));
+            list.setOnItemLongClickListener((p, v, pos, id) -> { appMenu(visible.get(pos)); return true; });
+            empty = text("", 20, secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40), 0, dp(40), 0); listArea.addView(empty, new FrameLayout.LayoutParams(-1, -1));
+            root.addView(listArea, new LinearLayout.LayoutParams(-1, 0, 1));
         } else {
             buildTopZone();
-        }
-
-        String layoutMode = prefs.getString("layout_mode", "grid");
-        if (!searching && "grid".equals(layoutMode)) {
             ratioGrid = new RatioGridHomescreen(this);
             ratioGrid.setColors(fg, accent);
             ratioGrid.setLaunchListener(new RatioGridHomescreen.AppLaunchListener() {
@@ -335,46 +334,6 @@ public final class MainActivity extends Activity {
             });
             ratioGrid.setApps(apps, categories, assignments, merges);
             root.addView(ratioGrid, new LinearLayout.LayoutParams(-1, 0, 1));
-        } else {
-            titleScroll = new CategoryTitles(); titleScroll.setHorizontalScrollBarEnabled(false); titleScroll.setClipToPadding(false);
-            titles = row(); titleScroll.addView(titles,new HorizontalScrollView.LayoutParams(-2,-2));
-            titleScroll.setVisibility(searching ? View.GONE : View.VISIBLE); root.addView(titleScroll);
-            SwipeFrame swipe = new SwipeFrame(); root.addView(swipe,new LinearLayout.LayoutParams(-1,0,1));
-            listArea = new FrameLayout(this); swipe.addView(listArea,new FrameLayout.LayoutParams(-1,-1));
-            if (pageSpring != null) pageSpring.cancel();
-            final FrameLayout pageView = listArea;
-            pageSpring = new Motion.Spring(theme.expressive ? Motion.SPATIAL_EXPRESSIVE : Motion.SPATIAL, (x, v) -> {
-                pageView.setTranslationX(x); float w = Math.max(1, pageView.getWidth());
-                pageView.setAlpha(1f - Math.min(.7f, Math.abs(x) / w * 1.6f));
-                if (pendingSwap != null && Math.abs(x) >= swapAt) { Runnable swap = pendingSwap; pendingSwap = null; pageView.post(swap); } });
-            list = new ListView(this); list.setDivider(null); list.setCacheColorHint(Color.TRANSPARENT); list.setVerticalScrollBarEnabled(false); list.setClipToPadding(false);
-            boolean left = prefs.getBoolean("left",false); list.setPadding(dp(left?48:18),dp(2),dp(left?18:48),dp(12)); // rows add 10dp: icons line up with the clock and titles at 28dp
-            list.setVerticalFadingEdgeEnabled(true); list.setFadingEdgeLength(dp(24));
-            list.setSelector(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); // rows animate their own press
-            adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list,new FrameLayout.LayoutParams(-1,-1));
-            list.setOnItemClickListener((p,v,pos,id) -> launch(visible.get(pos), v));
-            list.setOnItemLongClickListener((p,v,pos,id) -> { appMenu(visible.get(pos)); return true; });
-            empty = text("",20,secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40),0,dp(40),0); listArea.addView(empty,new FrameLayout.LayoutParams(-1,-1));
-            alphabet = new AlphabetRail(); FrameLayout.LayoutParams railParams = new FrameLayout.LayoutParams(dp(160),-1, left?Gravity.LEFT:Gravity.RIGHT); listArea.addView(alphabet,railParams);
-            letter = text("",28,onPrimaryContainer); letter.setGravity(Gravity.CENTER); letter.setTypeface(Typeface.create(theme.typeface,500,false)); letter.setIncludeFontPadding(false);
-            letter.setBackground(rounded(primaryContainer,23)); letter.setElevation(dp(4)); letter.setVisibility(View.GONE); letter.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            listArea.addView(letter,new FrameLayout.LayoutParams(dp(46),dp(46),Gravity.TOP|Gravity.START));
-            // Dock: a category pill stretching to a floating search button (Niagara-style), both on one surface.
-            LinearLayout footer = new SwipeUpFooter(); footer.setOrientation(LinearLayout.HORIZONTAL); footer.setGravity(Gravity.CENTER_VERTICAL);
-            footer.setPadding(dp(16),dp(6),dp(16),dp(14)); footer.setClipToPadding(false); footer.setClipChildren(false);
-            categoryRail = new CategoryRail();
-            categoryRail.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                public void onProgressChanged(SeekBar s,int p,boolean user) { if (user && !rebuilding && p < categories.size()) selectCategory(categories.get(p),false); }
-                public void onStartTrackingTouch(SeekBar s) { }
-                public void onStopTrackingTouch(SeekBar s) { s.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); }
-            });
-            FrameLayout bar = new FrameLayout(this); bar.setBackground(dockSurface(bar));
-            FrameLayout.LayoutParams dockRail=new FrameLayout.LayoutParams(-1,-1);dockRail.setMargins(dp(6),0,dp(6),0);bar.addView(categoryRail,dockRail);
-            footer.addView(bar,new LinearLayout.LayoutParams(0,dp(56),1));
-            View fab = searchButton(); LinearLayout.LayoutParams fabParams = new LinearLayout.LayoutParams(dp(56),dp(56)); fabParams.setMargins(dp(10),0,0,0);
-            footer.addView(fab,fabParams);
-            footer.setVisibility(searching?View.GONE:View.VISIBLE);
-            root.addView(footer);
         }
         refreshCategories(); refreshList(false); updateMedia(); attachSheet(); rebuilding = false;
     }
@@ -883,14 +842,12 @@ public final class MainActivity extends Activity {
     }
     private JSONObject themeJson(){try{return new JSONObject(theme.json.toString());}catch(JSONException e){throw new IllegalStateException(e);}}
     private void persistTheme(){prefs.edit().putString("theme",theme.json.toString()).apply();prepareSoftWallpaper();}
-    private void effectsSettings(){menu(str(R.string.effects),new String[]{str(R.string.background_blur),str(R.string.glass_surfaces),str(R.string.glass_tuning_blur_tint_refraction),str(R.string.wave_animation_x, (theme.animated?str(R.string.on):str(R.string.off))),str(R.string.material_3_expressive_x, (theme.expressive?str(R.string.on):str(R.string.off))),str(R.string.wallpaper_colors_x, (Build.VERSION.SDK_INT<31?str(R.string.android_12):theme.dynamic?str(R.string.on):str(R.string.off)))},i->{
-        if(i==2){glassTuning();return;}
-        if(i>2)i--;
-        if(i==3)changeEffect("expressive",!theme.expressive);
-        if(i==4){if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}
+    private void effectsSettings(){menu(str(R.string.effects),new String[]{str(R.string.background_blur),str(R.string.glass_surfaces),str(R.string.glass_tuning_blur_tint_refraction),str(R.string.material_3_expressive_x, (theme.expressive?str(R.string.on):str(R.string.off))),str(R.string.wallpaper_colors_x, (Build.VERSION.SDK_INT<31?str(R.string.android_12):theme.dynamic?str(R.string.on):str(R.string.off)))},i->{
         if(i==0)menu(str(R.string.blur),new String[]{str(R.string.off),str(R.string.soft_8),str(R.string.frosted_18),str(R.string.deep_32)},n->changeEffect("blur",new int[]{0,8,18,32}[n]));
         if(i==1)menu(str(R.string.glass),new String[]{str(R.string.off),str(R.string.subtle),str(R.string.frosted),str(R.string.liquid_glass)},n->{try{JSONObject t=themeJson();t.put("glass",new int[]{0,20,40,65}[n]);t.put("liquid",n==3);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
-        if(i==2)changeEffect("animated",!theme.animated);
+        if(i==2){glassTuning();return;}
+        if(i==3)changeEffect("expressive",!theme.expressive);
+        if(i==4){if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}
     });}
     // Glass tuning: three live sliders. Rebuilds are debounced so dragging stays smooth.
     private JSONObject pendingGlass;
@@ -1023,11 +980,10 @@ public final class MainActivity extends Activity {
         t.setShadowLayer(dp(5+5*strong),0,dp(1),lightText?MetroArt.alpha(Color.BLACK,.45f+.3f*strong):MetroArt.alpha(Color.WHITE,.6f+.3f*strong));
     }
     private void updateBackdrop(){
-        if(backdropView==null)return;glassBackdrop.clear();for(GlassSurface surface:glassSurfaces)surface.invalidateSelf();if(waves!=null)waves.stop();waves=null;
+        if(backdropView==null)return;glassBackdrop.clear();for(GlassSurface surface:glassSurfaces)surface.invalidateSelf();
         Bitmap image=Build.VERSION.SDK_INT<31&&softWallpaper!=null?softWallpaper:wallpaper;
         boolean system=activeWallpaperMode.equals("system");
-        if(theme.backdrop.equals("waves")&&!activeWallpaperMode.equals("photo")&&!system){waves=new Ps3Backdrop(bg,accent);backdropView.setBackground(waves);if(foreground&&theme.animated&&android.animation.ValueAnimator.areAnimatorsEnabled())waves.start();}
-        else backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",60)/100f+(float)Legibility.extraDim(legibility)),system));
+        backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",60)/100f+(float)Legibility.extraDim(legibility)),system));
         if(Build.VERSION.SDK_INT>=31){backdropView.setRenderEffect(theme.blur>0?RenderEffect.createBlurEffect(dp(theme.blur),dp(theme.blur),Shader.TileMode.CLAMP):null);getWindow().setBackgroundBlurRadius(system?dp(theme.blur):0);}
     }
     private void prepareSoftWallpaper(){
@@ -1123,7 +1079,7 @@ public final class MainActivity extends Activity {
                         binaryClock.setOnClickListener(v -> safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
                         block.addView(binaryClock, new LinearLayout.LayoutParams(-2, -2));
                     } else {
-                        clock=text("",theme.layout.equals("xmb")?40:percent<=10?44:64,fg);legible(clock);
+                        clock=text("",percent<=10?44:64,fg);legible(clock);
                         clock.setTypeface(Typeface.create(theme.typeface,300,false)); clock.setLetterSpacing(-.02f); clock.setSingleLine(true);
                         clock.setContentDescription(str(R.string.clock_tap_to_open_alarms)); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
                         block.addView(clock,new LinearLayout.LayoutParams(-2,-2));
@@ -1533,7 +1489,6 @@ public final class MainActivity extends Activity {
         boolean media=activeContext!=null&&activeContext.widgets.contains("media");
         boolean isDefault=Build.VERSION.SDK_INT>=29&&getSystemService(RoleManager.class).isRoleHeld(RoleManager.ROLE_HOME);
         page.addView(tileGrid(
-            tile("layout",prefs.getString("layout_mode","grid").equals("grid")?"grid":"list",prefs.getString("layout_mode","grid").equals("grid"),v->{prefs.edit().putString("layout_mode",prefs.getString("layout_mode","grid").equals("grid")?"list":"grid").apply();buildUi();sheet.refresh();}),
             tile("clock",prefs.getString("clock_face","binary").equals("binary")?"binary":"digital",prefs.getString("clock_face","binary").equals("binary"),v->{prefs.edit().putString("clock_face",prefs.getString("clock_face","binary").equals("binary")?"digital":"binary").apply();buildUi();sheet.refresh();}),
             tile(str(R.string.categories),prefs.getBoolean("categories",true)?str(R.string.on_2):str(R.string.off_2),prefs.getBoolean("categories",true),v->{prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);sheet.refresh();}),
             tile(str(R.string.app_icons),icons.equals("mono")?str(R.string.mono):icons.equals("color")?str(R.string.color):str(R.string.text),!icons.equals("none"),v->{prefs.edit().putString("icons",icons.equals("mono")?"color":icons.equals("color")?"none":"mono").apply();buildUi();}),
@@ -1545,7 +1500,6 @@ public final class MainActivity extends Activity {
             tile(str(R.string.default_home),isDefault?str(R.string.yes):str(R.string.set),isDefault,v->defaultHome()),
             tile(str(R.string.expressive),theme.expressive?str(R.string.on_2):str(R.string.off_2),theme.expressive,v->changeEffect("expressive",!theme.expressive)),
             tile(str(R.string.wallpaper_colors),Build.VERSION.SDK_INT<31?"12+":theme.dynamic?str(R.string.on_2):str(R.string.off_2),theme.dynamic,v->{if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}),
-            tile(str(R.string.waves),theme.animated?str(R.string.on_2):str(R.string.off_2),theme.animated,v->changeEffect("animated",!theme.animated)),
             tile(str(R.string.title_size),titleSize<=40?str(R.string.s):titleSize<=62?str(R.string.m):str(R.string.l),true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
         // Wallpaper dimming.
         LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
@@ -1603,7 +1557,7 @@ public final class MainActivity extends Activity {
             settingRow(str(R.string.scrubber_side),prefs.getBoolean("left",false)?str(R.string.left_2):str(R.string.right_2),v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
         page.addView(sectionLabel(str(R.string.appearance)));
         String icons=prefs.getString("icons",theme.iconStyle);
-        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow(str(R.string.glass),theme.glass==0?str(R.string.off_turn_on_liquid_or_frosted_glass):str(R.string.x_blur_y_tint_z_4_s, (theme.liquid?str(R.string.liquid_2):str(R.string.frosted)), (theme.glassBlur>=0?str(R.string.x_dp, theme.glassBlur):str(R.string.auto)), (theme.glassTint==0?str(R.string.theme):theme.glassTint<0?str(R.string.darker):str(R.string.lighter)), (theme.liquid?str(R.string.refraction_x, theme.refraction):"")),v->glassTuning()),settingRow(str(R.string.effects),str(R.string.blur_x_glass_y_waves_z_4_s_5_s, theme.blur, theme.glass, (theme.animated?str(R.string.on):str(R.string.off)), (theme.expressive?str(R.string.expressive_2):""), (theme.dynamic?str(R.string.wallpaper_colors_2):"")),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
+        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow(str(R.string.glass),theme.glass==0?str(R.string.off_turn_on_liquid_or_frosted_glass):str(R.string.x_blur_y_tint_z_4_s, (theme.liquid?str(R.string.liquid_2):str(R.string.frosted)), (theme.glassBlur>=0?str(R.string.x_dp, theme.glassBlur):str(R.string.auto)), (theme.glassTint==0?str(R.string.theme):theme.glassTint<0?str(R.string.darker):str(R.string.lighter)), (theme.liquid?str(R.string.refraction_x, theme.refraction):"")),v->glassTuning()),settingRow(str(R.string.effects),"blur " + theme.blur + " · glass " + theme.glass + (theme.expressive ? " · expressive" : "") + (theme.dynamic ? " · dynamic" : ""),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
         page.addView(sectionLabel(str(R.string.top_zone)));
         page.addView(group(settingRow(str(R.string.default_height),prefs.getInt("header",20)==0?str(R.string.off):str(R.string.x_of_the_screen_contexts_can_override, prefs.getInt("header",20)),v->menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow(str(R.string.media_access),mediaAccess()?str(R.string.allowed):str(R.string.needed_for_media_controls_and_the_media),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow(str(R.string.calendar_access),calendarAllowed()?str(R.string.allowed):str(R.string.needed_for_the_agenda_item),v->headerSettings())));
         page.addView(sectionLabel(str(R.string.background)));
@@ -1786,7 +1740,7 @@ public final class MainActivity extends Activity {
         bottom.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         boolean last=tourPage==TOUR_PAGES-1;
         TextView next=text(last?str(R.string.let_s_go):str(R.string.next),17,onPrimaryContainer);next.setGravity(Gravity.CENTER);next.setPadding(dp(28),0,dp(28),0);next.setMinHeight(dp(52));
-        GradientDrawable fill=new GradientDrawable();fill.setColor(primaryContainer);fill.setCornerRadius(theme.layout.equals("xmb")||theme.expressive||theme.liquid?dp(26):dp(2));next.setBackground(fill);
+        GradientDrawable fill=new GradientDrawable();fill.setColor(primaryContainer);fill.setCornerRadius(theme.expressive||theme.liquid?dp(26):dp(12));next.setBackground(fill);
         next.setOnClickListener(v->tourStep(1));next.setFocusable(true);next.setContentDescription(last?str(R.string.finish_setup):str(R.string.next_step));
         bottom.addView(next);
         frame.addView(bottom);
