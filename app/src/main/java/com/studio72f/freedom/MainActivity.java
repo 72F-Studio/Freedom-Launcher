@@ -415,7 +415,9 @@ public final class MainActivity extends Activity {
         adapter.notifyDataSetChanged();
         empty.setText(searching ?str(R.string.no_matches_try_another_name):category.equals("favorites") ?str(R.string.no_favorites_yet_hold_an_app_in_all_apps):str(R.string.no_apps_here_hold_an_app_to_move_it_here));
         empty.setVisibility(visible.isEmpty()?View.VISIBLE:View.GONE);
-        alphabet.setVisibility(!searching && category.equals("favorites") || visible.isEmpty()?View.GONE:View.VISIBLE); alphabet.update();
+        if (alphabet != null) {
+            alphabet.setVisibility(!searching && category.equals("favorites") || visible.isEmpty()?View.GONE:View.VISIBLE); alphabet.update();
+        }
         if (reset) list.setSelection(searching?0:scrollPositions.getOrDefault(category,0));
     }
     private final class AppRow extends LinearLayout {
