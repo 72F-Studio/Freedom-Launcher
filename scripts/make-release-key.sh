@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 KEYTOOL="${JAVA_HOME:-$HOME/.jdks/jbr-21.0.11}/bin/keytool"
-STORE="${1:-$HOME/.config/72f-launcher/72f-release.jks}"
+STORE="${1:-./keystore/72f-release.jks}"
 ALIAS=72f
 [ -e keystore.properties ] && { echo "keystore.properties already exists; not overwriting."; exit 1; }
 mkdir -p "$(dirname "$STORE")"
