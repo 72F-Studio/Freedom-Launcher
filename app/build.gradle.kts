@@ -48,4 +48,10 @@ dependencies {
     // Smartspacer Client SDK (Apache-2.0); 1.2 needs AGP 9.1+ and compileSdk 37.
     implementation("com.kieronquinn.smartspacer:sdk-client:1.2")
     implementation("androidx.viewpager:viewpager:1.1.0") // referenced directly by layout-v29/smartspacer_view.xml
+    implementation("com.android.billingclient:billing:9.1.0")
+
+    // Google LiteRT (Lite Runtime for on-device GenAI & ML)
+    implementation("com.google.ai.edge.litert:litert-api:1.4.2")
+    // Google AI Core (On-device Gemini Nano Foundation Model integration)
+    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp02")
 }

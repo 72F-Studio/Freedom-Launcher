@@ -66,6 +66,9 @@ public final class RootPageView extends LinearLayout {
     private TextView mediaPlayBtn;
     private MediaController mediaController;
 
+    // AI Assistant / Chatbot
+    private ChatbotView chatbotView;
+
     private final Runnable timerRunnable = new Runnable() {
         @Override
         public void run() {
@@ -114,16 +117,21 @@ public final class RootPageView extends LinearLayout {
         // 1. Day Progress Card
         stack.addView(createDayProgressCard(), createCardParams());
 
-        // 2. Weather Card
+        // 2. AI Assistant / Chatbot Card
+        chatbotView = new ChatbotView(getContext());
+        chatbotView.setColors(fgColor, accentColor);
+        stack.addView(chatbotView, createCardParams());
+
+        // 3. Weather Card
         stack.addView(createWeatherCard(), createCardParams());
 
-        // 3. Quick Notes Scratchpad Card
+        // 4. Quick Notes Scratchpad Card
         stack.addView(createNotesCard(), createCardParams());
 
-        // 4. Instant Calculator Card
+        // 5. Instant Calculator Card
         stack.addView(createCalculatorCard(), createCardParams());
 
-        // 5. Media Player Card
+        // 6. Media Player Card
         stack.addView(createMediaPlayerCard(), createCardParams());
 
         scroll.addView(stack, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
@@ -141,6 +149,22 @@ public final class RootPageView extends LinearLayout {
     public void setColors(int fg, int accent) {
         this.fgColor = fg;
         this.accentColor = accent;
+        if (chatbotView != null) {
+            chatbotView.setColors(fg, accent);
+        }
+    }
+
+    public void setChatbotActionListener(ChatbotView.ActionListener listener) {
+        if (chatbotView != null) {
+            chatbotView.setActionListener(listener);
+        }
+    }
+
+    public void refreshChatbot() {
+        if (chatbotView != null) {
+            chatbotView.setColors(fgColor, accentColor);
+            chatbotView.updateStatusSubtitle();
+        }
     }
 
     public void setMediaController(MediaController controller) {

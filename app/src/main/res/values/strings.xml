@@ -366,4 +366,9 @@
     <string name="clock_binary">Minimaa Binary Dot Matrix</string>
     <string name="root_widgets">Root Widgets</string>
     <string name="tree_conversations">Conversations Timeline</string>
+    <string name="support_72f">support 72freedom</string>
+    <string name="support_72f_title">Support 72Freedom</string>
+    <string name="support_72f_summary">Optional tips help keep 72Freedom private and self-funded</string>
+    <string name="support_72f_intro">Optional tips help keep 72Freedom private and self-funded. Tips offer no additional benefits.</string>
+    <string name="support_72f_thanks">Thank you for using and supporting 72Freedom.</string>
 </resources>

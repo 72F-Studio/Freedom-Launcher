@@ -86,6 +86,7 @@ public final class MainActivity extends Activity {
     private RootPageView rootPageView;
     private TreePageView treePageView;
     private RatioGridHomescreen ratioGrid;
+    private LocalAiChatSheet localAiSheet;
     private BinaryClockView binaryClock;
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
@@ -100,6 +101,10 @@ public final class MainActivity extends Activity {
     };
     private final BroadcastReceiver signalReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { signalChanged(); }
+    };
+    private final FreedomBilling.Listener billingListener = new FreedomBilling.Listener() {
+        @Override public void onProductDetailsUpdated() { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
+        @Override public void onPurchaseCompleted(String productId) { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
     };
     private final MediaController.Callback mediaCallback = new MediaController.Callback() {
         @Override public void onMetadataChanged(MediaMetadata m) { updateMedia(); }
@@ -147,19 +152,20 @@ public final class MainActivity extends Activity {
         MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); });
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         buildUi(); loadApps();
+        FreedomBilling.getInstance(this).addListener(billingListener);
         if (!prefs.getBoolean("introduced", false) && tourPage < 0) handler.postDelayed(this::welcome, 300);
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
     @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
-    @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
-    @Override protected void onDestroy() { MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
+    @Override protected void onPause() { foreground = false; if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
+    @Override protected void onDestroy() { FreedomBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
     // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
     @android.annotation.SuppressLint("GestureBackNavigation") @Override public void onBackPressed() { handleBack(); }
-    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (pager != null && pager.handleBackPressed()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
+    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (localAiSheet != null && localAiSheet.isShowing()) { localAiSheet.dismiss(); return; } if (sheet != null && sheet.back()) return; if (pager != null && pager.handleBackPressed()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
         favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();hidden.clear();labels.clear();order.clear();
@@ -278,6 +284,10 @@ public final class MainActivity extends Activity {
         rootPageView = new RootPageView(this);
         rootPageView.setColors(fg, accent);
         rootPageView.setMediaController(controller);
+        rootPageView.setChatbotActionListener(new ChatbotView.ActionListener() {
+            @Override public void onOpenSettings() { openSettings(); }
+            @Override public void onSetWallpaper() { wallpaperSettings(); }
+        });
 
         treePageView = new TreePageView(this);
         treePageView.setColors(fg, accent);
@@ -333,6 +343,10 @@ public final class MainActivity extends Activity {
                 @Override public void onLaunchApp(App app, View view) { launch(app, view); }
                 @Override public void onAppMenu(App app) { appMenu(app); }
                 @Override public void onOpenSearch() { searching = true; buildUi(); }
+                @Override public void onOpenSettings() { openSettings(); }
+                @Override public void onOpenWallpaper() { wallpaperSettings(); }
+                @Override public void onHomescreenMenu() { homescreenMenu(); }
+                @Override public void onOpenAiChat() { openLocalAiChat(); }
             });
             ratioGrid.setApps(apps, categories, assignments, merges);
             root.addView(ratioGrid, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -1110,6 +1124,100 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void chatbotSettings() {
+        String key = prefs.getString("gemini_api_key", "");
+        String currentModel = prefs.getString("gemini_model", "gemini-2.5-flash");
+        boolean preferLocal = prefs.getBoolean(AiCoreEngine.PREF_PREFER_LOCAL, true);
+        boolean aiCoreAvailable = AiCoreEngine.getInstance().isAiCoreAvailable(this);
+        boolean liteRtAvailable = AiCoreEngine.getInstance().isLiteRtAvailable();
+
+        menu("✦ AI Assistant & Local Engine", new String[]{
+            preferLocal ? "Engine Priority: On-Device (AICore / LiteRT) ✓" : "Engine Priority: Gemini Cloud API ✓",
+            "AICore Status: " + (aiCoreAvailable ? "Active (Gemini Nano on-device)" : "Not Detected on this device"),
+            "LiteRT Status: " + (liteRtAvailable ? "Active (On-Device Runtime)" : "Not Active"),
+            key.isEmpty() ? "Gemini Cloud API Key (Optional Fallback)" : "Gemini API Key: Saved",
+            "Select Cloud Model: " + currentModel,
+            "Clear Chat History",
+            "About Local AI Core & Privacy"
+        }, i -> {
+            if (i == 0) {
+                boolean next = !preferLocal;
+                prefs.edit().putBoolean(AiCoreEngine.PREF_PREFER_LOCAL, next).apply();
+                getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putBoolean(AiCoreEngine.PREF_PREFER_LOCAL, next).apply();
+                toast(next ? "Prioritizing on-device AI (AICore / LiteRT)" : "Prioritizing Gemini Cloud API");
+                if (rootPageView != null) rootPageView.refreshChatbot();
+                if (localAiSheet != null) localAiSheet.refreshEngineBadge();
+                if (sheet != null) sheet.refresh();
+            } else if (i == 1 || i == 2) {
+                message("On-Device AI Engine", "• Android AICore: Provides direct hardware-accelerated access to Google's system Gemini Nano foundation model on Android 12+ (e.g. Pixel 8+, Samsung Galaxy S24+).\n\n• Google LiteRT: High-performance on-device machine learning runtime executing models directly on your phone CPU/GPU/NPU with zero data transmission.\n\n• Status: " + (aiCoreAvailable ? "AICore is supported and active!" : "Running LiteRT local fallback engine."));
+            } else if (i == 3) {
+                EditText input = new EditText(this);
+                input.setSingleLine();
+                input.setText(key);
+                input.setHint("AIzaSy...");
+                AlertDialog d = new AlertDialog.Builder(this)
+                    .setTitle("Google Gemini API Key")
+                    .setMessage("Enter your API key from Google AI Studio to enable Gemini cloud fallback.")
+                    .setView(input)
+                    .setNegativeButton(str(R.string.cancel), null)
+                    .setNeutralButton("Clear Key", (a, b) -> {
+                        prefs.edit().remove("gemini_api_key").apply();
+                        getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().remove("gemini_api_key").apply();
+                        toast("Gemini API Key cleared. Assistant is now using on-device engines.");
+                        if (rootPageView != null) rootPageView.refreshChatbot();
+                        if (localAiSheet != null) localAiSheet.refreshEngineBadge();
+                        if (sheet != null) sheet.refresh();
+                    })
+                    .setPositiveButton(str(R.string.save), (a, b) -> {
+                        String newKey = input.getText().toString().trim();
+                        prefs.edit().putString("gemini_api_key", newKey).apply();
+                        getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putString("gemini_api_key", newKey).apply();
+                        toast("Gemini API Key saved!");
+                        if (rootPageView != null) rootPageView.refreshChatbot();
+                        if (localAiSheet != null) localAiSheet.refreshEngineBadge();
+                        if (sheet != null) sheet.refresh();
+                    }).create();
+                showDialog(d);
+            } else if (i == 4) {
+                String[] models = {"gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"};
+                menu("Select Model", models, m -> {
+                    prefs.edit().putString("gemini_model", models[m]).apply();
+                    getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putString("gemini_model", models[m]).apply();
+                    toast("Model set to " + models[m]);
+                    if (rootPageView != null) rootPageView.refreshChatbot();
+                    if (localAiSheet != null) localAiSheet.refreshEngineBadge();
+                    if (sheet != null) sheet.refresh();
+                });
+            } else if (i == 5) {
+                getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().remove("chatbot_history").apply();
+                toast("Chat history cleared");
+                if (rootPageView != null) rootPageView.refreshChatbot();
+            } else if (i == 6) {
+                message("✦ Local AI Core & Privacy", "Ratio AI Assistant is powered by LiteRT and Android AICore:\n\n• Zero data leaves your device when using local models.\n• Instant response for system control ('battery', 'time', 'open spotify', 'calculate 15 * 8').\n• Gemini Nano leverages on-device Tensor/Snapdragon NPUs for private reasoning.\n• Cloud Gemini API is only used as an optional fallback when an API key is configured and local mode is disabled.");
+            }
+        });
+    }
+
+    private void homescreenMenu() {
+        menu("Ratio Launcher", new String[]{
+            "✦ Local AI Chat (On-Device)",
+            "⚙ Open Settings",
+            "🖼 Change Wallpaper",
+            "✦ AI Assistant (Root Cards)",
+            "🎨 Themes & Glass",
+            "🔍 Search Apps"
+        }, i -> {
+            if (i == 0) openLocalAiChat();
+            else if (i == 1) openSettings();
+            else if (i == 2) wallpaperSettings();
+            else if (i == 3) {
+                if (pager != null) pager.setCurrentItem(LauncherPager.PAGE_ROOT, true);
+            }
+            else if (i == 4) effectsSettings();
+            else if (i == 5) { searching = true; buildUi(); }
+        });
+    }
+
     // Top zone: the active context decides which items fill the header and how tall it is.
     private void buildTopZone() {
         clock=null; date=null; mediaBox=null; alarmText=null; agendaText=null; playButton=null;
@@ -1385,7 +1493,25 @@ public final class MainActivity extends Activity {
         sheet.setColors(surface(),MetroArt.alpha(fg,.07f),MetroArt.alpha(muted,.4f));
         sheet.requestApplyInsets();
         if(sheet.isShowing())sheet.refresh();
+
+        if (localAiSheet == null) {
+            localAiSheet = new LocalAiChatSheet(this);
+            localAiSheet.setListener(new LocalAiChatSheet.Listener() {
+                @Override public void onDismiss() {}
+                @Override public void onOpenSettings() { chatbotSettings(); }
+            });
+        }
+        if (localAiSheet.getParent() != null) ((android.view.ViewGroup) localAiSheet.getParent()).removeView(localAiSheet);
+        scene.addView(localAiSheet, new FrameLayout.LayoutParams(-1, -1));
+        localAiSheet.setColors(fg, accent);
+        localAiSheet.requestApplyInsets();
+
         if(tourPage>=0)attachTour(0);
+    }
+    private void openLocalAiChat() {
+        if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); }
+        if (sheet != null && sheet.isShowing()) sheet.back();
+        if (localAiSheet != null) localAiSheet.show();
     }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}sheet.open(this::quickPage);}
     private final class SwipeUpFooter extends LinearLayout {
@@ -1491,7 +1617,7 @@ public final class MainActivity extends Activity {
         }
         return grid;
     }
-    private static final String[] PRESETS={"retro · cyan","retro · cobalt","retro · magenta","paper · light","Wave","Liquid Retro","Expressive"};
+    private static final String[] PRESETS={"Ratio Frosted","retro · cyan","retro · cobalt","retro · magenta","paper · light","Wave","Liquid Retro","Expressive"};
     private void applyPreset(int i){
         try{SharedPreferences.Editor edit=prefs.edit().remove("themeDir").remove("icons");if(PRESETS[i].equals("Wave"))edit.putString("wallpaperMode","solid");edit.apply();
             // Expressive and wallpaper colors are styles, like glass: they carry over when you switch palettes.
@@ -1600,7 +1726,13 @@ public final class MainActivity extends Activity {
         });
         dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(52),1));
         LinearLayout dimCard=group(dim);((LinearLayout.LayoutParams)dimCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));page.addView(dimCard);
-        View tune=chipRow(chip("Tune Glass Presets (Opaque · Frosted · Clear)",false,v->glassTuning()));tune.setPadding(dp(16),dp(4),dp(16),0);page.addView(tune);
+
+        View quickActions=chipRow(
+            chip("🖼 Change Wallpaper",false,v->wallpaperSettings()),
+            chip("✦ AI Assistant",false,v->chatbotSettings()),
+            chip("Tune Glass",false,v->glassTuning())
+        );
+        quickActions.setPadding(dp(16),dp(4),dp(16),0);page.addView(quickActions);
         // Anchor: everything below is revealed by swiping the sheet up.
         LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
         MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1650,8 +1782,51 @@ public final class MainActivity extends Activity {
         page.addView(sectionLabel(str(R.string.background)));
         String mode=prefs.getString("wallpaperMode","solid");
         page.addView(group(settingRow(str(R.string.wallpaper),str(R.string.x_y_dim, (mode.equals("photo")?str(R.string.photo):mode.equals("system")?str(R.string.phone_wallpaper):str(R.string.solid)), prefs.getInt("wallpaperDim",60)),v->wallpaperSettings()),settingRow(str(R.string.text_legibility),legibilitySummary(),v->legibilitySettings())));
+        page.addView(sectionLabel("AI Assistant & Chatbot"));
+        String geminiKey=prefs.getString("gemini_api_key","");
+        page.addView(group(settingRow("✦ Assistant Configuration",geminiKey.isEmpty()?"Offline mode · Tap to enter Gemini API Key":"Gemini 2.5 Active · Tap to configure",v->chatbotSettings())));
+        page.addView(sectionLabel(str(R.string.support_72f)));
+        page.addView(group(settingRow(str(R.string.support_72f_title),str(R.string.support_72f_summary),v->sheet.push(this::supportPage))));
         page.addView(sectionLabel(str(R.string.backup_about)));
         page.addView(group(settingRow(str(R.string.backup_restore),str(R.string.favorites_categories_contexts_theme_and),v->backupSettings()),settingRow(str(R.string.replay_the_tour),str(R.string.the_five_step_introduction_from_first_la),v->startTour(0)),settingRow(str(R.string.about_72f),str(R.string.x_open_source_notices, version()),v->aboutSettings())));
+        return page;
+    }
+    private View supportPage(){
+        LinearLayout page=column();
+        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
+        head.addView(iconButton("back","Back",false,v->sheet.back()));
+        TextView title=text(str(R.string.support_72f_title),28,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);
+        head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        page.addView(head);
+        TextView note=text(str(R.string.support_72f_intro),13.5f,muted);
+        note.setPadding(dp(26),dp(6),dp(26),dp(14));note.setLineSpacing(dp(2),1);
+        page.addView(note);
+
+        FreedomBilling billing=FreedomBilling.getInstance(this);
+        ArrayList<View> rows=new ArrayList<>();
+        for(FreedomBilling.DonationTier tier:FreedomBilling.TIERS){
+            String price=billing.getFormattedPrice(tier.id,tier.fallbackPrice);
+            LinearLayout row=row();row.setGravity(Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(64));row.setPadding(dp(18),dp(12),dp(16),dp(12));
+            TextView emoji=text(tier.emoji,20,fg);emoji.setPadding(0,0,dp(14),0);
+            row.addView(emoji);
+            LinearLayout words=column();
+            TextView name=text(tier.title,16.5f,fg);name.setTypeface(Typeface.create(theme.typeface,600,false));
+            words.addView(name);
+            TextView desc=text(tier.description,12.5f,muted);desc.setPadding(0,dp(2),0,0);
+            words.addView(desc);
+            row.addView(words,new LinearLayout.LayoutParams(0,-2,1));
+            TextView priceChip=chip(price,true,v->billing.launchDonation(MainActivity.this,tier.id));
+            priceChip.setContentDescription(tier.title+", "+price);
+            row.addView(priceChip);
+            row.setFocusable(true);pressFeedback(row);
+            row.setOnClickListener(v->billing.launchDonation(MainActivity.this,tier.id));
+            row.setContentDescription(tier.title+" "+price+". "+tier.description);
+            rows.add(row);
+        }
+        page.addView(group(rows.toArray(new View[0])));
+        TextView thankNote=text(str(R.string.support_72f_thanks),13,mix(accent,muted,.4f));
+        thankNote.setGravity(Gravity.CENTER);thankNote.setPadding(dp(26),dp(20),dp(26),dp(20));
+        page.addView(thankNote);
         return page;
     }
     private static final String[] TRI={"any","yes","no"};
