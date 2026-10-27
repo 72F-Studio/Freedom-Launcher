@@ -526,7 +526,7 @@ public final class MainActivity extends Activity {
     private android.graphics.drawable.Drawable dockSurface(View host){
         if(theme.glass>0){GlassSurface glass=glassSurface(host);glass.pill=true;return glass;}
         GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(28));d.setColor(surfaceContainer);
-        if(!theme.expressive)d.setStroke(dp(1),MetroArt.alpha(fg,.10f));
+        d.setStroke(0, 0);
         return d;
     }
     @android.annotation.SuppressLint("ClickableViewAccessibility") // the touch listener only observes; clicks reach the button
@@ -1435,7 +1435,7 @@ public final class MainActivity extends Activity {
     private TextView chip(String label,boolean on,View.OnClickListener click){
         TextView t=text(label,14,on?tintInk():fg);t.setGravity(Gravity.CENTER);t.setMinHeight(dp(48));t.setMinWidth(dp(48));t.setPadding(dp(16),dp(8),dp(16),dp(8));
         if(on)t.setTypeface(Typeface.create(theme.typeface,600,false));
-        GradientDrawable pill=rounded(on?tint(.30f):MetroArt.alpha(fg,.065f),100);if(!on&&!theme.expressive)pill.setStroke(Math.max(1,dp(.75f)),MetroArt.alpha(fg,.08f));
+        GradientDrawable pill=rounded(on?tint(.30f):MetroArt.alpha(fg,.085f),100);pill.setStroke(0, 0);
         t.setBackground(new android.graphics.drawable.InsetDrawable(pill,0,dp(4),0,dp(4)));t.setPadding(dp(16),dp(8),dp(16),dp(8)); // after: the inset background would reset it
         t.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(fg,.10f)),null,new android.graphics.drawable.InsetDrawable(rounded(Color.WHITE,100),0,dp(4),0,dp(4))));
         t.setOnClickListener(click);t.setFocusable(true);

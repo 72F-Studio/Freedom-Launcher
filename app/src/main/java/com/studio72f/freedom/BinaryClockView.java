@@ -69,9 +69,8 @@ public final class BinaryClockView extends View {
         activePaint.setStyle(Paint.Style.FILL);
         activePaint.setColor(activeColor);
 
-        inactivePaint.setStyle(Paint.Style.STROKE);
+        inactivePaint.setStyle(Paint.Style.FILL);
         inactivePaint.setColor(inactiveColor);
-        inactivePaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
 
         glowPaint.setStyle(Paint.Style.FILL);
         glowPaint.setColor(glowColor);
@@ -182,8 +181,8 @@ public final class BinaryClockView extends View {
                         // Solid active dot
                         canvas.drawCircle(cx, cy, dotRadius, activePaint);
                     } else {
-                        // Dim inactive dot ring
-                        canvas.drawCircle(cx, cy, dotRadius * 0.75f, inactivePaint);
+                        // Dim inactive dot
+                        canvas.drawCircle(cx, cy, dotRadius * 0.82f, inactivePaint);
                     }
                 }
             }

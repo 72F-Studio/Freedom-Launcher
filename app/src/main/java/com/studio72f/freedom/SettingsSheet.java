@@ -61,7 +61,7 @@ final class SettingsSheet extends FrameLayout {
     void setListener(Listener l) { listener = l; }
 
     void setColors(int surface, int border, int handleColor) {
-        GradientDrawable d = new GradientDrawable(); d.setColor(surface); d.setStroke(Math.max(1, dp(.75f)), border);
+        GradientDrawable d = new GradientDrawable(); d.setColor(surface); d.setStroke(0, 0);
         float r = dp(28); d.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
         panel.setBackground(d);
         GradientDrawable h = new GradientDrawable(); h.setColor(handleColor); h.setCornerRadius(dp(2)); handle.setBackground(h);

@@ -12,7 +12,8 @@ final class ThemeEffects {
             MetroArt.alpha(background,liquid?.025f+amount*.055f:.15f+amount*.45f),
             MetroArt.alpha(foreground,amount*.025f)});
         d.setCornerRadius((liquid?22:12)*density);
-        d.setStroke(Math.max(1,Math.round(density)),MetroArt.alpha(foreground,liquid?.07f+amount*.10f:.1f+amount*.35f));return d;
+        // Kelvin design system: No drawn hairlines or strokes around glass
+        d.setStroke(0, 0);return d;
     }
     static Bitmap blur(Bitmap source,int amount) {
         return blur(source,amount,640);
