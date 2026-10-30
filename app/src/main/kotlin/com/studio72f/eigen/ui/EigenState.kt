@@ -56,6 +56,10 @@ interface EigenHost {
     fun drawerOf(app: MainActivity.App): String
     fun useWallpaper(bitmap: android.graphics.Bitmap)
     fun setDim(dim: Float)
+    /** Saves the widgets page's order (Eigen widget ids and "widget:<id>" app widgets). */
+    fun setWidgetOrder(order: List<String>)
+    /** Removes a widget from the page: an Eigen widget is hidden, an app widget is unbound. */
+    fun removeWidget(id: String)
     fun hasDot(app: MainActivity.App): Boolean
 }
 
@@ -93,7 +97,13 @@ class EigenState {
     var blur by mutableIntStateOf(32)
 
     // Widgets page
-    var widgetViews by mutableStateOf(emptyList<View>())
+    /** App widgets hosted by the activity, by "widget:<id>". */
+    var hostedWidgets by mutableStateOf(emptyMap<String, View>())
+    /** What the widgets page shows, top to bottom; it stacks from the bottom, by the thumb. */
+    var widgetOrder by mutableStateOf(emptyList<String>())
+    /** The focus timer: when it ends (running) or how long is left (paused). */
+    var focusEndsAt by mutableStateOf(0L)
+    var focusLeftMs by mutableStateOf(25 * 60_000L)
     var alarm by mutableStateOf<String?>(null)
     var agenda by mutableStateOf<String?>(null)
     var mediaTitle by mutableStateOf<String?>(null)

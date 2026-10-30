@@ -139,7 +139,21 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void appMenu(App app) { MainActivity.this.appMenu(app); }
         @Override public void homeMenu() { homescreenMenu(); }
         @Override public void openSettings() { MainActivity.this.openSettings(); }
-        @Override public void addWidget() { if (activeContext != null) addAppWidget(activeContext); }
+        @Override public void addWidget() {
+            ArrayList<String> ids = new ArrayList<>(), names = new ArrayList<>();
+            String[] all = com.studio72f.eigen.ui.EigenWidgets.IDS, labels = com.studio72f.eigen.ui.EigenWidgets.NAMES;
+            for (int i = 0; i < all.length; i++) if (!eigen.getWidgetOrder().contains(all[i])) { ids.add(all[i]); names.add(labels[i] + " · Eigen"); }
+            names.add("App widget · from your apps");
+            menu("Add a widget", names.toArray(new String[0]), n -> {
+                if (n == ids.size()) { if (activeContext != null) addAppWidget(activeContext); return; }
+                ArrayList<String> order = new ArrayList<>(eigen.getWidgetOrder()); order.add(ids.get(n)); setWidgetOrder(order);
+            });
+        }
+        @Override public void setWidgetOrder(java.util.List<String> order) { prefs.edit().putString("widget_order", String.join(",", order)).apply(); eigen.setWidgetOrder(new ArrayList<>(order)); }
+        @Override public void removeWidget(String id) {
+            ArrayList<String> order = new ArrayList<>(eigen.getWidgetOrder()); order.remove(id); setWidgetOrder(order);
+            if (id.startsWith("widget:") && activeContext != null) { removeContextItem(activeContext, id); contextsChanged(); buildWidgets(); }
+        }
         @Override public void openAlarms() { safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)); }
         @Override public void media(int action) { mediaAction(action); }
         @Override public void openNotificationAccess() { safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
@@ -1306,13 +1320,18 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         alarmText=new TextView(this); agendaText=new TextView(this);
         eigen.setAlarm(null); eigen.setAgenda(null);
         ContextRules.Rule rule=activeContext;
-        ArrayList<View> views=new ArrayList<>();
-        if(rule!=null)for(String item:rule.widgets){
-            if(item.equals("alarm"))updateAlarm();
-            else if(item.equals("agenda"))updateAgenda();
-            else{View widget=hostedWidget(rule,item);if(widget!=null)views.add(widget);}
-        }
-        eigen.setWidgetViews(views);
+        updateAlarm();updateAgenda();
+        LinkedHashMap<String,View> hosted=new LinkedHashMap<>();
+        if(rule!=null)for(String item:rule.widgets){if(!item.startsWith("widget:"))continue;View widget=hostedWidget(rule,item);if(widget!=null)hosted.put(item,widget);}
+        eigen.setHostedWidgets(hosted);
+        pushWidgetOrder();
+    }
+    /** The widgets page's order: the saved one, minus app widgets this context no longer has, plus any new ones. */
+    private void pushWidgetOrder(){
+        ArrayList<String> order=new ArrayList<>(Arrays.asList(prefs.getString("widget_order",com.studio72f.eigen.ui.EigenWidgets.DEFAULT).split(",")));
+        order.removeIf(id->id.isEmpty()||(id.startsWith("widget:")&&!eigen.getHostedWidgets().containsKey(id)));
+        for(String id:eigen.getHostedWidgets().keySet())if(!order.contains(id))order.add(id);
+        eigen.setWidgetOrder(order);
     }
     private LinearLayout.LayoutParams slotParams(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(14));return p;}
     private List<App> appsIn(String c){
