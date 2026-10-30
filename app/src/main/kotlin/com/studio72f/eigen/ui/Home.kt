@@ -2,17 +2,21 @@ package com.studio72f.eigen.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,12 +29,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -39,6 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,23 +58,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.studio72f.eigen.CategoryRules
 import com.studio72f.eigen.MainActivity
 import com.studio72f.eigen.ai.EigenAssistant
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import studio72f.kelvin.CapsuleShape
 import studio72f.kelvin.ContinuousShape
 import studio72f.kelvin.GlassContent
@@ -73,37 +101,149 @@ import studio72f.kelvin.KText
 import studio72f.kelvin.Kelvin
 import studio72f.kelvin.KelvinBackdrop
 import studio72f.kelvin.KelvinIcons
+import studio72f.kelvin.KelvinMotion
 import studio72f.kelvin.glass
+import studio72f.kelvin.litGlass
+import kotlin.math.roundToInt
 
 private val CardShape = ContinuousShape(16.dp)
 private const val COLUMNS = 5
+private const val DOCK_SIZE = 4
 
 /**
- * Home: the centred clock, the drawers as large centred names that open in place into vertical cards, and one
- * glass search capsule at the bottom. While searching, results stack upward above the capsule, nearest the thumb.
+ * Home: the centred clock, the drawers as large centred names that open in place into vertical cards (several at
+ * once), the dock, and one glass search capsule at the bottom. Pull down to open or close every drawer; pull up, or
+ * drag the line above the dock, for the A–Z app drawer. Hold empty space or an app for pill actions at the finger.
  */
 @Composable
 fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
-    val gentle = Kelvin.motion.gentle<Float>()
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-        AnimatedContent(
-            state.searching, Modifier.weight(1f),
-            transitionSpec = { fadeIn(gentle) togetherWith fadeOut(gentle) },
-            label = "home or search",
-        ) { searching -> if (searching) SearchResults(state, host, backdrop) else Drawers(state, host) }
-        SearchCapsule(state, host, backdrop, Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp))
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val spatial = Kelvin.motion.spatial<Float>()
+    // Usage minutes reload whenever home comes back.
+    LaunchedEffect(state.resumeCount) {
+        val (access, minutes) = withContext(Dispatchers.IO) { Usage.hasAccess(context) to Usage.todayMinutes(context) }
+        state.usageAccess = access; state.usageMinutes = minutes
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val heightPx = with(density) { maxHeight.toPx() }
+        val downThreshold = with(density) { 96.dp.toPx() }
+        val upThreshold = with(density) { 110.dp.toPx() }
+        // How far the finger has pulled past either end of home: + down (open or close all), − up (app drawer).
+        var pull by remember { mutableFloatStateOf(0f) }
+        val drawer = remember { Animatable(0f) } // 0 closed … 1 open
+        LaunchedEffect(state.appDrawerOpen) { drawer.animateTo(if (state.appDrawerOpen) 1f else 0f, spatial) }
+
+        fun onPull(p: Float) {
+            pull = p
+            if (p <= 0f && !state.appDrawerOpen) scope.launch { drawer.snapTo((-p / heightPx).coerceIn(0f, 1f)) }
+        }
+        fun onRelease(velocity: Float) {
+            val p = pull
+            when {
+                p > downThreshold -> {
+                    val names = state.drawers.map { it.name }.toSet()
+                    state.openDrawers = if (state.openDrawers.containsAll(names)) emptySet() else names
+                }
+                p < 0f && (-p > upThreshold || velocity < -1800f) -> state.appDrawerOpen = true
+                p < 0f -> scope.launch { drawer.animateTo(0f, spatial) }
+            }
+            scope.launch { animate(pull, 0f, animationSpec = spatial) { v, _ -> pull = v } }
+        }
+        val connection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source != NestedScrollSource.UserInput) return Offset.Zero
+                    val p = pull
+                    if ((p > 0f && available.y < 0f) || (p < 0f && available.y > 0f)) {
+                        val next = if (p > 0f) (p + available.y).coerceAtLeast(0f) else (p + available.y).coerceAtMost(0f)
+                        onPull(next); return Offset(0f, next - p)
+                    }
+                    return Offset.Zero
+                }
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+                    onPull(pull + available.y); return Offset(0f, available.y)
+                }
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (pull == 0f) return Velocity.Zero
+                    onRelease(available.y); return available
+                }
+            }
+        }
+
+        // The drawer rises behind the dock and search capsule, which stay on top as in Ratio; home fades out above it.
+        if (drawer.value > 0f || state.appDrawerOpen) AppDrawer(state, host, backdrop, drawer.value, heightPx) { closing, v ->
+            if (closing == null) scope.launch { drawer.snapTo(v) } else if (closing) state.appDrawerOpen = false else scope.launch { drawer.animateTo(1f, spatial) }
+        }
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+            val gentle = Kelvin.motion.gentle<Float>()
+            AnimatedContent(
+                state.searching, Modifier.weight(1f).graphicsLayer { alpha = 1f - drawer.value },
+                transitionSpec = { (fadeIn(gentle) togetherWith fadeOut(gentle)).using(SizeTransform(clip = false)) },
+                label = "home or search",
+            ) { searching ->
+                if (searching) SearchResults(state, host, backdrop)
+                else if (state.appDrawerOpen) Spacer(Modifier.fillMaxSize()) // the open drawer takes the touches
+                else Drawers(state, host, Modifier.nestedScroll(connection), pull, downThreshold)
+            }
+            if (!state.searching) {
+                // The line bends into an up chevron as you pull up; drag or tap it for the app drawer.
+                val bend = if (state.appDrawerOpen) 1f else (-pull / upThreshold).coerceIn(0f, 1f)
+                Box(
+                    Modifier.fillMaxWidth().height(48.dp)
+                        .draggable(rememberDraggableState { d -> onPull(pull + d) }, Orientation.Vertical, onDragStopped = { v -> onRelease(v) })
+                        .eigenPress({ state.appDrawerOpen = true }, label = "All apps"),
+                    contentAlignment = Alignment.Center,
+                ) { Handle(bend) }
+                Dock(state, host, backdrop)
+            }
+            SearchCapsule(state, host, backdrop, Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp))
+        }
+        PillMenuOverlay(state, host, backdrop)
+    }
+}
+
+/** A short line that bends into an up chevron as [bend] goes 0 → 1. */
+@Composable
+private fun Handle(bend: Float) {
+    val ink = Kelvin.colors.ink.copy(alpha = 0.5f + 0.3f * bend)
+    Canvas(Modifier.size(40.dp, 14.dp)) {
+        val w = size.width; val h = size.height; val mid = h * (0.55f + 0.2f * bend)
+        val path = Path().apply { moveTo(w * 0.1f, mid); lineTo(w / 2f, mid - h * 0.55f * bend); lineTo(w * 0.9f, mid) }
+        drawPath(path, ink, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
     }
 }
 
 @Composable
-private fun Drawers(state: EigenState, host: EigenHost) {
-    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onLongPress = { host.homeMenu() }) }) {
+private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull: Float, threshold: Float) {
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    val allOpen = state.drawers.isNotEmpty() && state.openDrawers.containsAll(state.drawers.map { it.name })
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { at -> state.pillMenu = homeMenu(state, host, origin.x + at.x, origin.y + at.y) }) }
+            .then(modifier),
+    ) {
+        // A rubber-band pull with a quiet hint of what releasing will do.
+        val shift = if (pull > 0f) KelvinMotion.rubberBand(pull, threshold * 2f) else 0f
+        if (pull > 0f) KText(
+            if (allOpen) "Release to close all" else "Release to open all",
+            Modifier.align(Alignment.TopCenter).padding(top = 12.dp).graphicsLayer { alpha = (pull / threshold).coerceIn(0f, 1f) },
+            Kelvin.type.label, Kelvin.colors.ink2,
+        )
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 12.dp),
+            Modifier.fillMaxWidth().graphicsLayer { translationY = shift }.verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            HomeClock(state.clockStyle, onTime = host::openAlarms, onDate = host::openSettings, modifier = Modifier.padding(top = 28.dp))
+            var clockBounds by remember { mutableStateOf(Rect.Zero) }
+            HomeClock(
+                state.clockStyle, onTime = host::openAlarms, onDate = host::openCalendar,
+                modifier = Modifier.padding(top = 28.dp).onGloballyPositioned { clockBounds = it.boundsInRoot() },
+                onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Launcher settings" to host::openSettings)) },
+            )
             Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 for (drawer in state.drawers) if (drawer.apps.isNotEmpty()) DrawerSection(state, host, drawer)
             }
@@ -112,72 +252,254 @@ private fun Drawers(state: EigenState, host: EigenHost) {
     }
 }
 
+private fun homeMenu(state: EigenState, host: EigenHost, x: Float, y: Float) = PillMenu(x, y, listOf(
+    "Add drawer" to host::addDrawer,
+    "Settings" to host::openSettings,
+    "Wallpaper" to host::openWallpaper,
+    "Widgets" to { state.showPage(EigenState.PAGE_WIDGETS) },
+))
+
+private fun appMenu(state: EigenState, host: EigenHost, app: MainActivity.App, bounds: Rect) = PillMenu(bounds.left, bounds.top, listOf(
+    "App dashboard" to { state.dashboardApp = app },
+    (if (state.dockIds.contains(app.id)) "Remove from dock" else "Add to dock") to { host.toggleDock(app) },
+    (if (host.isFavorite(app)) "Remove from favourites" else "Add to favourites") to { host.toggleFavorite(app) },
+    "Move to drawer" to { host.moveApp(app) },
+    "More" to { host.appMenu(app) },
+), app, bounds)
+
 @Composable
 private fun DrawerSection(state: EigenState, host: EigenHost, drawer: Drawer) {
     val c = Kelvin.colors
-    val open = state.openDrawer == drawer.name
+    val open = drawer.name in state.openDrawers
     val locale = LocalConfiguration.current.locales[0]
-    val ink by animateColorAsState(if (state.openDrawer == null || open) c.ink else c.ink.copy(alpha = 0.42f), Kelvin.motion.gentle(), label = "drawer ink")
-    // An opened drawer scrolls itself into view once it has grown, so its cards never hide under the search capsule.
+    val unread = remember(state.dotsVersion, drawer) { drawer.apps.any(host::hasDot) }
+    val showUnread = unread && !open && state.dotStyle != "off"
+    val base = if (state.openDrawers.isEmpty() || open) c.ink else c.ink.copy(alpha = 0.42f)
+    val ink by animateColorAsState(if (showUnread && state.dotStyle == "colour") c.accent else base, Kelvin.motion.gentle(), label = "drawer ink")
+    // An opened drawer scrolls itself into view once it has grown, so its cards never hide under the dock.
     val reveal = remember { BringIntoViewRequester() }
-    LaunchedEffect(open) { if (open) { delay(320); reveal.bringIntoView() } }
+    LaunchedEffect(open) { if (open && state.openDrawers.size == 1) { delay(320); reveal.bringIntoView() } }
+    var titleBounds by remember { mutableStateOf(Rect.Zero) }
     Column(Modifier.fillMaxWidth().bringIntoViewRequester(reveal), horizontalAlignment = Alignment.CenterHorizontally) {
-    KText(
-        drawer.name.replaceFirstChar { it.titlecase(locale) },
-        Modifier.eigenPress(
-            onClick = { state.openDrawer = if (open) null else drawer.name },
-            onLongClick = host::homeMenu,
-            shape = CardShape,
-            label = if (open) "Close" else "Open",
-        ).padding(horizontal = 20.dp, vertical = 10.dp),
-        Kelvin.type.display.copy(fontSize = 31.sp, lineHeight = 38.sp),
-        ink, maxLines = 1, align = TextAlign.Center,
-    )
-    AnimatedVisibility(
-        open,
-        enter = expandVertically(Kelvin.motion.spatial()) + fadeIn(Kelvin.motion.gentle()),
-        exit = shrinkVertically(Kelvin.motion.spatial()) + fadeOut(Kelvin.motion.gentle()),
-    ) { AppGrid(state, host, drawer.apps) }
+        Row(
+            Modifier.onGloballyPositioned { titleBounds = it.boundsInRoot() }
+                .eigenPress(
+                    onClick = { state.openDrawers = if (open) state.openDrawers - drawer.name else state.openDrawers + drawer.name },
+                    onLongClick = { state.pillMenu = homeMenu(state, host, titleBounds.left, titleBounds.bottom) },
+                    shape = CardShape, label = if (open) "Close" else "Open",
+                ).padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            KText(drawer.name.replaceFirstChar { it.titlecase(locale) }, style = Kelvin.type.display.copy(fontSize = 31.sp, lineHeight = 38.sp), color = ink, maxLines = 1, align = TextAlign.Center)
+            // Unread: a short accent dash (Ratio's mark) or a dot, just after the name.
+            if (showUnread && state.dotStyle == "dash") Box(Modifier.padding(start = 6.dp, top = 9.dp).size(16.dp, 6.dp).clip(CapsuleShape).background(c.accent))
+            if (showUnread && state.dotStyle == "dot") Box(Modifier.padding(start = 6.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(c.accent))
+        }
+        AnimatedVisibility(
+            open,
+            enter = expandVertically(Kelvin.motion.spatial()) + fadeIn(Kelvin.motion.gentle()),
+            exit = shrinkVertically(Kelvin.motion.spatial()) + fadeOut(Kelvin.motion.gentle()),
+        ) { AppGrid(state, host, drawer.apps, animate = true) }
     }
 }
 
+/** Packs cards into rows of five units; a wide card takes two. */
+private fun rows(state: EigenState, apps: List<MainActivity.App>): List<List<MainActivity.App>> {
+    val out = ArrayList<List<MainActivity.App>>(); var row = ArrayList<MainActivity.App>(); var used = 0
+    for (a in apps) {
+        val units = if (a.id in state.wideCards) 2 else 1
+        if (used + units > COLUMNS) { out += row; row = ArrayList(); used = 0 }
+        row += a; used += units
+    }
+    if (row.isNotEmpty()) out += row
+    return out
+}
+
 @Composable
-private fun AppGrid(state: EigenState, host: EigenHost, apps: List<MainActivity.App>) {
+private fun AppGrid(state: EigenState, host: EigenHost, apps: List<MainActivity.App>, animate: Boolean) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 14.dp)) {
-        apps.chunked(COLUMNS).forEachIndexed { row, chunk ->
+        var index = 0
+        for (row in rows(state, apps)) {
             Row(Modifier.fillMaxWidth()) {
-                chunk.forEachIndexed { col, app -> AppCard(state, host, app, row * COLUMNS + col, Modifier.weight(1f)) }
-                repeat(COLUMNS - chunk.size) { Spacer(Modifier.weight(1f)) }
+                var used = 0
+                for (app in row) {
+                    val wide = app.id in state.wideCards
+                    AppCard(state, host, app, index++, Modifier.weight(if (wide) 2f else 1f), animate = animate)
+                    used += if (wide) 2 else 1
+                }
+                if (used < COLUMNS) Spacer(Modifier.weight((COLUMNS - used).toFloat()))
             }
         }
     }
 }
 
-/** A vertical card: icon over label on a faint frosted fill. Cards rise in one after another as a drawer opens. */
+/**
+ * A card: icon over label (or side by side when wide) on its fill: Classic (faint frost), Marker (the accent) or
+ * Bright (a lighter grey). Today's minutes show under the name once usage access is granted. Cards rise in one after
+ * another as a drawer opens.
+ */
 @Composable
-private fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: Int, modifier: Modifier) {
+fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: Int, modifier: Modifier, animate: Boolean = false, interactive: Boolean = true) {
     val c = Kelvin.colors
     val reduce = Kelvin.reduceMotion
-    val appear = remember { Animatable(if (reduce) 1f else 0f) }
+    val appear = remember { Animatable(if (reduce || !animate) 1f else 0f) }
     val spatial = Kelvin.motion.spatial<Float>()
-    LaunchedEffect(Unit) { delay(minOf(index, 15) * 22L); appear.animateTo(1f, spatial) }
+    LaunchedEffect(Unit) { if (appear.value < 1f) { delay(minOf(index, 15) * 22L); appear.animateTo(1f, spatial) } }
     val dot = remember(state.dotsVersion, app) { host.hasDot(app) }
+    val style = state.cardStyles[app.id] ?: "classic"
+    val wide = app.id in state.wideCards
+    val fill = when (style) { "marker" -> c.accent; "bright" -> c.ink.copy(alpha = 0.22f); else -> c.ink.copy(alpha = 0.075f) }
+    val ink = if (style == "marker") c.onAccent else c.ink
+    val minutes = state.usageMinutes[app.component.packageName] ?: 0
+    var bounds by remember { mutableStateOf(Rect.Zero) }
     Box(
         modifier.padding(3.dp).height(98.dp)
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
             .graphicsLayer {
                 val v = appear.value
                 alpha = v.coerceIn(0f, 1f); translationY = (1f - v) * 22.dp.toPx()
                 scaleX = 0.94f + 0.06f * v; scaleY = scaleX
             }
-            .clip(CardShape).background(c.ink.copy(alpha = 0.075f))
-            .eigenPress({ host.launch(app) }, { host.appMenu(app) }, CardShape, app.title()),
+            .clip(CardShape).background(fill)
+            .then(if (interactive) Modifier.eigenPress({ host.launch(app) }, { state.pillMenu = appMenu(state, host, app, bounds) }, CardShape, app.title()) else Modifier),
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        val label = Kelvin.type.caption.copy(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
+        if (wide) Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            AppIcon(app, 44.dp, state.monoIcons)
+            Column(Modifier.padding(start = 12.dp)) {
+                KText(app.title(), style = label.copy(fontSize = 15.sp, lineHeight = 18.sp), color = ink, maxLines = 2)
+                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption, color = ink.copy(alpha = 0.6f), maxLines = 1)
+            }
+        } else Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             AppIcon(app, 40.dp, state.monoIcons)
-            Spacer(Modifier.height(8.dp))
-            KText(app.title(), style = Kelvin.type.caption.copy(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium), color = c.ink, maxLines = 2, align = TextAlign.Center)
+            Spacer(Modifier.height(7.dp))
+            KText(app.title(), style = label, color = ink, maxLines = if (minutes > 0) 1 else 2, align = TextAlign.Center)
+            if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 11.sp), color = ink.copy(alpha = 0.6f), maxLines = 1, align = TextAlign.Center)
         }
-        if (dot) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(8.dp).clip(CircleShape).background(c.accent))
+        if (dot) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(8.dp).clip(CircleShape).background(if (style == "marker") c.onAccent else c.accent))
+    }
+}
+
+/** Up to four apps in a glass bar above the search capsule, icon only, with today's minutes under each. */
+@Composable
+private fun Dock(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+    val apps = state.dockIds.mapNotNull { id -> state.allApps.firstOrNull { it.id == id } }
+    if (apps.isEmpty()) return
+    val c = Kelvin.colors
+    Row(
+        Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(84.dp)
+            .glass(backdrop, ContinuousShape(28.dp), GlassContent.Text, elevated = true),
+        horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (app in apps) {
+            var bounds by remember { mutableStateOf(Rect.Zero) }
+            val minutes = state.usageMinutes[app.component.packageName] ?: 0
+            Column(
+                Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }
+                    .eigenPress({ host.launch(app) }, { state.pillMenu = appMenu(state, host, app, bounds) }, CircleShape, app.title())
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AppIcon(app, 46.dp, state.monoIcons)
+                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 11.sp), color = c.ink2, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * The A–Z app drawer: rises over a frosted pane, letter headers, the same cards as home. Pull down at the top to
+ * close. [onDrag] reports progress while dragging (closing == null), then whether the release closes it.
+ */
+@Composable
+private fun AppDrawer(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop, progress: Float, heightPx: Float, onDrag: (closing: Boolean?, progress: Float) -> Unit) {
+    val c = Kelvin.colors
+    val groups = remember(state.allApps) {
+        state.allApps.sortedBy { it.title().lowercase() }.groupBy { a -> a.title().firstOrNull()?.uppercaseChar()?.takeIf { it.isLetter() } ?: '#' }.toList()
+    }
+    var drag by remember { mutableFloatStateOf(0f) }
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (drag > 0f && available.y < 0f) {
+                    val next = (drag + available.y).coerceAtLeast(0f); val used = next - drag; drag = next
+                    onDrag(null, 1f - drag / heightPx); return Offset(0f, used)
+                }
+                return Offset.Zero
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                drag += available.y; onDrag(null, 1f - drag / heightPx); return Offset(0f, available.y)
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (drag == 0f) return Velocity.Zero
+                val close = drag > heightPx * 0.18f || available.y > 1800f
+                drag = 0f; onDrag(close, 0f); return available
+            }
+        }
+    }
+    Box(
+        Modifier.fillMaxSize()
+            .offset { IntOffset(0, ((1f - progress) * heightPx).roundToInt()) }
+            .glass(backdrop, RectangleShape, GlassContent.Pane)
+            .background(c.canvas.copy(alpha = 0.35f)),
+    ) {
+        LazyColumn(Modifier.fillMaxSize().nestedScroll(connection).statusBarsPadding().padding(horizontal = 12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 180.dp)) {
+            item { KText("All apps", Modifier.padding(start = 8.dp, bottom = 8.dp), Kelvin.type.display) }
+            items(groups, key = { it.first }) { (letter, apps) ->
+                Column {
+                    KText(letter.toString(), Modifier.padding(start = 10.dp, top = 14.dp, bottom = 6.dp), Kelvin.type.title)
+                    AppGrid(state, host, apps, animate = false)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Actions at the finger: everything else dims, a held app's card stays lit in place, and a Kelvin glass menu of pills
+ * grows out of the anchor. Tap outside or press Back to dismiss.
+ */
+@Composable
+private fun PillMenuOverlay(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+    val menu = state.pillMenu
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (menu != null) 1f else 0f, Kelvin.motion.gentle(), label = "pill scrim")
+    if (menu == null && dim == 0f) return
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = with(density) { maxWidth.toPx() }; val h = with(density) { maxHeight.toPx() }
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = dim }.background(Color.Black.copy(alpha = 0.6f)).pointerInput(Unit) { detectTapGestures { state.pillMenu = null } })
+        if (menu == null) return@BoxWithConstraints
+        val b = menu.cardBounds
+        if (menu.app != null && b != null) {
+            Box(Modifier.offset { IntOffset(b.left.roundToInt(), b.top.roundToInt()) }.size(with(density) { b.width.toDp() }, with(density) { b.height.toDp() })) {
+                AppCard(state, host, menu.app, 0, Modifier.fillMaxSize(), interactive = false)
+            }
+        }
+        val pillH = with(density) { 50.dp.toPx() }; val gap = with(density) { 8.dp.toPx() }
+        val stack = menu.items.size * (pillH + gap)
+        // Above a held card when there is room, else below it; at the finger for a long-press on space.
+        val top = when {
+            b != null && b.top - stack > with(density) { 40.dp.toPx() } -> b.top - stack
+            b != null -> b.bottom + gap
+            else -> menu.y.coerceAtMost(h - stack - with(density) { 120.dp.toPx() })
+        }
+        val left = (b?.left ?: menu.x).coerceIn(with(density) { 12.dp.toPx() }, w - with(density) { 220.dp.toPx() })
+        Column(Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            menu.items.forEachIndexed { i, (label, action) ->
+                val appear = remember(menu) { Animatable(0f) }
+                val spatial = Kelvin.motion.spatial<Float>()
+                LaunchedEffect(menu) { delay(i * 28L); appear.animateTo(1f, spatial) }
+                KText(
+                    label,
+                    Modifier.graphicsLayer { alpha = appear.value.coerceIn(0f, 1f); scaleX = 0.85f + 0.15f * appear.value; scaleY = scaleX; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) }
+                        .height(50.dp).litGlass(backdrop, CapsuleShape)
+                        .eigenPress({ state.pillMenu = null; action() }, shape = CapsuleShape)
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    Kelvin.type.label.copy(fontSize = 15.sp), Kelvin.colors.ink, maxLines = 1,
+                )
+            }
+        }
     }
 }
 
@@ -219,14 +541,14 @@ private fun SearchCapsule(state: EigenState, host: EigenHost, backdrop: KelvinBa
             }
         }
         if (state.searching) {
-            Box(Modifier.size(44.dp).eigenPress({ state.searching = false; state.query = "" }, shape = CircleShape, label = "Close search"), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).eigenPress({ state.searching = false; state.query = "" }, shape = CircleShape, label = "Close search"), contentAlignment = Alignment.Center) {
                 KIcon(KelvinIcons.X, null, size = 20.dp, color = c.ink)
             }
         } else {
-            Box(Modifier.size(44.dp).eigenPress({ state.openAssistant(null) }, shape = CircleShape, label = "Ask the assistant"), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).eigenPress({ state.openAssistant(null) }, shape = CircleShape, label = "Ask the assistant"), contentAlignment = Alignment.Center) {
                 KIcon(KelvinIcons.Sparkles, null, size = 22.dp, color = c.accent)
             }
-            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { KIcon(KelvinIcons.Search, null, size = 22.dp, color = c.ink) }
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { KIcon(KelvinIcons.Search, null, size = 22.dp, color = c.ink) }
         }
     }
 }

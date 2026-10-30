@@ -81,9 +81,11 @@ fun EigenApp(state: EigenState, host: EigenHost) {
         val backdrop = rememberKelvinBackdrop(ground = if (state.wallpaperMode == "system") Color.Black.copy(alpha = 0.3f) else Color.Black)
         Box(Modifier.fillMaxSize()) {
             Wallpaper(state, Modifier.fillMaxSize().kelvinBackdrop(backdrop))
-            // The tour owns the screen: home fades out behind it, leaving only the wallpaper.
-            val homeAlpha by androidx.compose.animation.core.animateFloatAsState(if (state.tourPage >= 0) 0f else 1f, Kelvin.motion.gentle(), label = "home under tour")
+            // The tour and app dashboards own the screen: home fades out behind them, leaving only the wallpaper.
+            val homeAlpha by androidx.compose.animation.core.animateFloatAsState(if (state.tourPage >= 0 || state.dashboardApp != null) 0f else 1f, Kelvin.motion.gentle(), label = "home under tour")
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha }) { if (homeAlpha > 0f) Pages(state, host, backdrop) }
+            DashboardOverlay(state, host)
+            ClockSheet(state, host, backdrop)
             SettingsOverlay(state, host)
             com.studio72f.eigen.ContextsOverlay(state, host.contexts())
             TourOverlay(state, host)

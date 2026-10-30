@@ -2,6 +2,7 @@ package com.studio72f.eigen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -94,8 +95,8 @@ fun ContextsOverlay(state: EigenState, host: ContextsHost) {
             AnimatedContent(
                 state.contextsPage ?: "",
                 transitionSpec = {
-                    if (targetState.isNotEmpty()) slideInHorizontally(spatial) { it } togetherWith slideOutHorizontally(spatial) { -it / 3 }
-                    else slideInHorizontally(spatial) { -it / 3 } togetherWith slideOutHorizontally(spatial) { it }
+                    (if (targetState.isNotEmpty()) slideInHorizontally(spatial) { it } togetherWith slideOutHorizontally(spatial) { -it / 3 }
+                    else slideInHorizontally(spatial) { -it / 3 } togetherWith slideOutHorizontally(spatial) { it }).using(SizeTransform(clip = false))
                 },
                 label = "contexts page",
             ) { page ->
@@ -238,10 +239,11 @@ private fun Section(title: String) {
 /** A sideways row of pills; the chosen ones are accent pebbles. */
 @Composable
 private fun Pills(labels: List<String>, selected: (Int) -> Boolean, onClick: (Int) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Inside a group card (16 gutter + 16 padding): the row bleeds through the card to the screen edge.
+    com.studio72f.eigen.ui.CarouselRow(32.dp, Modifier.padding(vertical = 4.dp)) {
         labels.forEachIndexed { i, label ->
             val on = selected(i)
-            KText(label, Modifier.height(36.dp).kelvinPill(on, null).eigenPress({ onClick(i) }, shape = CapsuleShape).padding(horizontal = 14.dp, vertical = 8.dp),
+            KText(label, Modifier.height(48.dp).kelvinPill(on, null).eigenPress({ onClick(i) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp),
                 Kelvin.type.label, kelvinPillInk(on), maxLines = 1)
         }
     }

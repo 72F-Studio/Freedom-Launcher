@@ -44,9 +44,9 @@ object ClockStyles {
     @JvmField val NAMES = arrayOf("Ratio", "Thin", "Stacked", "Outline", "Kesar split", "Binary")
 }
 
-/** Centred clock and date. Tapping the time opens alarms; tapping the date opens settings. */
+/** Centred clock and date. Tapping the time opens alarms, the date opens the calendar; holding either offers a style change. */
 @Composable
-fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: Modifier = Modifier, scale: Float = 1f) {
+fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: Modifier = Modifier, scale: Float = 1f, onLongPress: (() -> Unit)? = null) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -62,7 +62,7 @@ fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: M
     val minutes = "%02d".format(cal.get(Calendar.MINUTE))
     val c = Kelvin.colors
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        val tap = Modifier.eigenPress(onTime, label = "Open alarms").semantics { contentDescription = "$hours:$minutes" }
+        val tap = Modifier.eigenPress(onTime, onLongPress, label = "Open alarms").semantics { contentDescription = "$hours:$minutes" }
         when (style) {
             "binary" -> BinaryClock(cal, tap.padding(vertical = 12.dp), scale)
             "stacked" -> Column(tap, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -83,7 +83,7 @@ fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: M
         }
         KText(
             SimpleDateFormat("EEEE, d MMMM", LocalConfiguration.current.locales[0]).format(Date(now)),
-            Modifier.eigenPress(onDate, label = "Open settings").padding(horizontal = 12.dp, vertical = 6.dp),
+            Modifier.eigenPress(onDate, onLongPress, label = "Open calendar").padding(horizontal = 12.dp, vertical = 6.dp),
             Kelvin.type.rowTitle, c.ink.copy(alpha = 0.78f), maxLines = 1, align = TextAlign.Center,
         )
     }

@@ -12,6 +12,9 @@ import com.studio72f.eigen.MainActivity
 /** One line in the Assistant tab. [source] is set on Eigen's finished answers. */
 data class ChatLine(val mine: Boolean, val text: String, val source: String? = null, val failed: Boolean = false)
 
+/** Pill actions anchored at a point (a long-press): optional lifted app card and its bounds in the window. */
+data class PillMenu(val x: Float, val y: Float, val items: List<Pair<String, () -> Unit>>, val app: MainActivity.App? = null, val cardBounds: androidx.compose.ui.geometry.Rect? = null)
+
 /** A drawer on home: its name and the apps in it, in order. */
 data class Drawer(val name: String, val apps: List<MainActivity.App>)
 
@@ -33,6 +36,20 @@ interface EigenHost {
     fun chooseWallpaper()
     fun finishTour()
     fun contexts(): com.studio72f.eigen.ContextsHost
+    fun isFavorite(app: MainActivity.App): Boolean
+    fun toggleFavorite(app: MainActivity.App)
+    fun moveApp(app: MainActivity.App)
+    fun addDrawer()
+    fun openWallpaper()
+    fun appInfo(app: MainActivity.App)
+    fun uninstall(app: MainActivity.App)
+    fun setCardStyle(app: MainActivity.App, style: String)
+    fun setWide(app: MainActivity.App, wide: Boolean)
+    fun setConversationApps(packages: Set<String>)
+    fun requestUsageAccess()
+    fun toggleDock(app: MainActivity.App)
+    fun openCalendar()
+    fun drawerOf(app: MainActivity.App): String
     fun hasDot(app: MainActivity.App): Boolean
 }
 
@@ -74,7 +91,29 @@ class EigenState {
     // UI state the activity can reset
     var page by mutableIntStateOf(PAGE_HOME)
     var pageRequest by mutableIntStateOf(0)
-    var openDrawer by mutableStateOf<String?>(null)
+    /** Drawers open on home; several can be open at once. */
+    var openDrawers by mutableStateOf(emptySet<String>())
+    var appDrawerOpen by mutableStateOf(false)
+    var pillMenu by mutableStateOf<PillMenu?>(null)
+    var dashboardApp by mutableStateOf<MainActivity.App?>(null)
+    /** How a collapsed drawer shows unread notifications: dash, dot, colour or off. */
+    var dotStyle by mutableStateOf("dash")
+    /** Per-app card fill (classic, marker, bright) and two-column cards, by app id. */
+    var cardStyles by mutableStateOf(emptyMap<String, String>())
+    var wideCards by mutableStateOf(emptySet<String>())
+    /** Up to four app ids pinned to the dock above the search capsule. */
+    var dockIds by mutableStateOf(emptyList<String>())
+    /** The clock style sheet, opened from a long-press on the clock. */
+    var clockSheet by mutableStateOf(false)
+    /** Black and white over everything, set by the activity on its window. */
+    var monochrome by mutableStateOf(false)
+    /** Minutes in the foreground today, by package; empty without usage access. */
+    var usageMinutes by mutableStateOf(emptyMap<String, Int>())
+    var usageAccess by mutableStateOf(false)
+    /** Bumped on every resume so usage and similar live data reload. */
+    var resumeCount by mutableIntStateOf(0)
+    /** Packages whose notifications feed Conversations; empty means all. */
+    var conversationApps by mutableStateOf(emptySet<String>())
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
     var leftTab by mutableIntStateOf(TAB_CONVERSATIONS)
@@ -99,6 +138,9 @@ class EigenState {
         return kotlin.math.abs(r - g) < 12 && kotlin.math.abs(g - b) < 12
     }
 
+    /** Opens one drawer on its own (a context's drawer when Home is pressed). */
+    fun openOnly(name: String) { openDrawers = setOf(name) }
+
     fun showPage(target: Int) { page = target; pageRequest++ }
 
     fun openAssistant(question: String?) {
@@ -109,16 +151,20 @@ class EigenState {
     }
 
     /** The Home button: back to a closed, centred home. */
-    fun goHome() { contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawer = null; composerFocus = false; showPage(PAGE_HOME) }
+    fun goHome() { contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawers = emptySet(); appDrawerOpen = false; pillMenu = null; dashboardApp = null; composerFocus = false; showPage(PAGE_HOME) }
 
     /** Back, innermost first. Returns false when there was nothing to close. */
     fun handleBack(): Boolean = when {
         tourPage > 0 -> { tourPage--; true }
+        pillMenu != null -> { pillMenu = null; true }
+        clockSheet -> { clockSheet = false; true }
+        dashboardApp != null -> { dashboardApp = null; true }
         contextsPage != null -> { contextsPage = if (contextsPage!!.isEmpty()) null else ""; true }
         settingsOpen -> { settingsOpen = false; true }
         searching -> { searching = false; query = ""; true }
         page != PAGE_HOME -> { showPage(PAGE_HOME); true }
-        openDrawer != null -> { openDrawer = null; true }
+        appDrawerOpen -> { appDrawerOpen = false; true }
+        openDrawers.isNotEmpty() -> { openDrawers = emptySet(); true }
         else -> false
     }
 

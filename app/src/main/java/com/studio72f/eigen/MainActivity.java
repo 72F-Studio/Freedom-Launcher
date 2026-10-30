@@ -140,6 +140,39 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void chooseWallpaper() { try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 44); } catch (ActivityNotFoundException e) { toast(str(R.string.no_image_picker_available)); } }
         @Override public void finishTour() { endTour(); }
         @Override public ContextsHost contexts() { return contextsHost; }
+        @Override public boolean isFavorite(App app) { return favorites.contains(app.id); }
+        @Override public void toggleFavorite(App app) {
+            if (favorites.remove(app.id)) { saveState(); refreshList(false); return; }
+            if (favorites.size() >= 20) { toast(str(R.string.favorites_holds_up_to_20_apps)); return; }
+            favorites.add(app.id); hidden.remove(app.id); saveState(); refreshList(false);
+        }
+        @Override public void moveApp(App app) {
+            ArrayList<String> destinations = editableCategories(); destinations.add("automatic");
+            menu("Move " + app.name + " to", destinations.toArray(new String[0]), n -> { if (n == destinations.size() - 1) assignments.remove(app.id); else assignments.put(app.id, destinations.get(n)); saveState(); refreshList(false); });
+        }
+        @Override public void addDrawer() { nameDialog("new drawer", "", name -> { custom.add(name); saveState(); refreshCategories(); refreshList(false); }); }
+        @Override public void openWallpaper() { wallpaperSettings(); }
+        @Override public void appInfo(App app) { try { launcher.startAppDetailsActivity(app.component, app.user, null, null); } catch (Exception e) { toast(str(R.string.app_info_unavailable)); } }
+        @Override public void uninstall(App app) { if (app.work) { toast(str(R.string.use_app_info_to_manage_work_apps)); return; } safeStart(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.component.getPackageName()))); }
+        @Override public void setCardStyle(App app, String style) {
+            try { JSONObject m = new JSONObject(prefs.getString("card_styles", "{}")); if (style.equals("classic")) m.remove(app.id); else m.put(app.id, style); prefs.edit().putString("card_styles", m.toString()).apply(); } catch (JSONException ignored) { }
+            pushLayoutPrefs();
+        }
+        @Override public void setWide(App app, boolean wide) {
+            HashSet<String> set = new HashSet<>(prefs.getStringSet("wide_cards", new HashSet<>())); if (wide) set.add(app.id); else set.remove(app.id);
+            prefs.edit().putStringSet("wide_cards", set).apply(); pushLayoutPrefs();
+        }
+        @Override public void setConversationApps(java.util.Set<String> packages) { prefs.edit().putStringSet("conversation_apps", new HashSet<>(packages)).apply(); pushLayoutPrefs(); }
+        @Override public void requestUsageAccess() { safeStart(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); }
+        @Override public void toggleDock(App app) {
+            ArrayList<String> dock = new ArrayList<>(eigen.getDockIds());
+            if (dock.remove(app.id)) { /* removed */ }
+            else if (dock.size() >= 4) { toast("There's no room in the dock. Remove an app from it first."); return; }
+            else dock.add(app.id);
+            prefs.edit().putString("dock", String.join(",", dock)).apply(); pushLayoutPrefs();
+        }
+        @Override public void openCalendar() { safeStart(new Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/" + System.currentTimeMillis()))); }
+        @Override public String drawerOf(App app) { return group(app); }
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
     };
     private WidgetHosting.Host widgetHost;
@@ -211,11 +244,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
+    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", eigen.getTourPage()); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); if (activeContext != null && !activeContext.category.isEmpty()) eigen.setOpenDrawer(activeContext.category); buildUi(); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); if (activeContext != null && !activeContext.category.isEmpty()) eigen.openOnly(activeContext.category); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
     // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
     @android.annotation.SuppressLint({"GestureBackNavigation","MissingSuperCall"}) @Override public void onBackPressed() { handleBack(); } // Back is routed by handleBack, never the default finish
@@ -360,12 +393,31 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)));
         eigen.setBlur(theme.blur);
         eigen.setNotificationAccess(mediaAccess());
+        pushLayoutPrefs(); applyMonochrome();
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
+    }
+    /** Per-app card styles, wide cards, the dock, the unread mark and which apps feed Conversations. */
+    private void pushLayoutPrefs(){
+        HashMap<String,String> styles=new HashMap<>();
+        try{JSONObject m=new JSONObject(prefs.getString("card_styles","{}"));Iterator<String> k=m.keys();while(k.hasNext()){String id=k.next();styles.put(id,m.getString(id));}}catch(JSONException ignored){}
+        eigen.setCardStyles(styles);
+        eigen.setWideCards(new HashSet<>(prefs.getStringSet("wide_cards",new HashSet<>())));
+        String dock=prefs.getString("dock","");eigen.setDockIds(dock.isEmpty()?new ArrayList<>():new ArrayList<>(Arrays.asList(dock.split(","))));
+        eigen.setDotStyle(prefs.getString("dot_style","dash"));
+        eigen.setConversationApps(new HashSet<>(prefs.getStringSet("conversation_apps",new HashSet<>())));
+        eigen.setMonochrome(prefs.getBoolean("monochrome",false));
+    }
+    /** Monochrome only: a black-and-white filter over the whole window, Compose and legacy views alike. */
+    private void applyMonochrome(){
+        boolean on=prefs.getBoolean("monochrome",false);View decor=getWindow().getDecorView();
+        if(on){ColorMatrix m=new ColorMatrix();m.setSaturation(0);Paint p=new Paint();p.setColorFilter(new ColorMatrixColorFilter(m));decor.setLayerType(View.LAYER_TYPE_HARDWARE,p);}
+        else decor.setLayerType(View.LAYER_TYPE_NONE,null);
     }
     /** Drawers for home (in the person's category order) and every app for search (hidden apps stay searchable). */
     private void pushApps(){
         ArrayList<com.studio72f.eigen.ui.Drawer> drawers=new ArrayList<>();
-        for(String c:categories){List<App> in=appsIn(c);if(!in.isEmpty())drawers.add(new com.studio72f.eigen.ui.Drawer(c,in));}
+        for(String c:categories){if(c.equals("all apps"))continue; // all apps live in the swipe-up drawer
+            List<App> in=appsIn(c);if(!in.isEmpty())drawers.add(new com.studio72f.eigen.ui.Drawer(c,in));}
         eigen.setDrawers(drawers);eigen.setAllApps(new ArrayList<>(apps));
     }
     private void updateClock() {
@@ -1460,11 +1512,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
             row("Wallpaper",mode.equals("photo")?"Your photo, blurred inside Eigen":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
             row("App icons",null,icons.equals("mono")?"Monochrome":!prefs.getString("iconPack","").isEmpty()?"Icon pack":"Colour","apps","teal",null,()->menu("App icons",new String[]{"Colour","Monochrome","Icon pack"},n->{if(n==2)chooseIconPack();else setIcons(n==0?"color":"mono");})),
-            row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings))));
+            row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings),
+            row("Monochrome only","Black and white over everything",null,"adjust","grey",prefs.getBoolean("monochrome",false),()->{prefs.edit().putBoolean("monochrome",!prefs.getBoolean("monochrome",false)).apply();pushState();}))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Home",Arrays.asList(
             row("Drawers","Create, hide, merge and rename",null,"folder","blue",null,this::categorySettings),
             row("Drawer order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size()))),null,"sort","blue",null,()->sheet.open(this::orderPage)),
             row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),
+            row("Unread mark","On a closed drawer with notifications",new String[]{"Dash","Dot","Colour","Off"}[Math.max(0,Arrays.asList("dash","dot","colour","off").indexOf(prefs.getString("dot_style","dash")))],"bell","orange",null,()->menu("Unread mark",new String[]{"Dash · after the name","Dot · after the name","Colour · the name turns orange","Off"},n->{prefs.edit().putString("dot_style",new String[]{"dash","dot","colour","off"}[n]).apply();pushState();})),
             row("Notification dots",mediaAccess()?null:"Needs notification access",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Your day",Arrays.asList(
             row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->eigen.setContextsPage("")),
@@ -1472,6 +1526,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         out.add(new com.studio72f.eigen.ui.SettingsSection("Access",Arrays.asList(
             row("Notification access","Conversations, replies and dots",mediaAccess()?"On":"Off","message","green",null,()->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),
             row("Calendar access","Your agenda on the widgets page",calendarAllowed()?"On":"Off","calendar","red",null,()->{if(calendarAllowed())safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}),
+            row("Usage access","Screen time on cards and app dashboards",com.studio72f.eigen.ui.Usage.INSTANCE.hasAccess(this)?"On":"Off","adjust","violet",null,()->safeStart(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))),
             row("Default home app",null,isDefaultHome()?"Eigen":null,"home","blue",null,this::defaultHome))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and about",Arrays.asList(
             row("Backup and restore","Drawers, contexts, look and wallpaper",null,"archive","grey",null,this::backupSettings),

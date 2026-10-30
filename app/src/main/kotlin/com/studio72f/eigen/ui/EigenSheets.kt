@@ -90,11 +90,11 @@ object EigenSheets {
         }
 
     /**
-     * Kelvin's rule for panes that carry reading text: a milky coat of at least 86% over the blurred window behind,
-     * opaque where the system cannot blur.
+     * Kelvin's rule for windows: over a window the system has blurred, the panel is glass-tint at the Glass level's
+     * coat, never thinner than half; opaque where the phone cannot blur across windows.
      */
     private fun Modifier.pane(blurred: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
-        background(Kelvin.colors.glassTint.copy(alpha = if (blurred) maxOf(Kelvin.glass.tintAlpha, 0.86f) else 1f), shape)
+        background(Kelvin.colors.glassTint.copy(alpha = if (blurred) maxOf(Kelvin.glass.tintAlpha, 0.5f) else 1f), shape)
     }
 
     @Composable
@@ -133,7 +133,18 @@ object EigenSheets {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.35f)
             if (android.os.Build.VERSION.SDK_INT >= 30) setDecorFitsSystemWindows(false)
+            // Blur what is behind the sheet. Kelvin's KelvinWindowGlass only finds Compose's own dialog windows, so
+            // the flag goes on this window directly; the panel thins once blur is really on.
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                attributes = attributes.also { it.blurBehindRadius = (activity.resources.displayMetrics.density * 40).toInt() }
+                setDimAmount(0.2f)
+            }
         }
+        // Monochrome only reaches sheets too: they are windows of their own.
+        if (state.monochrome) dialog.window?.decorView?.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply {
+            colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
+        })
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         return dialog

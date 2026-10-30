@@ -2,6 +2,7 @@ package com.studio72f.eigen.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
@@ -90,8 +91,8 @@ fun TourOverlay(state: EigenState, host: EigenHost) {
                 page, Modifier.weight(1f).fillMaxWidth(),
                 transitionSpec = {
                     val forward = targetState > initialState
-                    (slideInHorizontally(spatial) { if (forward) it / 3 else -it / 3 } + fadeIn(gentle)) togetherWith
-                        (slideOutHorizontally(spatial) { if (forward) -it / 3 else it / 3 } + fadeOut(gentle))
+                    ((slideInHorizontally(spatial) { if (forward) it / 3 else -it / 3 } + fadeIn(gentle)) togetherWith
+                        (slideOutHorizontally(spatial) { if (forward) -it / 3 else it / 3 } + fadeOut(gentle))).using(SizeTransform(clip = false))
                 },
                 label = "tour page",
             ) { p ->
@@ -150,7 +151,7 @@ private fun ColourPage(state: EigenState, host: EigenHost) {
     Title("Pick a colour", "One colour marks what you can act on. Greyscale keeps everything quiet, icons and wallpaper too.")
     val names = listOf("Kesar", "Fire", "Ladoo", "Haldi", "Greyscale")
     val colours = listOf(0xFFFF8A1F, 0xFFFF5A1F, 0xFFF7A21B, 0xFFFFC233, 0xFFECECEC).map { it.toInt() }
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    CarouselRow(24.dp, spacing = 14.dp) {
         names.forEachIndexed { i, name ->
             val on = state.accent == colours[i]
             Column(Modifier.eigenPress({ host.setColour(i) }, shape = CircleShape, label = name), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -166,10 +167,10 @@ private fun ClockPage(state: EigenState, host: EigenHost) {
     Title("Pick a clock", "It sits at the top of home. Tap it any time to see your alarms.")
     HomeClock(state.clockStyle, onTime = {}, onDate = {}, scale = 0.62f)
     Spacer(Modifier.height(24.dp))
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    CarouselRow(24.dp) {
         ClockStyles.IDS.forEachIndexed { i, id ->
             val on = state.clockStyle == id
-            KText(ClockStyles.NAMES[i], Modifier.height(40.dp).kelvinPill(on, null).eigenPress({ host.setClock(id) }, shape = CapsuleShape).padding(horizontal = 16.dp, vertical = 10.dp),
+            KText(ClockStyles.NAMES[i], Modifier.height(48.dp).kelvinPill(on, null).eigenPress({ host.setClock(id) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp),
                 Kelvin.type.label, kelvinPillInk(on), maxLines = 1)
         }
     }

@@ -3,6 +3,7 @@ package com.studio72f.eigen.ui
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -90,19 +92,19 @@ private val RowShape = ContinuousShape(22.dp)
 fun LeftPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     val gentle = Kelvin.motion.gentle<Float>()
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 16.dp)) {
-        AnimatedContent(state.leftTab, transitionSpec = { fadeIn(gentle) togetherWith fadeOut(gentle) }, label = "left title") { tab ->
+        AnimatedContent(state.leftTab, transitionSpec = { (fadeIn(gentle) togetherWith fadeOut(gentle)).using(SizeTransform(clip = false)) }, label = "left title") { tab ->
             KText(if (tab == EigenState.TAB_ASSISTANT) "Assistant" else "Conversations", Modifier.padding(start = 4.dp, top = 20.dp, bottom = 14.dp), Kelvin.type.display)
         }
         KelvinSegmented(listOf("Conversations", "Assistant"), state.leftTab, { state.leftTab = it })
         Spacer(Modifier.height(14.dp))
-        AnimatedContent(state.leftTab, Modifier.weight(1f), transitionSpec = { fadeIn(gentle) togetherWith fadeOut(gentle) }, label = "left body") { tab ->
-            if (tab == EigenState.TAB_ASSISTANT) Assistant(state, backdrop) else Conversations(host, backdrop)
+        AnimatedContent(state.leftTab, Modifier.weight(1f), transitionSpec = { (fadeIn(gentle) togetherWith fadeOut(gentle)).using(SizeTransform(clip = false)) }, label = "left body") { tab ->
+            if (tab == EigenState.TAB_ASSISTANT) Assistant(state, backdrop) else Conversations(state, host, backdrop)
         }
     }
 }
 
 @Composable
-private fun Conversations(host: EigenHost, backdrop: KelvinBackdrop) {
+private fun Conversations(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     val c = Kelvin.colors
     var items by remember { mutableStateOf(MediaAccessService.getConversations().toList()) }
     var connected by remember { mutableStateOf(MediaAccessService.isServiceConnected()) }
@@ -118,12 +120,19 @@ private fun Conversations(host: EigenHost, backdrop: KelvinBackdrop) {
         }
         return
     }
-    val shown = remember(items, filter) {
+    var choosing by remember { mutableStateOf(false) }
+    val allowed = state.conversationApps
+    val shown = remember(items, filter, allowed) {
         val f = filter.trim().lowercase()
-        if (f.isEmpty()) items else items.filter { listOf(it.sender, it.text, it.appName).any { s -> s?.lowercase()?.contains(f) == true } }
+        val fromApps = if (allowed.isEmpty()) items else items.filter { it.packageName in allowed }
+        if (f.isEmpty()) fromApps else fromApps.filter { listOf(it.sender, it.text, it.appName).any { s -> s?.lowercase()?.contains(f) == true } }
     }
     Column(Modifier.fillMaxSize()) {
-        KelvinSearchField(filter, { filter = it }, "Search conversations", "Clear", backdrop = backdrop)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            KelvinSearchField(filter, { filter = it }, "Search conversations", "Clear", Modifier.weight(1f), backdrop = backdrop)
+            Spacer(Modifier.size(8.dp))
+            KelvinIconButton(KelvinIcons.Adjustments, "Choose apps", { choosing = true }, kind = IconButtonKind.Glass, backdrop = backdrop)
+        }
         Spacer(Modifier.height(12.dp))
         if (shown.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -135,6 +144,7 @@ private fun Conversations(host: EigenHost, backdrop: KelvinBackdrop) {
             }
         }
     }
+    AppChooser(state, host, backdrop, choosing, items) { choosing = false }
 }
 
 @Composable
@@ -223,8 +233,8 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 KText("Ask anything", style = Kelvin.type.headline.copy(fontSize = 30.sp), align = TextAlign.Center)
                 KText("Answers come from the model on this phone. Nothing you type leaves it.", Modifier.padding(horizontal = 24.dp, vertical = 10.dp), Kelvin.type.body, c.ink2, align = TextAlign.Center)
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 12.dp, horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (s in SUGGESTIONS) KText(s, Modifier.height(40.dp).kelvinPill(false, backdrop).eigenPress({ send(s) }, shape = CapsuleShape).padding(horizontal = 16.dp, vertical = 10.dp), Kelvin.type.label, kelvinPillInk(false), maxLines = 1)
+                CarouselRow(16.dp, Modifier.padding(vertical = 12.dp)) {
+                    for (s in SUGGESTIONS) KText(s, Modifier.height(48.dp).kelvinPill(false, backdrop).eigenPress({ send(s) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp), Kelvin.type.label, kelvinPillInk(false), maxLines = 1)
                 }
             }
         } else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,5 +271,34 @@ private fun Bubble(line: ChatLine) {
             )
         }
         if (line.source != null) KText(line.source, Modifier.padding(start = 12.dp, top = 4.dp), Kelvin.type.caption, c.ink2, maxLines = 1)
+    }
+}
+
+/** Messaging apps Eigen knows by package, offered even before they have posted anything. */
+private val MESSENGERS = setOf(
+    "com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "org.thoughtcrime.securesms", "com.facebook.orca", "com.facebook.mlite",
+    "com.instagram.android", "com.discord", "com.Slack", "com.google.android.apps.messaging", "com.samsung.android.messaging",
+    "com.android.mms", "com.microsoft.teams", "jp.naver.line.android", "com.viber.voip", "com.snapchat.android", "com.google.android.gm",
+)
+
+/** Pick which apps' notifications feed Conversations. None picked means all of them. */
+@Composable
+private fun AppChooser(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop, visible: Boolean, items: List<MediaAccessService.ConversationItem>, onDismiss: () -> Unit) {
+    val seen = items.map { it.packageName }.toSet()
+    val candidates = state.allApps.filter { it.component.packageName in seen || it.component.packageName in MESSENGERS }.distinctBy { it.component.packageName }.sortedBy { it.title().lowercase() }
+    studio72f.kelvin.KelvinSheet(visible, onDismiss, "Conversations from", "Close", backdrop) {
+        KText("Only messages from the apps you turn on show up here. With none on, every messaging app does.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)
+        androidx.compose.foundation.layout.Column(Modifier.heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+            studio72f.kelvin.KelvinGroup(gutter = 0.dp) {
+                if (candidates.isEmpty()) studio72f.kelvin.KelvinRow("No messaging apps found", summary = "Apps appear here once they post a message.")
+                for (app in candidates) {
+                    val pkg = app.component.packageName
+                    val on = pkg in state.conversationApps
+                    studio72f.kelvin.KelvinRow(app.title(), trailing = {
+                        studio72f.kelvin.KelvinSwitch(on, { v -> host.setConversationApps(if (v) state.conversationApps + pkg else state.conversationApps - pkg) })
+                    })
+                }
+            }
+        }
     }
 }

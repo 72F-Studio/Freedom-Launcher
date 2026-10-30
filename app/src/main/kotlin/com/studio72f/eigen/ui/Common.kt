@@ -28,6 +28,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.padding
 import androidx.core.graphics.drawable.toBitmap
 import com.studio72f.eigen.MainActivity
 import kotlinx.coroutines.launch
@@ -101,3 +105,26 @@ fun AppIcon(app: MainActivity.App, size: Dp, mono: Boolean, modifier: Modifier =
 }
 
 fun MainActivity.App.title(): String = (name ?: label ?: "").toString()
+
+/**
+ * A sideways carousel that is clipped only by the screen, never by the card or padded column it sits in: it
+ * bleeds [bleed] past its parent's edges and puts the same amount inside the scroll, so the first item still lines
+ * up with the content above it while overflow reads clearly at the screen edge.
+ */
+@Composable
+fun CarouselRow(bleed: Dp, modifier: Modifier = Modifier, spacing: Dp = 8.dp, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    androidx.compose.foundation.layout.Row(
+        modifier.bleed(bleed).horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = bleed),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** Widens this element by [horizontal] on both sides past its parent's bounds (see [CarouselRow]). */
+fun Modifier.bleed(horizontal: Dp): Modifier = layout { measurable, constraints ->
+    val px = horizontal.roundToPx()
+    val wide = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.minWidth + 2 * px, maxWidth = constraints.maxWidth + 2 * px) else constraints
+    val placeable = measurable.measure(wide)
+    layout((placeable.width - 2 * px).coerceAtLeast(0), placeable.height) { placeable.place(-px, 0) }
+}
