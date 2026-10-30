@@ -80,7 +80,7 @@ class MlKitEngine(
         val text = if (systemInstruction.isNotBlank()) "$systemInstruction\n\n$prompt" else prompt
         return GenerateContentRequest.Builder(TextPart(text)).apply {
             temperature = 0.6f
-            maxOutputTokens = 384
+            maxOutputTokens = 256 // the Prompt API rejects anything above 256
         }.build()
     }
 
