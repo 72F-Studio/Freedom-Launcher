@@ -140,7 +140,7 @@ private fun Conversations(state: EigenState, host: EigenHost, backdrop: KelvinBa
             }
         } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(shown, key = { it.key }) { item ->
-                ConversationRow(item, open == item.key) { open = if (open == item.key) null else item.key }
+                ConversationRow(state, item, open == item.key) { open = if (open == item.key) null else item.key }
             }
         }
     }
@@ -148,12 +148,12 @@ private fun Conversations(state: EigenState, host: EigenHost, backdrop: KelvinBa
 }
 
 @Composable
-private fun ConversationRow(item: MediaAccessService.ConversationItem, expanded: Boolean, onToggle: () -> Unit) {
+private fun ConversationRow(state: EigenState, item: MediaAccessService.ConversationItem, expanded: Boolean, onToggle: () -> Unit) {
     val c = Kelvin.colors
     val context = LocalContext.current
     var reply by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxWidth().clip(RowShape).background(c.ink.copy(alpha = 0.07f)).eigenPress(onToggle, shape = RowShape).padding(14.dp)) {
+    Column(Modifier.fillMaxWidth().frostSurface(state, RowShape).eigenPress(onToggle, shape = RowShape).padding(14.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             KelvinAvatar(item.sender ?: item.appName ?: "?")
             Spacer(Modifier.size(12.dp))
@@ -170,7 +170,7 @@ private fun ConversationRow(item: MediaAccessService.ConversationItem, expanded:
         AnimatedVisibility(expanded, enter = expandVertically(Kelvin.motion.spatial()) + fadeIn(), exit = shrinkVertically(Kelvin.motion.spatial()) + fadeOut()) {
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (item.canReply()) Row(
-                    Modifier.fillMaxWidth().height(48.dp).clip(CapsuleShape).background(c.sunken).padding(start = 16.dp, end = 4.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp).background(c.ink.copy(alpha = 0.10f), CapsuleShape).padding(start = 16.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.weight(1f)) {
@@ -196,7 +196,8 @@ private val SUGGESTIONS = listOf("How's my battery?", "Open camera", "Plan a cal
 private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
     val c = Kelvin.colors
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    // Answers run in the state's scope so a rebuilt screen never cancels one mid-stream.
+    val scope = state.scope
     val status by EigenAssistant.status.collectAsState()
     var draft by remember { mutableStateOf("") }
     val list = rememberLazyListState()
@@ -238,12 +239,13 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
                 }
             }
         } else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(state.chat) { _, line -> Bubble(line) }
+            itemsIndexed(state.chat) { _, line -> Bubble(state, line) }
         }
+        // The glass is a layer behind the composer, so it never clips the send button or its glow.
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).heightIn(min = 60.dp)) {
+        Box(Modifier.matchParentSize().glass(backdrop, ContinuousShape(30.dp), GlassContent.Text, elevated = true))
         Row(
-            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).heightIn(min = 56.dp)
-                .glass(backdrop, ContinuousShape(28.dp), GlassContent.Text, elevated = true)
-                .padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
@@ -254,20 +256,21 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
             }
             KelvinIconButton(ArrowUp, "Send", { send(draft) }, kind = IconButtonKind.Accent, enabled = draft.isNotBlank() && !state.thinking)
         }
+        }
     }
 }
 
 @Composable
-private fun Bubble(line: ChatLine) {
+private fun Bubble(state: EigenState, line: ChatLine) {
     val c = Kelvin.colors
     Column(Modifier.fillMaxWidth(), horizontalAlignment = if (line.mine) Alignment.End else Alignment.Start) {
         val shape = ContinuousShape(22.dp)
         SelectionContainer {
             KText(
                 line.text.ifEmpty { "Thinking…" },
-                Modifier.widthIn(max = 320.dp).clip(shape).background(if (line.mine) c.accentSoft else c.ink.copy(alpha = 0.08f)).padding(horizontal = 16.dp, vertical = 11.dp),
+                Modifier.widthIn(max = 320.dp).frostSurface(state, shape, tint = if (line.mine) c.accent.copy(alpha = 0.28f) else null).padding(horizontal = 16.dp, vertical = 11.dp),
                 Kelvin.type.body.copy(fontSize = 16.sp, lineHeight = 23.sp),
-                if (line.mine) c.onAccentSoft else if (line.text.isEmpty() || line.failed) c.ink2 else c.ink,
+                if (line.mine) c.ink else if (line.text.isEmpty() || line.failed) c.ink2 else c.ink,
             )
         }
         if (line.source != null) KText(line.source, Modifier.padding(start = 12.dp, top = 4.dp), Kelvin.type.caption, c.ink2, maxLines = 1)

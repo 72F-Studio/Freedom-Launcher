@@ -769,7 +769,7 @@ private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBa
 private fun AskCard(state: EigenState, q: String, backdrop: KelvinBackdrop) {
     val c = Kelvin.colors
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val scope = state.scope
     var asked by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf<String?>(null) }
     var source by remember { mutableStateOf<String?>(null) }

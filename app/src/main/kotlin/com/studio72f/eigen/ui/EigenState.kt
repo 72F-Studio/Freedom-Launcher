@@ -64,6 +64,9 @@ interface EigenHost {
  * activity must be able to reset (search, the open drawer, the current page) lives here too.
  */
 class EigenState {
+    /** Work that must outlive any one screen (an assistant answer still streaming when the UI is rebuilt). */
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+
     // Apps
     var drawers by mutableStateOf(emptyList<Drawer>())
     var allApps by mutableStateOf(emptyList<MainActivity.App>())

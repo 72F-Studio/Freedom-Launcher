@@ -63,7 +63,13 @@ private val Alarm by lazy { tablerIcon("alarm", "M5 13a7 7 0 1 0 14 0a7 7 0 0 0 
  * and the Android app widgets the person has added.
  */
 @Composable
-fun WidgetsPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+fun WidgetsPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) = androidx.compose.runtime.CompositionLocalProvider(LocalEigenState provides state) { WidgetsContent(state, host, backdrop) }
+
+/** Lets the page's small cards reach the state for their frost without threading it through every call. */
+private val LocalEigenState = androidx.compose.runtime.staticCompositionLocalOf<EigenState?> { null }
+
+@Composable
+private fun WidgetsContent(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 20.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             KText("Widgets", Modifier.weight(1f), Kelvin.type.display)
@@ -84,7 +90,7 @@ fun WidgetsPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
             }
             DayProgress()
             Notes()
-            for (view in state.widgetViews) HostedWidget(view)
+            for (view in state.widgetViews) HostedWidget(state, view)
             if (state.widgetViews.isEmpty()) KText(
                 "Add any widget from your apps with Add widget. Hold a widget to resize it or remove it.",
                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp), Kelvin.type.summary, Kelvin.colors.ink2,
@@ -96,8 +102,9 @@ fun WidgetsPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
 
 @Composable
 private fun Card(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val state = LocalEigenState.current
     Column(
-        Modifier.fillMaxWidth().clip(CardShape).background(Kelvin.colors.ink.copy(alpha = 0.075f)).then(modifier).padding(18.dp),
+        Modifier.fillMaxWidth().then(if (state != null) Modifier.frostSurface(state, CardShape) else Modifier.clip(CardShape).background(Kelvin.colors.ink.copy(alpha = 0.075f))).then(modifier).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp), content = content,
     )
 }
@@ -160,8 +167,8 @@ private fun Notes() {
 
 /** An Android app widget, hosted by the activity, in a card. */
 @Composable
-private fun HostedWidget(view: View) {
-    Box(Modifier.fillMaxWidth().clip(CardShape).background(Kelvin.colors.ink.copy(alpha = 0.06f))) {
+private fun HostedWidget(state: EigenState, view: View) {
+    Box(Modifier.fillMaxWidth().frostSurface(state, CardShape)) {
         AndroidView(
             factory = { (view.parent as? ViewGroup)?.removeView(view); view },
             modifier = Modifier.fillMaxWidth().height(200.dp),
