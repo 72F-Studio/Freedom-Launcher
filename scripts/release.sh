@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 export JAVA_HOME="${JAVA_HOME:-$HOME/.jdks/jbr-21.0.11}"
 SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"; BT="$SDK/build-tools/37.0.0"; [ -x "$BT/apksigner" ] || BT="$SDK/build-tools/35.0.0"
 VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-OUT="dist/72F-Launcher-$VERSION.apk"
+OUT="dist/Eigen-$VERSION.apk"
 ./gradlew -q :app:assembleRelease
 if [ -f keystore.properties ]; then
   cp app/build/outputs/apk/release/app-release.apk "$OUT"; echo "Signed with the production key."

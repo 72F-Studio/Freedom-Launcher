@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.content.Context;
 import android.content.Intent;
@@ -586,7 +586,7 @@ public final class ChatbotView extends LinearLayout {
         JSONObject contentObj = new JSONObject();
         JSONArray parts = new JSONArray();
         JSONObject partObj = new JSONObject();
-        partObj.put("text", "You are the built-in AI assistant for Blloc Ratio / 72Freedom Launcher. Keep responses concise, elegant, informative, and formatted with clean markdown.\nUser query: " + prompt);
+        partObj.put("text", "You are the built-in AI assistant for Eigen Launcher. Keep responses concise, elegant, informative, and formatted with clean markdown.\nUser query: " + prompt);
         parts.put(partObj);
         contentObj.put("parts", parts);
         contents.put(contentObj);

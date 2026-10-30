@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.app.Activity;
 import android.content.Context;
@@ -27,15 +27,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Google Play Billing client handling optional donation tiers for 72Freedom Launcher.
+ * Google Play Billing client handling optional donation tiers for Eigen.
  * Donations offer no functional benefit or tier unlock; purchases are consumed so they
  * do not auto-refund and can be made repeatedly.
  */
-public final class FreedomBilling implements PurchasesUpdatedListener {
-    public static final String DONATION_COFFEE = "freedom_donation_coffee";
-    public static final String DONATION_SNACK = "freedom_donation_snack";
-    public static final String DONATION_MEAL = "freedom_donation_meal";
-    public static final String DONATION_SUPPORTER = "freedom_donation_supporter";
+public final class EigenBilling implements PurchasesUpdatedListener {
+    public static final String DONATION_COFFEE = "eigen_donation_coffee";
+    public static final String DONATION_SNACK = "eigen_donation_snack";
+    public static final String DONATION_MEAL = "eigen_donation_meal";
+    public static final String DONATION_SUPPORTER = "eigen_donation_supporter";
 
     public static final List<String> DONATION_PRODUCT_IDS = List.of(
         DONATION_COFFEE,
@@ -61,10 +61,10 @@ public final class FreedomBilling implements PurchasesUpdatedListener {
     }
 
     public static final List<DonationTier> TIERS = List.of(
-        new DonationTier(DONATION_COFFEE, "Tip Coffee", "₹99", "Helps keep 72Freedom private and independent.", "☕"),
+        new DonationTier(DONATION_COFFEE, "Tip Coffee", "₹99", "Helps keep Eigen private and independent.", "☕"),
         new DonationTier(DONATION_SNACK, "Tip Snack", "₹249", "Supports ongoing maintenance and updates.", "🥐"),
         new DonationTier(DONATION_MEAL, "Tip Meal", "₹499", "Funds development of new features and tools.", "🍱"),
-        new DonationTier(DONATION_SUPPORTER, "Tip Supporter", "₹999", "Backs 72Freedom as a self-funded project.", "🌟")
+        new DonationTier(DONATION_SUPPORTER, "Tip Supporter", "₹999", "Backs Eigen as a self-funded project.", "🌟")
     );
 
     public interface Listener {
@@ -72,7 +72,7 @@ public final class FreedomBilling implements PurchasesUpdatedListener {
         void onPurchaseCompleted(String productId);
     }
 
-    private static FreedomBilling instance;
+    private static EigenBilling instance;
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private BillingClient billingClient;
@@ -80,14 +80,14 @@ public final class FreedomBilling implements PurchasesUpdatedListener {
     private final List<Listener> listeners = new ArrayList<>();
     private boolean isConnecting = false;
 
-    public static synchronized FreedomBilling getInstance(Context context) {
+    public static synchronized EigenBilling getInstance(Context context) {
         if (instance == null) {
-            instance = new FreedomBilling(context.getApplicationContext());
+            instance = new EigenBilling(context.getApplicationContext());
         }
         return instance;
     }
 
-    private FreedomBilling(Context context) {
+    private EigenBilling(Context context) {
         this.context = context;
         initBillingClient();
     }
@@ -248,7 +248,7 @@ public final class FreedomBilling implements PurchasesUpdatedListener {
         billingClient.consumeAsync(consumeParams, (billingResult, purchaseToken) -> {
             if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
                 mainHandler.post(() -> {
-                    Toast.makeText(context, "Thank you for supporting 72Freedom!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(context, "Thank you for supporting Eigen!", Toast.LENGTH_LONG).show();
                     for (Listener l : listeners) l.onPurchaseCompleted(productId);
                 });
             }

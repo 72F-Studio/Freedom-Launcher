@@ -1,7 +1,7 @@
 # Blloc Ratio Launcher v7.2.0 (PREMIUM) — Complete Architectural Teardown & Design System Specification
 
 > Reverse-engineered from package `com.bllocosn` (`Ratio Productivity v7.2.0 (PREMIUM) (2).apk`)  
-> Target Project Reference: `72Freedom-Launcher`
+> Target Project Reference: `Eigen-Launcher`
 
 ---
 

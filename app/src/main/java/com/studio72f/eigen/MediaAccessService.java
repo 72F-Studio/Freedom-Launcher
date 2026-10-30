@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.app.Notification;
 import android.app.PendingIntent;

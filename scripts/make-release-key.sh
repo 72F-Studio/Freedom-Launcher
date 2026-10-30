@@ -10,7 +10,7 @@ ALIAS=72f
 [ -e keystore.properties ] && { echo "keystore.properties already exists; not overwriting."; exit 1; }
 mkdir -p "$(dirname "$STORE")"
 "$KEYTOOL" -genkeypair -v -keystore "$STORE" -alias "$ALIAS" -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=72F Launcher"
+  -dname "CN=Eigen Launcher"
 read -r -s -p "Keystore password (again, for keystore.properties): " PASS; echo
 umask 077
 cat > keystore.properties <<PROPS

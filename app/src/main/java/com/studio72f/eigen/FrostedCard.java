@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.content.Context;
 import android.graphics.Color;
@@ -9,7 +9,7 @@ import android.content.res.ColorStateList;
 import android.view.View;
 
 /**
- * Kelvin-inspired Frosted Surface helper for 72Freedom Launcher.
+ * Kelvin-inspired Frosted Surface helper for Eigen.
  *
  * Implements Kelvin's design principles:
  * - Pure squircle surfaces with ZERO stroke outline (no harsh borders)

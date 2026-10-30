@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import java.text.Normalizer;
 import java.util.Locale;

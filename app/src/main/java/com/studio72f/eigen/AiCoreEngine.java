@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.content.Context;
 import android.content.Intent;
@@ -292,8 +292,8 @@ public final class AiCoreEngine {
                    "On supported Pixel/Galaxy flagships (Android 14+), AICore powers local Gemini Nano with zero latency and zero data leaving your phone.";
         }
 
-        if (lower.contains("ratio") || lower.contains("freedom") || lower.contains("launcher") || lower.contains("help")) {
-            return "✦ 72Freedom / Ratio Assistant:\n" +
+        if (lower.contains("ratio") || lower.contains("eigen") || lower.contains("launcher") || lower.contains("help")) {
+            return "✦ Eigen Assistant:\n" +
                    "• Local AI Chat: Available right here on your home screen\n" +
                    "• Screen 0 (Left): Root Widgets (Day Progress, Weather, Calculator, Notes)\n" +
                    "• Screen 1 (Center): Frosted Grid with category drawers\n" +
@@ -321,7 +321,7 @@ public final class AiCoreEngine {
         JSONObject contentObj = new JSONObject();
         JSONArray parts = new JSONArray();
         JSONObject partObj = new JSONObject();
-        partObj.put("text", "You are the local AI assistant for 72Freedom Ratio Launcher. Keep responses concise, clean, elegant, and formatted with markdown.\nUser query: " + prompt);
+        partObj.put("text", "You are the local AI assistant for Eigen Launcher. Keep responses concise, clean, elegant, and formatted with markdown.\nUser query: " + prompt);
         parts.put(partObj);
         contentObj.put("parts", parts);
         contents.put(contentObj);

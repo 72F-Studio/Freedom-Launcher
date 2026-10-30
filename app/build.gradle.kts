@@ -7,13 +7,13 @@ plugins { id("com.android.application") }
 val releaseKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
-    namespace = "com.studio72f.freedom"
+    namespace = "com.studio72f.eigen"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.studio72f.freedom"
+        applicationId = "com.studio72f.eigen"
         minSdk = 28
         targetSdk = 37
-        testInstrumentationRunner = "com.studio72f.freedom.EngineChecks"
+        testInstrumentationRunner = "com.studio72f.eigen.EngineChecks"
         versionCode = 1
         versionName = "1.0.0"
     }

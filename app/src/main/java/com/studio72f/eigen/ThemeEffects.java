@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;

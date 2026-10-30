@@ -1,4 +1,4 @@
-package com.studio72f.freedom;
+package com.studio72f.eigen;
 
 import android.app.*;
 import android.app.role.RoleManager;
@@ -102,7 +102,7 @@ public final class MainActivity extends Activity {
     private final BroadcastReceiver signalReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { signalChanged(); }
     };
-    private final FreedomBilling.Listener billingListener = new FreedomBilling.Listener() {
+    private final EigenBilling.Listener billingListener = new EigenBilling.Listener() {
         @Override public void onProductDetailsUpdated() { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
         @Override public void onPurchaseCompleted(String productId) { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
     };
@@ -152,14 +152,14 @@ public final class MainActivity extends Activity {
         MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); });
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         buildUi(); loadApps();
-        FreedomBilling.getInstance(this).addListener(billingListener);
+        EigenBilling.getInstance(this).addListener(billingListener);
         if (!prefs.getBoolean("introduced", false) && tourPage < 0) handler.postDelayed(this::welcome, 300);
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
     @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
     @Override protected void onPause() { foreground = false; if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
-    @Override protected void onDestroy() { FreedomBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
+    @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
@@ -1802,9 +1802,9 @@ public final class MainActivity extends Activity {
         note.setPadding(dp(26),dp(6),dp(26),dp(14));note.setLineSpacing(dp(2),1);
         page.addView(note);
 
-        FreedomBilling billing=FreedomBilling.getInstance(this);
+        EigenBilling billing=EigenBilling.getInstance(this);
         ArrayList<View> rows=new ArrayList<>();
-        for(FreedomBilling.DonationTier tier:FreedomBilling.TIERS){
+        for(EigenBilling.DonationTier tier:EigenBilling.TIERS){
             String price=billing.getFormattedPrice(tier.id,tier.fallbackPrice);
             LinearLayout row=row();row.setGravity(Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(64));row.setPadding(dp(18),dp(12),dp(16),dp(12));
             TextView emoji=text(tier.emoji,20,fg);emoji.setPadding(0,0,dp(14),0);
