@@ -125,6 +125,17 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     };
     private final com.studio72f.eigen.ui.EigenHost host = new com.studio72f.eigen.ui.EigenHost() {
         @Override public void launch(App app) { MainActivity.this.launch(app, null); eigen.setSearching(false); eigen.setQuery(""); }
+        @Override public void launchFrom(App app, int left, int top, int width, int height) {
+            Rect bounds = new Rect(left, top, left + width, top + height); Bundle options = null;
+            if (Motion.on() && scene != null) {
+                ActivityOptions o = ActivityOptions.makeClipRevealAnimation(scene, left, top, width, height);
+                if (Build.VERSION.SDK_INT >= 33) o.setSplashScreenStyle(android.window.SplashScreen.SPLASH_SCREEN_STYLE_ICON);
+                options = o.toBundle();
+            }
+            try { launcher.startMainActivity(app.component, app.user, bounds, options); returningFromApp = true; }
+            catch (Exception e) { toast(str(R.string.app_unavailable_its_profile_may_be_pause)); loadApps(); }
+            eigen.setSearching(false); eigen.setQuery("");
+        }
         @Override public void appMenu(App app) { MainActivity.this.appMenu(app); }
         @Override public void homeMenu() { homescreenMenu(); }
         @Override public void openSettings() { MainActivity.this.openSettings(); }
@@ -172,6 +183,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             prefs.edit().putString("dock", String.join(",", dock)).apply(); pushLayoutPrefs();
         }
         @Override public void openCalendar() { safeStart(new Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/" + System.currentTimeMillis()))); }
+        @Override public void useWallpaper(Bitmap image) { useWallpaperBitmap(image); }
+        @Override public void setDim(float dim) { prefs.edit().putInt("wallpaperDim", Math.round(dim * 100)).apply(); eigen.setDim(dim); }
         @Override public String drawerOf(App app) { return group(app); }
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
     };
@@ -244,7 +257,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
+    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); eigen.setReturnPulse(eigen.getReturnPulse() + 1); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", eigen.getTourPage()); super.onSaveInstanceState(out); }
@@ -390,7 +403,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setClockStyle(prefs.getString("clock_face","ratio"));
         eigen.setWallpaperMode(activeWallpaperMode==null?"solid":activeWallpaperMode);
         eigen.setWallpaper(wallpaper); eigen.setSoftWallpaper(softWallpaper);
-        eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)));
+        eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",75)/100f+(float)Legibility.extraDim(legibility)));
         eigen.setBlur(theme.blur);
         eigen.setNotificationAccess(mediaAccess());
         pushLayoutPrefs(); applyMonochrome();
@@ -406,6 +419,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setDotStyle(prefs.getString("dot_style","dash"));
         eigen.setConversationApps(new HashSet<>(prefs.getStringSet("conversation_apps",new HashSet<>())));
         eigen.setMonochrome(prefs.getBoolean("monochrome",false));
+        eigen.setColumns(prefs.getInt("grid_columns",4));
     }
     /** Monochrome only: a black-and-white filter over the whole window, Compose and legacy views alike. */
     private void applyMonochrome(){
@@ -1094,7 +1108,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                         bright=light?Math.max(.7,primary):Math.max(.25,Math.min(1,primary*1.8));dark=light?Math.min(.3,primary):primary*.5;}}
                 catch(RuntimeException ignored){}
             }
-            automatic=Legibility.auto(Color.luminance(fg),Color.luminance(bg),dark,bright,prefs.getInt("wallpaperDim",35)/100.0);
+            automatic=Legibility.auto(Color.luminance(fg),Color.luminance(bg),dark,bright,prefs.getInt("wallpaperDim",75)/100.0);
         }
         return Legibility.resolve(prefs.getString("legibility","auto"),overImage(),automatic);
     }
@@ -1111,7 +1125,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(backdropView==null)return;glassBackdrop.clear();for(GlassSurface surface:glassSurfaces)surface.invalidateSelf();
         Bitmap image=Build.VERSION.SDK_INT<31&&softWallpaper!=null?softWallpaper:wallpaper;
         boolean system=activeWallpaperMode.equals("system");
-        backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)),system));
+        backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",75)/100f+(float)Legibility.extraDim(legibility)),system));
         float gLvl = prefs.getFloat("glass_level", 0.30f);
         int blurAmount = theme.blur > 0 ? theme.blur : Math.round(24f * Math.max(0f, 1f - gLvl * 0.8f));
         boolean grey=EigenPalette.isGreyscale(accent);
@@ -1123,9 +1137,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         }else{Paint layer=new Paint();layer.setColorFilter(new ColorMatrixColorFilter(desaturate));backdropView.setLayerType(View.LAYER_TYPE_HARDWARE,layer);}
     }
     private void prepareSoftWallpaper(){
-        final int request=++effectGeneration;final Bitmap source=wallpaper;final int amount=theme.blur;
-        if(Build.VERSION.SDK_INT>=31||source==null||amount==0){softWallpaper=null;return;}
-        worker.execute(()->{Bitmap image=ThemeEffects.blur(source,amount);handler.post(()->{if(request==effectGeneration&&!isDestroyed()){softWallpaper=image;updateBackdrop();}else if(image!=source)image.recycle();});});
+        // Made on every version: app cards draw their slice of this frosted copy, lined up with the wallpaper.
+        final int request=++effectGeneration;final Bitmap source=wallpaper;final int amount=Math.max(theme.blur,24);
+        if(source==null){softWallpaper=null;eigen.setSoftWallpaper(null);return;}
+        worker.execute(()->{Bitmap image=ThemeEffects.blur(source,amount);handler.post(()->{if(request==effectGeneration&&!isDestroyed()){softWallpaper=image;eigen.setSoftWallpaper(image);updateBackdrop();}else if(image!=source)image.recycle();});});
     }
     private void restoreWallpaper() {
         final int request=++wallpaperGeneration;
@@ -1147,6 +1162,20 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             decoder.setTargetSize(Math.max(1,Math.round(w*scale)),Math.max(1,Math.round(h*scale)));
             decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
             // Keep full color precision: wallpapers often contain smooth gradients.
+        });
+    }
+    /** Saves a generated wallpaper (an Eigen texture) as the launcher's photo, like an import. */
+    private void useWallpaperBitmap(Bitmap image){
+        final int request=++wallpaperGeneration;
+        worker.execute(()->{
+            try{
+                measurePhoto(image);
+                android.util.AtomicFile saved=new android.util.AtomicFile(new File(getFilesDir(),"wallpaper.jpg"));
+                FileOutputStream output=saved.startWrite();
+                try{if(!image.compress(Bitmap.CompressFormat.JPEG,94,output))throw new IOException("Couldn't save image");saved.finishWrite(output);}catch(IOException e){saved.failWrite(output);throw e;}
+                prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
+                handler.post(()->{if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast(str(R.string.wallpaper_set));}});
+            }catch(Exception e){handler.post(()->message(str(R.string.couldn_t_open_wallpaper),"The texture couldn't be saved. Try again."));}
         });
     }
     private void importWallpaper(Uri uri) {
@@ -1174,16 +1203,17 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         });
     }
     private void wallpaperSettings() {
-        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary()),"Set as phone wallpaper"},i -> {
+        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary()),"Set as phone wallpaper","Eigen textures"},i -> {
+            if(i==7){eigen.setTextureSheet(true);return;}
             if(i==6){systemWallpaper();return;}
             if(i==5){legibilitySettings();return;}
             if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast(str(R.string.no_image_picker_available));}}
             if(i==1||i==2){prefs.edit().putString("wallpaperMode",i==1?"system":"solid").apply();buildUi();}
             if(i==3){
                 LinearLayout box=column();box.setPadding(dp(24),dp(12),dp(24),dp(18));
-                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",35)),24,fg);box.addView(value);
+                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",75)),24,fg);box.addView(value);
                 TextView explanation=text(str(R.string.adjust_the_wallpaper_brightness_behind_a),14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
-                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",35));
+                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",75));
                 styleSlider(dimmer);
                 dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
                     public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(str(R.string.x_dim, amount));updateBackdrop();}
@@ -1511,11 +1541,12 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         out.add(new com.studio72f.eigen.ui.SettingsSection("Look",Arrays.asList(
             row("Colour",null,colourName(),"palette","orange",null,this::colourSettings),
             row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
-            row("Wallpaper",mode.equals("photo")?"Your photo, blurred inside Eigen":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
+            row("Wallpaper",mode.equals("photo")?"Your photo, or an Eigen texture":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
             row("App icons",null,icons.equals("mono")?"Monochrome":!prefs.getString("iconPack","").isEmpty()?"Icon pack":"Colour","apps","teal",null,()->menu("App icons",new String[]{"Colour","Monochrome","Icon pack"},n->{if(n==2)chooseIconPack();else setIcons(n==0?"color":"mono");})),
             row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings),
             row("Monochrome only","Black and white over everything",null,"adjust","grey",prefs.getBoolean("monochrome",false),()->{prefs.edit().putBoolean("monochrome",!prefs.getBoolean("monochrome",false)).apply();pushState();}))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Home",Arrays.asList(
+            row("Grid density","Cards in each row of a drawer",prefs.getInt("grid_columns",4)==4?"Roomy":prefs.getInt("grid_columns",4)==6?"Compact":"Balanced","apps","blue",null,()->menu("Grid density",new String[]{"Roomy · 4 in a row","Balanced · 5 in a row","Compact · 6 in a row"},n->{prefs.edit().putInt("grid_columns",4+n).apply();pushState();})),
             row("Drawers","Create, hide, merge and rename",null,"folder","blue",null,this::categorySettings),
             row("Drawer order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size()))),null,"sort","blue",null,()->sheet.open(this::orderPage)),
             row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),

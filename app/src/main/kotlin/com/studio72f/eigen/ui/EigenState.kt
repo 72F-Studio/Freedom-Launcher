@@ -21,6 +21,8 @@ data class Drawer(val name: String, val apps: List<MainActivity.App>)
 /** What the Compose UI asks of the activity, which still owns apps, widgets, settings and dialogs. */
 interface EigenHost {
     fun launch(app: MainActivity.App)
+    /** Launches with a clip-reveal from where the card sits (window pixels). */
+    fun launchFrom(app: MainActivity.App, left: Int, top: Int, width: Int, height: Int)
     fun appMenu(app: MainActivity.App)
     fun homeMenu()
     fun openSettings()
@@ -50,6 +52,8 @@ interface EigenHost {
     fun toggleDock(app: MainActivity.App)
     fun openCalendar()
     fun drawerOf(app: MainActivity.App): String
+    fun useWallpaper(bitmap: android.graphics.Bitmap)
+    fun setDim(dim: Float)
     fun hasDot(app: MainActivity.App): Boolean
 }
 
@@ -76,7 +80,7 @@ class EigenState {
     var wallpaper by mutableStateOf<Bitmap?>(null)
     /** Pre-blurred copy for Android 11 and older, which have no RenderEffect blur. */
     var softWallpaper by mutableStateOf<Bitmap?>(null)
-    var dim by mutableStateOf(0.35f)
+    var dim by mutableStateOf(0.75f)
     var blur by mutableIntStateOf(32)
 
     // Widgets page
@@ -94,6 +98,8 @@ class EigenState {
     /** Drawers open on home; several can be open at once. */
     var openDrawers by mutableStateOf(emptySet<String>())
     var appDrawerOpen by mutableStateOf(false)
+    /** How far the app drawer is open, 0 … 1, live while the finger pulls; the wallpaper frosts in step. */
+    var drawerProgress by mutableStateOf(0f)
     var pillMenu by mutableStateOf<PillMenu?>(null)
     var dashboardApp by mutableStateOf<MainActivity.App?>(null)
     /** How a collapsed drawer shows unread notifications: dash, dot, colour or off. */
@@ -105,6 +111,10 @@ class EigenState {
     var dockIds by mutableStateOf(emptyList<String>())
     /** The clock style sheet, opened from a long-press on the clock. */
     var clockSheet by mutableStateOf(false)
+    /** Eigen's shader textures, opened from the wallpaper menu. */
+    var textureSheet by mutableStateOf(false)
+    /** Cards per row in drawers: 4 (roomy), 5 or 6 (compact). */
+    var columns by mutableIntStateOf(4)
     /** Black and white over everything, set by the activity on its window. */
     var monochrome by mutableStateOf(false)
     /** Minutes in the foreground today, by package; empty without usage access. */
@@ -112,6 +122,8 @@ class EigenState {
     var usageAccess by mutableStateOf(false)
     /** Bumped on every resume so usage and similar live data reload. */
     var resumeCount by mutableIntStateOf(0)
+    /** Bumped when home comes back from an app, so it settles in. */
+    var returnPulse by mutableIntStateOf(0)
     /** Packages whose notifications feed Conversations; empty means all. */
     var conversationApps by mutableStateOf(emptySet<String>())
     var searching by mutableStateOf(false)
@@ -158,6 +170,7 @@ class EigenState {
         tourPage > 0 -> { tourPage--; true }
         pillMenu != null -> { pillMenu = null; true }
         clockSheet -> { clockSheet = false; true }
+        textureSheet -> { textureSheet = false; true }
         dashboardApp != null -> { dashboardApp = null; true }
         contextsPage != null -> { contextsPage = if (contextsPage!!.isEmpty()) null else ""; true }
         settingsOpen -> { settingsOpen = false; true }

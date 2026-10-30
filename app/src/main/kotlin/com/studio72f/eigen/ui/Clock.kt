@@ -4,6 +4,8 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
@@ -41,7 +43,7 @@ import java.util.Date
 /** The home clock's styles, shared with the Java settings menus. */
 object ClockStyles {
     @JvmField val IDS = arrayOf("ratio", "thin", "stacked", "outline", "kesar", "binary")
-    @JvmField val NAMES = arrayOf("Ratio", "Thin", "Stacked", "Outline", "Kesar split", "Binary")
+    @JvmField val NAMES = arrayOf("Heavy", "Thin", "Stacked", "Outline", "Kesar split", "Binary")
 }
 
 /** Centred clock and date. Tapping the time opens alarms, the date opens the calendar; holding either offers a style change. */
@@ -66,19 +68,18 @@ fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: M
         when (style) {
             "binary" -> BinaryClock(cal, tap.padding(vertical = 12.dp), scale)
             "stacked" -> Column(tap, horizontalAlignment = Alignment.CenterHorizontally) {
-                BasicText(hours, style = face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink, lineHeight = (104 * scale).sp))
-                BasicText(minutes, style = face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink.copy(alpha = 0.55f), lineHeight = (104 * scale).sp))
+                Rolling(hours, face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink, lineHeight = (104 * scale).sp))
+                Rolling(minutes, face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink.copy(alpha = 0.55f), lineHeight = (104 * scale).sp))
             }
             else -> {
                 val weight = if (style == "thin") FontWeight.Light else FontWeight.Bold
-                val base = face(((if (style == "thin") 112 else 96) * scale).toInt(), weight)
-                val text = buildAnnotatedString {
-                    append(hours)
-                    withStyle(SpanStyle(color = c.ink.copy(alpha = 0.5f))) { append(":") }
-                    if (style == "kesar") withStyle(SpanStyle(color = c.accent)) { append(minutes) } else append(minutes)
+                val base = face(((if (style == "thin") 112 else 96) * scale).toInt(), weight).let { if (style == "outline") it.copy(drawStyle = Stroke(width = 5f)) else it }
+                // Hours and minutes roll up on their own as they change; the colon stays put.
+                Row(tap, verticalAlignment = Alignment.CenterVertically) {
+                    Rolling(hours, base.copy(color = c.ink))
+                    BasicText(":", style = base.copy(color = c.ink.copy(alpha = 0.5f)))
+                    Rolling(minutes, base.copy(color = if (style == "kesar") c.accent else c.ink))
                 }
-                val drawn = if (style == "outline") base.copy(drawStyle = Stroke(width = 5f)) else base
-                BasicText(text, tap, style = drawn.copy(color = c.ink))
             }
         }
         KText(
@@ -87,6 +88,22 @@ fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: M
             Kelvin.type.rowTitle, c.ink.copy(alpha = 0.78f), maxLines = 1, align = TextAlign.Center,
         )
     }
+}
+
+/** Text that rolls up into its new value on the spatial spring when it changes (clock digits). */
+@Composable
+private fun Rolling(text: String, style: TextStyle) {
+    val spatial = Kelvin.motion.spatial<androidx.compose.ui.unit.IntOffset>()
+    val gentle = Kelvin.motion.gentle<Float>()
+    androidx.compose.animation.AnimatedContent(
+        text,
+        transitionSpec = {
+            ((androidx.compose.animation.slideInVertically(spatial) { it / 2 } + androidx.compose.animation.fadeIn(gentle)) togetherWith
+                (androidx.compose.animation.slideOutVertically(spatial) { -it / 2 } + androidx.compose.animation.fadeOut(gentle)))
+                .using(androidx.compose.animation.SizeTransform(clip = false))
+        },
+        label = "rolling digits",
+    ) { BasicText(it, style = style) }
 }
 
 private fun face(size: Int, weight: FontWeight) = TextStyle(

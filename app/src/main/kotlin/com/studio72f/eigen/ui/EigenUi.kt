@@ -18,6 +18,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -86,6 +87,7 @@ fun EigenApp(state: EigenState, host: EigenHost) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha }) { if (homeAlpha > 0f) Pages(state, host, backdrop) }
             DashboardOverlay(state, host)
             ClockSheet(state, host, backdrop)
+            TextureSheet(state, host, backdrop)
             SettingsOverlay(state, host)
             com.studio72f.eigen.ContextsOverlay(state, host.contexts())
             TourOverlay(state, host)
@@ -105,38 +107,47 @@ private fun Pages(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) 
         snapshotFlow { pager.settledPage }.collect { state.page = it }
     }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { page ->
-        when (page) {
-            EigenState.PAGE_LEFT -> LeftPage(state, host, backdrop)
-            EigenState.PAGE_HOME -> HomePage(state, host, backdrop)
-            else -> WidgetsPage(state, host, backdrop)
+        // A page leaving recedes a little and fades; the one arriving grows into place.
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            val off = kotlin.math.abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+            val s = 1f - 0.06f * off
+            scaleX = s; scaleY = s; alpha = 1f - 0.45f * off
+        }) {
+            when (page) {
+                EigenState.PAGE_LEFT -> LeftPage(state, host, backdrop)
+                EigenState.PAGE_HOME -> HomePage(state, host, backdrop)
+                else -> WidgetsPage(state, host, backdrop)
+            }
         }
     }
 }
 
 /**
- * The wallpaper as Eigen shows it: HyperOS-strength blur with a touch of extra saturation so colour survives it,
- * dimmed for legibility and a little more toward the bottom, or fully desaturated in Greyscale. Solid mode gets a
+ * The wallpaper as Eigen shows it on home: sharp, with a touch of extra saturation, dimmed for legibility and a
+ * little more toward the bottom, or fully desaturated in Greyscale. The app drawer frosts it through [FrostedPane]. Solid mode gets a
  * faint warm glow from the top in the accent. System mode stays transparent: Android draws it, unblurred.
  */
 @Composable
 private fun Wallpaper(state: EigenState, modifier: Modifier) {
     val accent = Kelvin.colors.accent
     val modern = Build.VERSION.SDK_INT >= 31
-    val photo: Bitmap? = if (state.wallpaperMode == "photo") (if (modern) state.wallpaper else state.softWallpaper ?: state.wallpaper) else null
+    val photo: Bitmap? = if (state.wallpaperMode == "photo") state.wallpaper else null
     Box(modifier) {
         when {
             photo != null -> {
                 val image = remember(photo) { photo.asImageBitmap() }
                 val matrix = remember(state.greyscale) { ColorMatrix().apply { setToSaturation(if (state.greyscale) 0f else 1.15f) } }
+                // Home shows the wallpaper sharp, only dimmed; the app drawer is a frosted pane over it (FrostedPane).
                 Image(
                     image, null,
-                    Modifier.fillMaxSize().then(if (modern && state.blur > 0) Modifier.blur(state.blur.dp, BlurredEdgeTreatment.Rectangle) else Modifier),
+                    Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(matrix),
                 )
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
                     Color.Black.copy(alpha = state.dim * 0.8f), Color.Black.copy(alpha = state.dim), Color.Black.copy(alpha = (state.dim + 0.18f).coerceAtMost(0.95f)),
                 ))))
+
             }
             state.wallpaperMode == "system" -> Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = state.dim * 0.6f)))
             else -> Box(
@@ -147,6 +158,33 @@ private fun Wallpaper(state: EigenState, modifier: Modifier) {
                     ))
                 },
             )
+        }
+    }
+}
+
+/**
+ * A pane of frosted glass over the wallpaper: it blurs only the wallpaper (never home's drawers or cards), lined up
+ * with the real wallpaper so it reads as glass sliding over it. [offsetY] is how far the pane is pushed down from the
+ * top of the screen; the frosted image is shifted back by the same amount so it never moves with the pane.
+ */
+@Composable
+fun FrostedPane(state: EigenState, offsetY: Float, modifier: Modifier = Modifier) {
+    val modern = Build.VERSION.SDK_INT >= 31
+    val photo: Bitmap? = if (state.wallpaperMode == "photo") (if (modern) state.wallpaper else state.softWallpaper ?: state.wallpaper) else null
+    Box(modifier.clipToBounds()) {
+        if (photo != null) {
+            val image = remember(photo) { photo.asImageBitmap() }
+            val matrix = remember(state.greyscale) { ColorMatrix().apply { setToSaturation(if (state.greyscale) 0f else 1.25f) } }
+            Image(
+                image, null,
+                Modifier.fillMaxSize().graphicsLayer { translationY = -offsetY }
+                    .then(if (modern) Modifier.blur(maxOf(state.blur, 28).dp, BlurredEdgeTreatment.Rectangle) else Modifier),
+                contentScale = ContentScale.Crop, colorFilter = ColorFilter.colorMatrix(matrix),
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = (state.dim * 0.6f + 0.25f).coerceAtMost(0.8f))))
+        } else {
+            // Solid or the phone's own wallpaper: a dense Kelvin canvas pane.
+            Box(Modifier.fillMaxSize().background(Kelvin.colors.canvas.copy(alpha = 0.88f)))
         }
     }
 }

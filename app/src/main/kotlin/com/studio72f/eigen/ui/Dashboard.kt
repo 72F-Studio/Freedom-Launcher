@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.sp
 import com.studio72f.eigen.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.launch
 import studio72f.kelvin.ButtonKind
 import studio72f.kelvin.ContinuousShape
 import studio72f.kelvin.KIcon
@@ -75,7 +77,8 @@ private val Shortcuts by lazy { tablerIcon("bolt", "M13 3l0 7l6 0l-8 11l0 -7l-6 
 private val Wide by lazy { tablerIcon("arrows-horizontal", "M7 8l-4 4l4 4", "M17 8l4 4l-4 4", "M3 12l18 0") }
 private val Dock by lazy { tablerIcon("layout-bottombar", "M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z", "M4 15l16 0") }
 
-private val STYLES = listOf("classic" to "Classic", "marker" to "Marker", "bright" to "Bright")
+/** Card materials, named for what they are in Kelvin: frosted glass, glass stained with the accent, lit glass. Ids are kept for saved choices. */
+private val STYLES = listOf("classic" to "Frost", "marker" to "Stained", "bright" to "Lit")
 
 /**
  * An app's dashboard as a Kelvin detail page: back circle and the app's name, then groups of cards. Today (time and
@@ -201,5 +204,49 @@ fun ClockSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
             }
         }
         KelvinButton("Launcher settings", { state.clockSheet = false; host.openSettings() }, Modifier.fillMaxWidth().padding(top = 8.dp), kind = ButtonKind.Secondary, icon = KelvinIcons.Settings)
+    }
+}
+
+/**
+ * Eigen's textures: live previews in the current accent, two to a row. Picking one renders it at screen size and
+ * uses it as the wallpaper, exactly like a photo.
+ */
+@Composable
+fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var previews by remember { mutableStateOf<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap()) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.textureSheet, state.accent) {
+        if (!state.textureSheet) return@LaunchedEffect
+        previews = withContext(Dispatchers.Default) {
+            Textures.ALL.associate { it.id to Textures.render(it, 240, 520, state.accent).asImageBitmap() }
+        }
+    }
+    KelvinSheet(state.textureSheet, { state.textureSheet = false }, "Textures", "Close", backdrop) {
+        KText("Drawn in your colour. Dim them and set them as your phone's wallpaper like any photo.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)
+        Textures.ALL.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (t in row) Column(
+                    Modifier.weight(1f).eigenPress({
+                        if (busy != null) return@eigenPress
+                        busy = t.id
+                        scope.launch {
+                            val m = context.resources.displayMetrics
+                            val full = withContext(Dispatchers.Default) { Textures.render(t, m.widthPixels, m.heightPixels, state.accent) }
+                            host.useWallpaper(full); busy = null; state.textureSheet = false
+                        }
+                    }, shape = ContinuousShape(20.dp), label = t.name),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(Modifier.fillMaxWidth().height(200.dp).clip(ContinuousShape(20.dp)).background(Kelvin.colors.group), contentAlignment = Alignment.Center) {
+                        previews[t.id]?.let { androidx.compose.foundation.Image(it, t.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                        if (busy == t.id) studio72f.kelvin.KelvinSpinner()
+                    }
+                    KText(t.name, Modifier.padding(top = 8.dp), Kelvin.type.label, maxLines = 1)
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }

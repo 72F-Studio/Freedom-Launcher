@@ -117,7 +117,7 @@ fun SettingsOverlay(state: EigenState, host: EigenHost) {
                     KelvinSectionHeader(section.title, Modifier.padding(top = if (i == 0) 4.dp else 0.dp))
                     KelvinGroup {
                         for (row in section.rows) SettingsRowView(row)
-                        if (section.title == "Look") GlassRow(state, host)
+                        if (section.title == "Look") { BrightnessRow(state, host); GlassRow(state, host) }
                     }
                     Spacer(Modifier.height(24.dp))
                 }
@@ -138,6 +138,16 @@ private fun SettingsRowView(row: SettingsRow) {
         onClick = row.action?.let { a -> { a.run() } },
         trailing = row.toggle?.let { on -> { KelvinSwitch(on, { row.action?.run() }) } },
     )
+}
+
+@Composable
+private fun BrightnessRow(state: EigenState, host: EigenHost) {
+    var bright by remember { mutableFloatStateOf(1f - state.dim / 0.9f) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        studio72f.kelvin.KText("Wallpaper brightness", style = Kelvin.type.rowTitle)
+        studio72f.kelvin.KelvinSlider(bright, { bright = it; state.dim = (1f - it) * 0.9f }, "Wallpaper brightness", valueText = "${(bright * 100).toInt()}%",
+            onValueChangeFinished = { host.setDim((1f - bright) * 0.9f) })
+    }
 }
 
 @Composable
