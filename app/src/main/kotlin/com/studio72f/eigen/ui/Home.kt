@@ -491,7 +491,8 @@ private fun Dock(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     val c = Kelvin.colors
     Row(
         Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(84.dp)
-            .glass(backdrop, ContinuousShape(28.dp), GlassContent.Text, elevated = true),
+            // Frost: the same milky slice of the frosted wallpaper as the cards; Liquid glass keeps live glass.
+            .then(if (state.frost) Modifier.frostSurface(state, ContinuousShape(28.dp), milk = 0.13f) else Modifier.glass(backdrop, ContinuousShape(28.dp), GlassContent.Text, elevated = true)),
         horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
     ) {
         for (app in apps) {
@@ -681,7 +682,7 @@ private fun SearchCapsule(state: EigenState, host: EigenHost, backdrop: KelvinBa
     }
     Row(
         modifier.fillMaxWidth().height(56.dp)
-            .glass(backdrop, CapsuleShape, GlassContent.Text, elevated = true)
+            .then(if (state.frost) Modifier.frostSurface(state, CapsuleShape, milk = 0.13f) else Modifier.glass(backdrop, CapsuleShape, GlassContent.Text, elevated = true))
             .then(if (!state.searching) Modifier.eigenPress({ state.searching = true }, { state.openAssistant(null) }, CapsuleShape, "Search") else Modifier)
             .padding(start = 22.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -697,9 +698,9 @@ private fun SearchCapsule(state: EigenState, host: EigenHost, backdrop: KelvinBa
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { submitSearch(state, host) }),
                 )
-                if (state.query.isEmpty()) KText("Search apps, or ask anything", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink2, maxLines = 1)
+                if (state.query.isEmpty()) KText("Search apps, or ask anything", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink.copy(alpha = 0.78f), maxLines = 1)
             } else {
-                KText("Tap to search", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink2, maxLines = 1)
+                KText("Tap to search", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink.copy(alpha = 0.78f), maxLines = 1)
             }
         }
         if (state.searching) {
