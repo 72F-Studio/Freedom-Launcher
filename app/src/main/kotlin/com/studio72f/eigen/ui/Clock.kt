@@ -46,7 +46,7 @@ object ClockStyles {
 
 /** Centred clock and date. Tapping the time opens alarms; tapping the date opens settings. */
 @Composable
-fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: Modifier = Modifier) {
+fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: Modifier = Modifier, scale: Float = 1f) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -64,14 +64,14 @@ fun HomeClock(style: String, onTime: () -> Unit, onDate: () -> Unit, modifier: M
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         val tap = Modifier.eigenPress(onTime, label = "Open alarms").semantics { contentDescription = "$hours:$minutes" }
         when (style) {
-            "binary" -> BinaryClock(cal, tap.padding(vertical = 12.dp))
+            "binary" -> BinaryClock(cal, tap.padding(vertical = 12.dp), scale)
             "stacked" -> Column(tap, horizontalAlignment = Alignment.CenterHorizontally) {
-                BasicText(hours, style = face(120, FontWeight.Bold).copy(color = c.ink, lineHeight = 104.sp))
-                BasicText(minutes, style = face(120, FontWeight.Bold).copy(color = c.ink.copy(alpha = 0.55f), lineHeight = 104.sp))
+                BasicText(hours, style = face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink, lineHeight = (104 * scale).sp))
+                BasicText(minutes, style = face((120 * scale).toInt(), FontWeight.Bold).copy(color = c.ink.copy(alpha = 0.55f), lineHeight = (104 * scale).sp))
             }
             else -> {
                 val weight = if (style == "thin") FontWeight.Light else FontWeight.Bold
-                val base = face(if (style == "thin") 112 else 96, weight)
+                val base = face(((if (style == "thin") 112 else 96) * scale).toInt(), weight)
                 val text = buildAnnotatedString {
                     append(hours)
                     withStyle(SpanStyle(color = c.ink.copy(alpha = 0.5f))) { append(":") }
@@ -96,13 +96,13 @@ private fun face(size: Int, weight: FontWeight) = TextStyle(
 
 /** Binary-coded decimal: four columns (hour tens, hour ones, minute tens, minute ones), lit dots in the accent. */
 @Composable
-private fun BinaryClock(cal: Calendar, modifier: Modifier) {
+private fun BinaryClock(cal: Calendar, modifier: Modifier, scale: Float = 1f) {
     val c = Kelvin.colors
     val h = cal.get(Calendar.HOUR_OF_DAY); val m = cal.get(Calendar.MINUTE)
     val digits = intArrayOf(h / 10, h % 10, m / 10, m % 10)
     val rows = intArrayOf(2, 4, 3, 4)
-    Canvas(modifier.size(232.dp, 112.dp)) {
-        val r = 11.dp.toPx(); val gapX = size.width / 4f; val gapY = size.height / 4f
+    Canvas(modifier.size(232.dp * scale, 112.dp * scale)) {
+        val r = 11.dp.toPx() * scale; val gapX = size.width / 4f; val gapY = size.height / 4f
         for (col in 0 until 4) for (bit in 0 until rows[col]) {
             val on = digits[col] shr bit and 1 == 1
             val center = Offset(gapX * col + gapX / 2 + (if (col >= 2) 8.dp.toPx() else -8.dp.toPx()), size.height - gapY * bit - gapY / 2)

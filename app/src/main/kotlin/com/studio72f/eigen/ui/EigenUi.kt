@@ -11,6 +11,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -79,8 +81,12 @@ fun EigenApp(state: EigenState, host: EigenHost) {
         val backdrop = rememberKelvinBackdrop(ground = if (state.wallpaperMode == "system") Color.Black.copy(alpha = 0.3f) else Color.Black)
         Box(Modifier.fillMaxSize()) {
             Wallpaper(state, Modifier.fillMaxSize().kelvinBackdrop(backdrop))
-            Pages(state, host, backdrop)
+            // The tour owns the screen: home fades out behind it, leaving only the wallpaper.
+            val homeAlpha by androidx.compose.animation.core.animateFloatAsState(if (state.tourPage >= 0) 0f else 1f, Kelvin.motion.gentle(), label = "home under tour")
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = homeAlpha }) { if (homeAlpha > 0f) Pages(state, host, backdrop) }
             SettingsOverlay(state, host)
+            com.studio72f.eigen.ContextsOverlay(state, host.contexts())
+            TourOverlay(state, host)
         }
     }
 }

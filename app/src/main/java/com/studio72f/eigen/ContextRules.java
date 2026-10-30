@@ -3,7 +3,7 @@ package com.studio72f.eigen;
 import java.util.*;
 
 /** Context rules: ordered, first match wins, AND-only conditions. Pure Java so it is testable off-device. */
-final class ContextRules {
+public final class ContextRules {
     static final int ANY = 0, YES = 1, NO = 2;
     static final String[] DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
     static final String[] WIDGETS = {"clock", "alarm", "agenda", "media", "smartspace"};
@@ -18,7 +18,7 @@ final class ContextRules {
         if (days.length == 7) dayNames = days.clone();
     }
 
-    static final class Rule {
+    public static final class Rule {
         String id, name, category = "";
         boolean enabled = true, fallback;
         int days, start, end, headphones, charging, dnd, playing, header = -1;

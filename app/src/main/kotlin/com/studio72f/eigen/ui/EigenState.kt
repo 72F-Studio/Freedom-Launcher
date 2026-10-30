@@ -26,6 +26,13 @@ interface EigenHost {
     fun media(action: Int)
     fun openNotificationAccess()
     fun setGlassLevel(level: Float)
+    fun isDefaultHome(): Boolean
+    fun makeDefaultHome()
+    fun setColour(index: Int)
+    fun setClock(style: String)
+    fun chooseWallpaper()
+    fun finishTour()
+    fun contexts(): com.studio72f.eigen.ContextsHost
     fun hasDot(app: MainActivity.App): Boolean
 }
 
@@ -77,6 +84,12 @@ class EigenState {
     val chat = mutableStateListOf<ChatLine>()
     var thinking by mutableStateOf(false)
     var settingsOpen by mutableStateOf(false)
+    /** null: closed; "": the contexts list; otherwise the id of the context being edited. */
+    var contextsPage by mutableStateOf<String?>(null)
+    /** Bumped whenever a context changes, so pages that read the (plain Java) rules redraw. */
+    var contextsVersion by mutableIntStateOf(0)
+    /** The first-run tour's page, or -1 when it is not showing. */
+    var tourPage by mutableIntStateOf(-1)
     var settings by mutableStateOf(emptyList<SettingsSection>())
     /** Set to put the cursor in the Assistant's composer (opening it from search or the menu); cleared once used. */
     var composerFocus by mutableStateOf(false)
@@ -96,10 +109,12 @@ class EigenState {
     }
 
     /** The Home button: back to a closed, centred home. */
-    fun goHome() { settingsOpen = false; searching = false; query = ""; openDrawer = null; composerFocus = false; showPage(PAGE_HOME) }
+    fun goHome() { contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawer = null; composerFocus = false; showPage(PAGE_HOME) }
 
     /** Back, innermost first. Returns false when there was nothing to close. */
     fun handleBack(): Boolean = when {
+        tourPage > 0 -> { tourPage--; true }
+        contextsPage != null -> { contextsPage = if (contextsPage!!.isEmpty()) null else ""; true }
         settingsOpen -> { settingsOpen = false; true }
         searching -> { searching = false; query = ""; true }
         page != PAGE_HOME -> { showPage(PAGE_HOME); true }

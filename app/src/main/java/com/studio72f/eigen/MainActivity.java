@@ -85,6 +85,44 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     // The Compose UI (home, side pages, search, assistant) reads this state; the activity keeps apps, widgets,
     // settings and dialogs. Created once, so the UI keeps its place across rebuilds.
     private final com.studio72f.eigen.ui.EigenState eigen = new com.studio72f.eigen.ui.EigenState();
+    /** The Kelvin contexts editor edits rules in place and reports back here, where they are stored and applied. */
+    private final ContextsHost contextsHost = new ContextsHost() {
+        @Override public List<ContextRules.Rule> contexts() { return contexts; }
+        @Override public String activeId() { return activeContext == null ? null : activeContext.id; }
+        @Override public void changed() { contextsChanged(); }
+        @Override public void addContext() {
+            if (contexts.size() >= ContextStore.MAX_RULES) { toast(str(R.string.up_to_x_contexts, ContextStore.MAX_RULES)); return; }
+            String[] kinds = {"morning", "work", "headphones", "night", "charging", "blank"};
+            menu("Add a context", new String[]{"Morning", "Work", "Headphones", "Night", "Charging", "Blank"}, i -> {
+                ContextRules.Rule r = ContextRules.template(kinds[i].equals("blank") ? "new context" : kinds[i], ContextStore.newId(contexts));
+                if (!r.category.isEmpty() && !editableCategories().contains(r.category)) r.category = "";
+                contexts.add(Math.max(0, contexts.size() - 1), r); contextsChanged(); eigen.setContextsPage(r.id);
+            });
+        }
+        @Override public void holdMenu() { contextOverride(); }
+        @Override public void hold(ContextRules.Rule r) { prefs.edit().putString("contextPin", r.id).putLong("contextPinUntil", System.currentTimeMillis() + 3600000L).apply(); contextsChanged(); toast(str(R.string.x_held_for_1_hour, r.name)); }
+        @Override public void delete(ContextRules.Rule r) {
+            for (String item : new ArrayList<>(r.widgets)) if (item.startsWith("widget:")) removeContextItem(r, item);
+            contexts.remove(r); if (r.id.equals(prefs.getString("contextPin", ""))) prefs.edit().remove("contextPin").remove("contextPinUntil").apply();
+            contextsChanged();
+        }
+        @Override public void pickTime(ContextRules.Rule r, boolean start) { MainActivity.this.pickTime(r, start); }
+        @Override public void addItem(ContextRules.Rule r) {
+            if (r.widgets.size() >= ContextStore.MAX_WIDGETS) { toast(str(R.string.this_context_is_full)); return; }
+            ArrayList<String> addable = new ArrayList<>();
+            for (String w : new String[]{"alarm", "agenda", "smartspace"}) if (!r.widgets.contains(w) && (Build.VERSION.SDK_INT >= 29 || !w.equals("smartspace"))) addable.add(w);
+            ArrayList<String> labels = new ArrayList<>(); for (String w : addable) labels.add(itemLabel(w)); labels.add("App widget");
+            menu("Add to the widgets page", labels.toArray(new String[0]), n -> {
+                if (n == addable.size()) { addAppWidget(r); return; }
+                String w = addable.get(n); r.widgets.add(w);
+                if (w.equals("agenda") && !calendarAllowed()) requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR}, 49);
+                contextsChanged();
+            });
+        }
+        @Override public void removeItem(ContextRules.Rule r, String item) { removeContextItem(r, item); }
+        @Override public String itemLabel(String item) { return MainActivity.this.itemLabel(item); }
+        @Override public List<String> drawers() { return editableCategories(); }
+    };
     private final com.studio72f.eigen.ui.EigenHost host = new com.studio72f.eigen.ui.EigenHost() {
         @Override public void launch(App app) { MainActivity.this.launch(app, null); eigen.setSearching(false); eigen.setQuery(""); }
         @Override public void appMenu(App app) { MainActivity.this.appMenu(app); }
@@ -95,6 +133,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void media(int action) { mediaAction(action); }
         @Override public void openNotificationAccess() { safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
         @Override public void setGlassLevel(float level) { prefs.edit().putFloat("glass_level", level).apply(); FrostedCard.setGlassLevel(level); updateBackdrop(); }
+        @Override public boolean isDefaultHome() { return MainActivity.this.isDefaultHome(); }
+        @Override public void makeDefaultHome() { defaultHome(); }
+        @Override public void setColour(int index) { applyColour(index); }
+        @Override public void setClock(String style) { prefs.edit().putString("clock_face", style).apply(); eigen.setClockStyle(style); }
+        @Override public void chooseWallpaper() { try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 44); } catch (ActivityNotFoundException e) { toast(str(R.string.no_image_picker_available)); } }
+        @Override public void finishTour() { endTour(); }
+        @Override public ContextsHost contexts() { return contextsHost; }
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
     };
     private WidgetHosting.Host widgetHost;
@@ -155,26 +200,26 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         FrostedCard.setGlassLevel(prefs.getFloat("glass_level", 0.30f));
         restoreWallpaper();
         activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext);
-        if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); tourPage = state.getInt("tour", -1); }
+        if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); eigen.setTourPage(state.getInt("tour", -1)); }
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         launcher.registerCallback(appChanges, handler);
         MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); eigen.setDotsVersion(eigen.getDotsVersion() + 1); });
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         buildUi(); loadApps();
         EigenBilling.getInstance(this).addListener(billingListener);
-        if (!prefs.getBoolean("introduced", false) && tourPage < 0) handler.postDelayed(this::welcome, 300);
+        if (!prefs.getBoolean("introduced", false) && eigen.getTourPage() < 0) handler.postDelayed(this::welcome, 300);
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
+    @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
     @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
-    @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); buildUi(); }
+    @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", eigen.getTourPage()); super.onSaveInstanceState(out); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); if (activeContext != null && !activeContext.category.isEmpty()) eigen.setOpenDrawer(activeContext.category); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
     // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
     @android.annotation.SuppressLint({"GestureBackNavigation","MissingSuperCall"}) @Override public void onBackPressed() { handleBack(); } // Back is routed by handleBack, never the default finish
-    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (eigen.handleBack()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
+    private void handleBack() { if (eigen.getTourPage() == 0) { endTour(); return; } if (sheet != null && sheet.back()) return; if (eigen.handleBack()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
         favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();hidden.clear();labels.clear();order.clear();
@@ -770,11 +815,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);ArrayList<String> used=editableCategories();used.addAll(merges.keySet());used.add("favorites");used.add("all apps");
             if(name.isEmpty()||!name.equals(existing)&&used.contains(name)){input.setError(str(R.string.choose_a_unique_category_name));return;}action.accept(name);d.dismiss();});
     }
-    private void headerSettings(){menu(str(R.string.top_zone),new String[]{str(R.string.default_height_x, prefs.getInt("header",20)),str(R.string.media_access_settings),str(R.string.calendar_access)},i->{
-        if(i==0)menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();buildUi();});
-        if(i==1)safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-        if(i==2){if(calendarAllowed())safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}
-    });}
     private void bindMedia(){
         if(!mediaWanted()){if(controller!=null)controller.unregisterCallback(mediaCallback);controller=null;updateMedia();return;}
         try{List<MediaController> sessions=getSystemService(MediaSessionManager.class).getActiveSessions(new ComponentName(this,MediaAccessService.class));MediaController next=sessions.isEmpty()?null:sessions.get(0);for(MediaController c:sessions)if(c.getPlaybackState()!=null&&c.getPlaybackState().getState()==PlaybackState.STATE_PLAYING){next=c;break;}
@@ -1148,7 +1188,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     /** Kesar and its warm siblings, or Greyscale: monochrome icons, a white accent and a desaturated in-launcher wallpaper. */
     private void colourSettings() {
-        menu("Colour", EigenPalette.ACCENT_NAMES, n -> {
+        menu("Colour", EigenPalette.ACCENT_NAMES, this::applyColour);
+    }
+    private void applyColour(int n) {
+        {
             try {
                 JSONObject t = themeJson();
                 t.put("accent", String.format("#%06X", EigenPalette.ACCENTS[n] & 0xFFFFFF));
@@ -1158,7 +1201,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 applyTheme(t); persistTheme(); buildUi(); updateBackdrop();
                 if (sheet != null && sheet.isShowing()) sheet.refresh();
             } catch (Exception e) { fileError(e); }
-        });
+        }
     }
     private String colourName() {
         for (int i = 0; i < EigenPalette.ACCENTS.length; i++) if (EigenPalette.ACCENTS[i] == accent) return EigenPalette.ACCENT_NAMES[i];
@@ -1246,7 +1289,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
-        if(request==49){agendaLoaded=0;updateAgenda();if(sheet!=null)sheet.refresh();if(tourPage>=0)attachTour(0);}
+        if(request==49){agendaLoaded=0;updateAgenda();if(sheet!=null)sheet.refresh();}
     }
 
     // Contexts: evaluated only while Home is visible.
@@ -1288,6 +1331,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void contextsChanged(){
         ContextRules.normalize(contexts);ContextStore.save(prefs,contexts);
         appliedLayout="";evaluateContext();bindMedia();if(sheet!=null)sheet.refresh();
+        eigen.setContextsVersion(eigen.getContextsVersion()+1);if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
     private void contextOverride(){
         ArrayList<String> names=new ArrayList<>();names.add("automatic");for(ContextRules.Rule r:contexts)names.add(r.name);
@@ -1363,7 +1407,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         menu(itemLabel(item),options.toArray(new String[0]),i->{
             if(i==0){removeContextItem(rule,item);contextsChanged();toast(str(R.string.widget_removed));}
             if(i==1)menu(str(R.string.top_zone_height),new String[]{"20%","30%","40%"},n->{rule.header=new int[]{20,30,40}[n];contextsChanged();});
-            if(i==2){sheet.open(this::quickPage);sheet.push(()->contextPage(rule));}
+            if(i==2)eigen.setContextsPage(rule.id);
             if(i==3)try{widgetHost.startAppWidgetConfigureActivityForResult(this,id,0,50,null);}catch(Exception e){toast(str(R.string.widget_settings_unavailable));}
         });
     }
@@ -1383,9 +1427,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(item.startsWith("widget:")){boolean used=false;for(ContextRules.Rule r:contexts)used|=r.widgets.contains(item);if(!used)try{widgetHost.deleteAppWidgetId(Integer.parseInt(item.substring(7)));}catch(RuntimeException ignored){}}
     }
     private String itemLabel(String item){
-        switch(item){case "smartspace":return "Smartspacer";case "clock":return "clock & date";case "alarm":return "next alarm";case "agenda":return "agenda";case "media":return "media controls";}
-        try{AppWidgetProviderInfo info=widgetManager.getAppWidgetInfo(Integer.parseInt(item.substring(7)));if(info!=null)return info.loadLabel(getPackageManager())+" · widget";}catch(RuntimeException ignored){}
-        return "missing widget";
+        switch(item){case "smartspace":return "Smartspacer";case "clock":return "Clock and date";case "alarm":return "Next alarm";case "agenda":return "Agenda";case "media":return "Now playing";}
+        try{AppWidgetProviderInfo info=widgetManager.getAppWidgetInfo(Integer.parseInt(item.substring(7)));if(info!=null)return info.loadLabel(getPackageManager())+" widget";}catch(RuntimeException ignored){}
+        return "Missing widget";
     }
 
     // Settings: quick sheet that expands into the full page.
@@ -1400,7 +1444,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         sheet.requestApplyInsets();
         if(sheet.isShowing())sheet.refresh();
 
-        if(tourPage>=0)attachTour(0);
+        
     }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}eigen.setSettings(settingsModel());eigen.setSettingsOpen(true);}
     private com.studio72f.eigen.ui.SettingsRow row(String title,String summary,String value,String icon,String tile,Boolean toggle,Runnable action){return new com.studio72f.eigen.ui.SettingsRow(title,summary,value,icon,tile,toggle,action);}
@@ -1423,7 +1467,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),
             row("Notification dots",mediaAccess()?null:"Needs notification access",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Your day",Arrays.asList(
-            row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->sheet.open(this::fullSettings)),
+            row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->eigen.setContextsPage("")),
             row("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),null,"sparkles","orange",null,this::assistantSettings))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Access",Arrays.asList(
             row("Notification access","Conversations, replies and dots",mediaAccess()?"On":"Off","message","green",null,()->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),
@@ -1495,17 +1539,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         scroll.addView(line);return scroll;
     }
     /** Segmented control: one rounded track, the chosen segment raised in the accent tint. */
-    private View segmented(String label,String[] options,int value,IntChoice change){
-        LinearLayout track=row();track.setPadding(dp(4),dp(4),dp(4),dp(4));track.setBackground(rounded(MetroArt.alpha(fg,.06f),100));
-        for(int i=0;i<options.length;i++){
-            final int n=i;boolean on=value==i;
-            TextView s=text(options[i],14,on?tintInk():muted);s.setGravity(Gravity.CENTER);s.setMinWidth(dp(54));s.setMinHeight(dp(48));s.setPadding(dp(12),0,dp(12),0);
-            if(on){s.setBackground(rounded(tint(.34f),100));s.setTypeface(Typeface.create(theme.typeface,600,false));}else s.setBackground(rounded(Color.TRANSPARENT,100));
-            foregroundRipple(s);s.setFocusable(true);s.setOnClickListener(v->change.accept(n));s.setContentDescription(label+": "+options[i]+(on?", selected":""));
-            track.addView(s,new LinearLayout.LayoutParams(-2,dp(48)));
-        }
-        return track;
-    }
     private void styleSlider(SeekBar bar){
         bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setThumbTintList(ColorStateList.valueOf(accent));
         bar.setProgressBackgroundTintList(ColorStateList.valueOf(MetroArt.alpha(fg,.35f)));bar.setSplitTrack(false);
@@ -1530,188 +1563,12 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             if(longest>width&&t.getTextSize()>dp(10)){t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,Math.max(dp(10),t.getTextSize()*width/longest*.92f));}
         });
     }
-    private LinearLayout tileGrid(View... tiles){
-        LinearLayout grid=column();grid.setPadding(dp(12),dp(4),dp(12),dp(4));
-        for(int i=0;i<tiles.length;i+=4){
-            LinearLayout line=row();
-            for(int j=i;j<i+4;j++){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(74),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));if(j<tiles.length)line.addView(tiles[j],p);else line.addView(new View(this),p);}
-            grid.addView(line);
-        }
-        return grid;
-    }
     private static final String[] PRESETS={"Ratio Frosted","retro · cyan","retro · cobalt","retro · magenta","paper · light","Wave","Liquid Retro","Expressive"};
     private void applyPreset(int i){
         try{SharedPreferences.Editor edit=prefs.edit().remove("themeDir").remove("icons");if(PRESETS[i].equals("Wave"))edit.putString("wallpaperMode","solid");edit.apply();
             // Expressive and wallpaper colors are styles, like glass: they carry over when you switch palettes.
             JSONObject next=ThemeEngine.preset(PRESETS[i]);if(!next.has("expressive")){next.put("expressive",theme.expressive);next.put("dynamic",theme.dynamic);}
             applyTheme(next);persistTheme();buildUi();loadApps();}catch(Exception e){fileError(e);}
-    }
-    private View swatches(){
-        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);scroll.setPadding(dp(12),dp(8),dp(12),dp(8));scroll.setClipToPadding(false);
-        LinearLayout line=row();
-        for(int i=0;i<PRESETS.length;i++){
-            final int index=i;JSONObject preset;try{preset=ThemeEngine.preset(PRESETS[i]);}catch(JSONException e){continue;}
-            int pBg=Color.parseColor(preset.optString("background","#000000")),pAccent=Color.parseColor(preset.optString("accent","#39B9D4"));
-            boolean selected=theme.name.equals(preset.optString("name"));
-            LinearLayout item=column();item.setGravity(Gravity.CENTER_HORIZONTAL);item.setPadding(dp(4),dp(4),dp(4),dp(4));
-            // Selected: a ring around the swatch, separated by a gap of the sheet colour.
-            FrameLayout ring=new FrameLayout(this);ring.setPadding(dp(3),dp(3),dp(3),dp(3));
-            GradientDrawable outer=new GradientDrawable();outer.setShape(GradientDrawable.OVAL);outer.setStroke(dp(2),selected?fg:Color.TRANSPARENT);ring.setBackground(outer);
-            View swatch=new View(this);GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{pBg,pBg,pAccent});
-            d.setShape(GradientDrawable.OVAL);d.setStroke(Math.max(1,dp(.75f)),MetroArt.alpha(fg,.14f));swatch.setBackground(d);
-            FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.setMargins(dp(2),dp(2),dp(2),dp(2));ring.addView(swatch,sp);
-            item.addView(ring,new LinearLayout.LayoutParams(dp(54),dp(54)));
-            TextView name=text(PRESETS[i].replace("retro · ","").toLowerCase(Locale.ROOT),11.5f,selected?fg:muted);name.setPadding(0,dp(6),0,0);if(selected)name.setTypeface(Typeface.create(theme.typeface,600,false));item.addView(name);
-            item.setFocusable(true);item.setContentDescription(str(R.string.x_theme_y, PRESETS[i].toLowerCase(Locale.ROOT), (selected?str(R.string.active):"")));item.setOnClickListener(v->applyPreset(index));
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(72),-2);line.addView(item,p);
-        }
-        scroll.addView(line);return scroll;
-    }
-    private View quickPage(){
-        LinearLayout page=column();
-        // Active context and why.
-        LinearLayout ctx=row();ctx.setGravity(Gravity.CENTER_VERTICAL);ctx.setPadding(dp(18),dp(14),dp(12),dp(14));
-        LinearLayout words=column();
-        TextView over=text(str(R.string.context),13,mix(accent,muted,.3f));over.setTypeface(Typeface.create(theme.typeface,600,false));words.addView(over);
-        String name=activeContext==null?"everyday":activeContext.name;
-        TextView title=text(name,26,fg);title.setPadding(0,dp(6),0,dp(4));words.addView(title);
-        String pinned=pinSummary();
-        TextView why=text(pinned!=null?pinned:activeContext==null||activeContext.fallback?str(R.string.used_when_no_other_context_matches):str(R.string.because_x, ContextRules.describe(activeContext)),13,muted);why.setMaxLines(2);words.addView(why);
-        ctx.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-        ctx.addView(chip(pinned!=null?str(R.string.held):str(R.string.auto),pinned!=null,v->contextOverride()));
-        ctx.setOnClickListener(v->{if(activeContext!=null)sheet.push(()->contextPage(activeContext));});pressFeedback(ctx);
-        LinearLayout ctxCard=group(ctx);((LinearLayout.LayoutParams)ctxCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));
-        page.addView(ctxCard);
-        page.addView(swatches());
-        String icons=prefs.getString("icons",theme.iconStyle);
-        int effective=activeContext!=null&&activeContext.header>=0?activeContext.header:prefs.getInt("header",20);
-        boolean media=activeContext!=null&&activeContext.widgets.contains("media");
-        boolean isDefault=Build.VERSION.SDK_INT>=29&&getSystemService(RoleManager.class).isRoleHeld(RoleManager.ROLE_HOME);
-        page.addView(tileGrid(
-            tile("clock",prefs.getString("clock_face","binary").equals("binary")?"binary":"digital",prefs.getString("clock_face","binary").equals("binary"),v->{prefs.edit().putString("clock_face",prefs.getString("clock_face","binary").equals("binary")?"digital":"binary").apply();buildUi();sheet.refresh();}),
-            tile(str(R.string.categories),prefs.getBoolean("categories",true)?str(R.string.on_2):str(R.string.off_2),prefs.getBoolean("categories",true),v->{prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);sheet.refresh();}),
-            tile(str(R.string.app_icons),icons.equals("mono")?str(R.string.mono):icons.equals("color")?str(R.string.color):str(R.string.text),!icons.equals("none"),v->{prefs.edit().putString("icons",icons.equals("mono")?"color":icons.equals("color")?"none":"mono").apply();buildUi();}),
-            tile(str(R.string.scrubber),prefs.getBoolean("left",false)?str(R.string.left):str(R.string.right),true,v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();}),
-            tile(str(R.string.media_here),media?str(R.string.on_2):str(R.string.off_2),media,v->{if(activeContext==null)return;if(media)removeContextItem(activeContext,"media");else{activeContext.widgets.add(0<activeContext.widgets.size()?1:0,"media");if(!mediaAccess())message(str(R.string.media_controls),str(R.string.enable_72f_media_controls_in_notificatio));}contextsChanged();}),
-            tile(str(R.string.top_zone),effective==0?str(R.string.off_2):effective+"%",effective>0,v->{int next=(effective+10)%50;if(activeContext!=null&&activeContext.header>=0){activeContext.header=next;contextsChanged();}else{prefs.edit().putInt("header",next).apply();appliedLayout="";buildUi();}}),
-            tile(str(R.string.default_home),isDefault?str(R.string.yes):str(R.string.set),isDefault,v->defaultHome()),
-            tile(str(R.string.expressive),theme.expressive?str(R.string.on_2):str(R.string.off_2),theme.expressive,v->changeEffect("expressive",!theme.expressive)),
-            tile(str(R.string.wallpaper_colors),Build.VERSION.SDK_INT<31?"12+":theme.dynamic?str(R.string.on_2):str(R.string.off_2),theme.dynamic,v->{if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}),
-            tile(str(R.string.title_size),titleSize<=40?str(R.string.s):titleSize<=62?str(R.string.m):str(R.string.l),true,v->changeEffect("titleSize",titleSize<=40?60:titleSize<=62?72:32))));
-
-        // Kelvin Stepless Glass Slider
-        float currentGlass = prefs.getFloat("glass_level", 0.30f);
-        FrostedCard.setGlassLevel(currentGlass);
-        LinearLayout glassBox = column();
-        glassBox.setPadding(dp(18), dp(6), dp(18), dp(6));
-        LinearLayout glassHead = row();
-        glassHead.setGravity(Gravity.CENTER_VERTICAL);
-        TextView glassLabel = text("Glass: " + getGlassLabel(currentGlass), 14, fg);
-        glassLabel.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        glassHead.addView(glassLabel, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView glassVal = text(String.format(Locale.ROOT, "%.2f", currentGlass), 13, muted);
-        glassHead.addView(glassVal);
-        glassBox.addView(glassHead);
-
-        SeekBar glassBar = new SeekBar(this);
-        glassBar.setContentDescription("Glass setting");
-        glassBar.setMax(100);
-        glassBar.setProgress(Math.round(currentGlass * 100));
-        styleSlider(glassBar);
-        glassBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar bar, int amount, boolean user){
-                if (!user) return;
-                float level = amount / 100f;
-                prefs.edit().putFloat("glass_level", level).apply();
-                FrostedCard.setGlassLevel(level);
-                glassLabel.setText("Glass: " + getGlassLabel(level));
-                glassVal.setText(String.format(Locale.ROOT, "%.2f", level));
-                pushApps();
-                updateBackdrop();
-            }
-            public void onStartTrackingTouch(SeekBar bar){ bar.getParent().requestDisallowInterceptTouchEvent(true); }
-            public void onStopTrackingTouch(SeekBar bar){}
-        });
-        glassBox.addView(glassBar, new LinearLayout.LayoutParams(-1, dp(48)));
-        LinearLayout glassCard = group(glassBox);
-        ((LinearLayout.LayoutParams)glassCard.getLayoutParams()).setMargins(dp(16), dp(4), dp(16), dp(4));
-        page.addView(glassCard);
-
-        // Wallpaper dimming.
-        LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
-        TextView dimLabel=text(str(R.string.dim_x, prefs.getInt("wallpaperDim",35)),14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
-        SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",35));
-        styleSlider(dimmer);
-        dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();dimLabel.setText(str(R.string.dim_x, amount));updateBackdrop();}
-            public void onStartTrackingTouch(SeekBar bar){bar.getParent().requestDisallowInterceptTouchEvent(true);}public void onStopTrackingTouch(SeekBar bar){}
-        });
-        dim.addView(dimmer,new LinearLayout.LayoutParams(0,dp(52),1));
-        LinearLayout dimCard=group(dim);((LinearLayout.LayoutParams)dimCard.getLayoutParams()).setMargins(dp(16),dp(4),dp(16),dp(4));page.addView(dimCard);
-
-        View quickActions=chipRow(
-            chip("🖼 Change Wallpaper",false,v->wallpaperSettings()),
-            chip("Assistant",false,v->assistantSettings()),
-            chip("Tune Glass",false,v->glassTuning())
-        );
-        quickActions.setPadding(dp(16),dp(4),dp(16),0);page.addView(quickActions);
-        // Anchor: everything below is revealed by swiping the sheet up.
-        LinearLayout more=row();more.setGravity(Gravity.CENTER);more.setPadding(0,dp(8),0,dp(8));
-        MetroArt.Icon up=new MetroArt.Icon(this,uiIcons,"chevron",muted,false);up.setRotation(-90);up.setFocusable(false);up.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        more.addView(up,new LinearLayout.LayoutParams(dp(24),dp(24)));
-        TextView moreLabel=text(str(R.string.swipe_up_for_all_settings),13,muted);moreLabel.setPadding(dp(6),0,0,0);more.addView(moreLabel);
-        more.setFocusable(true);more.setContentDescription(str(R.string.all_settings));more.setOnClickListener(v->sheet.expand());pressFeedback(more);
-        page.addView(more,new LinearLayout.LayoutParams(-1,dp(48)));
-        sheet.setPeekAnchor(more);
-        page.addView(fullSettings());
-        return page;
-    }
-    private View fullSettings(){
-        LinearLayout page=column();
-        page.addView(sectionLabel(str(R.string.contexts)));
-        TextView intro=text(str(R.string.the_first_matching_context_sets_the_top),13,muted);intro.setPadding(dp(34),0,dp(30),dp(12));intro.setLineSpacing(dp(2),1);page.addView(intro);
-        ArrayList<View> contextRows=new ArrayList<>();
-        for(ContextRules.Rule r:contexts){
-            String summary=(r.enabled||r.fallback?ContextRules.describe(r):"off")+" → "+(r.widgets.isEmpty()?"no top zone":r.widgets.size()+" item"+(r.widgets.size()==1?"":"s"))+(r.category.isEmpty()?"":", opens "+r.category);
-            boolean active=activeContext!=null&&r.id.equals(activeContext.id);
-            LinearLayout row=settingRow(r.name,summary,v->sheet.push(()->contextPage(r)));
-            if(active){TextView badge=text(str(R.string.active_2),11.5f,tintInk());badge.setTypeface(Typeface.create(theme.typeface,600,false));badge.setPadding(dp(10),dp(4),dp(10),dp(4));badge.setBackground(rounded(tint(.30f),100));
-                LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-2,-2);bp.setMargins(dp(8),0,dp(4),0);row.addView(badge,row.getChildCount()-1,bp);row.setContentDescription(str(R.string.x_active_y, r.name, summary));}
-            if(!r.enabled&&!r.fallback)row.setAlpha(.55f);
-            contextRows.add(row);
-        }
-        contextRows.add(settingRow(str(R.string.add_context),str(R.string.morning_work_headphones_night_charging_o),v->{
-            if(contexts.size()>=ContextStore.MAX_RULES){toast(str(R.string.up_to_x_contexts, ContextStore.MAX_RULES));return;}
-            String[] kinds={"morning","work","headphones","night","charging","blank"};
-            menu(str(R.string.add_context),kinds,i->{ContextRules.Rule r=ContextRules.template(kinds[i].equals("blank")?"new context":kinds[i],ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(Math.max(0,contexts.size()-1),r);contextsChanged();sheet.push(()->contextPage(r));});
-        }));
-        contextRows.add(settingRow(str(R.string.override),str(R.string.hold_a_context_for_a_while_or_return_to),v->contextOverride()));
-        page.addView(group(contextRows.toArray(new View[0])));
-        page.addView(sectionLabel(str(R.string.home_categories)));
-        page.addView(group(
-            settingRow(str(R.string.clock_style),com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],v->clockSettings()),
-            settingRow("Colour",colourName(),v->colourSettings()),
-            settingRow(str(R.string.set_as_default_launcher),null,v->defaultHome()),settingRow(str(R.string.categories_folders),str(R.string.x_create_hide_merge_rename, (prefs.getBoolean("categories",true)?str(R.string.x_visible, editableCategories().size()-disabled.size()):str(R.string.off))),v->categorySettings()),settingRow(str(R.string.category_order),String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
-            settingRow(str(R.string.notification_dots),!mediaAccess()?str(R.string.needs_notification_access_only_app_names):prefs.getBoolean("dots",true)?str(R.string.on):str(R.string.off),v->{
-                if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}
-                prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();if(adapter!=null)adapter.notifyDataSetChanged();sheet.refresh();}),
-            settingRow(str(R.string.hidden_apps),hidden.isEmpty()?str(R.string.none_hold_an_app_to_hide_it):str(R.string.x_hidden_still_in_search, hidden.size()),v->hiddenAppsSettings()),
-            settingRow(str(R.string.scrubber_side),prefs.getBoolean("left",false)?str(R.string.left_2):str(R.string.right_2),v->{prefs.edit().putBoolean("left",!prefs.getBoolean("left",false)).apply();buildUi();})));
-        page.addView(sectionLabel(str(R.string.appearance)));
-        String icons=prefs.getString("icons",theme.iconStyle);
-        page.addView(group(settingRow(str(R.string.themes),str(R.string.x_presets_import_export, theme.name.toLowerCase(Locale.ROOT)),v->themeSettings()),settingRow(str(R.string.title_size),String.valueOf(titleSize),v->menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}})),settingRow(str(R.string.app_icons),(icons.equals("mono")?"monochrome":icons.equals("color")?"original color":"text only")+(prefs.getString("iconPack","").isEmpty()?"":" · icon pack"),v->menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only),str(R.string.icon_packs)},n->{if(n==3){chooseIconPack();return;}prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();})),settingRow("Glass","level " + String.format(Locale.ROOT, "%.2f", prefs.getFloat("glass_level", 0.30f)) + " · " + getGlassLabel(prefs.getFloat("glass_level", 0.30f)),v->glassTuning()),settingRow(str(R.string.effects),"blur " + theme.blur + " · glass " + theme.glass + (theme.expressive ? " · expressive" : "") + (theme.dynamic ? " · dynamic" : ""),v->effectsSettings()),settingRow(str(R.string.launcher_icon_set),theme.uiIconSet,v->menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}))));
-        page.addView(sectionLabel(str(R.string.top_zone)));
-        page.addView(group(settingRow(str(R.string.default_height),prefs.getInt("header",20)==0?str(R.string.off):str(R.string.x_of_the_screen_contexts_can_override, prefs.getInt("header",20)),v->menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow(str(R.string.media_access),mediaAccess()?str(R.string.allowed):str(R.string.needed_for_media_controls_and_the_media),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow(str(R.string.calendar_access),calendarAllowed()?str(R.string.allowed):str(R.string.needed_for_the_agenda_item),v->headerSettings())));
-        page.addView(sectionLabel(str(R.string.background)));
-        String mode=prefs.getString("wallpaperMode","solid");
-        page.addView(group(settingRow(str(R.string.wallpaper),str(R.string.x_y_dim, (mode.equals("photo")?str(R.string.photo):mode.equals("system")?str(R.string.phone_wallpaper):str(R.string.solid)), prefs.getInt("wallpaperDim",35)),v->wallpaperSettings()),settingRow(str(R.string.text_legibility),legibilitySummary(),v->legibilitySettings())));
-        page.addView(sectionLabel("Assistant"));
-        page.addView(group(settingRow("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),v->assistantSettings())));
-        page.addView(sectionLabel(str(R.string.support_72f)));
-        page.addView(group(settingRow(str(R.string.support_72f_title),str(R.string.support_72f_summary),v->sheet.push(this::supportPage))));
-        page.addView(sectionLabel(str(R.string.backup_about)));
-        page.addView(group(settingRow(str(R.string.backup_restore),str(R.string.favorites_categories_contexts_theme_and),v->backupSettings()),settingRow(str(R.string.replay_the_tour),str(R.string.the_five_step_introduction_from_first_la),v->startTour(0)),settingRow(str(R.string.about_72f),str(R.string.x_open_source_notices, version()),v->aboutSettings())));
-        return page;
     }
     private View supportPage(){
         LinearLayout page=column();
@@ -1751,7 +1608,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         page.addView(thankNote);
         return page;
     }
-    private static final String[] TRI={"any","yes","no"};
     /** Category order: favorites stays first and all apps last; everything between can move. */
     private View orderPage(){
         LinearLayout page=column();
@@ -1775,90 +1631,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void moveCategory(ArrayList<String> current,int index,int by){
         Collections.swap(current,index,index+by);order.clear();order.addAll(current);saveState();refreshCategories();sheet.refresh();
     }
-    private View contextPage(ContextRules.Rule r){
-        LinearLayout page=column();
-        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
-        head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text(r.name,28,fg);title.setPadding(dp(4),0,0,0);title.setMinHeight(dp(48));title.setGravity(Gravity.CENTER_VERTICAL);
-        if(!r.fallback){title.setOnClickListener(v->renameContext(r));title.setContentDescription(str(R.string.x_tap_to_rename, r.name));}
-        head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        if(!r.fallback)head.addView(chip(r.enabled?str(R.string.on):str(R.string.off),r.enabled,v->{r.enabled=!r.enabled;contextsChanged();}));
-        page.addView(head);
-        TextView why=text(r.fallback?str(R.string.used_when_no_other_context_matches):ContextRules.describe(r),13,muted);why.setPadding(dp(66),0,dp(26),dp(4));page.addView(why);
-
-        if(!r.fallback){
-            page.addView(sectionLabel(str(R.string.when_days)));
-            View[] days=new View[8];
-            days[0]=chip(str(R.string.every_day),r.days==0,v->{r.days=0;contextsChanged();});
-            for(int d=0;d<7;d++){final int bit=1<<d;days[d+1]=chip(ContextRules.dayNames[d],r.days!=0&&(r.days&bit)!=0,v->{r.days^=bit;if(r.days==127)r.days=0;contextsChanged();});}
-            page.addView(chipRow(days));
-            page.addView(sectionLabel(str(R.string.when_time)));
-            page.addView(chipRow(
-                chip(str(R.string.all_day),r.allDay(),v->{r.start=0;r.end=0;contextsChanged();}),
-                chip(r.allDay()?str(R.string.from):str(R.string.from_x, ContextRules.time(r.start)),!r.allDay(),v->pickTime(r,true)),
-                chip(r.allDay()?str(R.string.until):str(R.string.until_x, ContextRules.time(r.end)),!r.allDay(),v->pickTime(r,false))));
-            page.addView(sectionLabel(str(R.string.when_conditions)));
-            page.addView(group(
-                conditionRow("headphones",r.headphones,n->{r.headphones=n;contextsChanged();}),
-                conditionRow("charging",r.charging,n->{r.charging=n;contextsChanged();}),
-                conditionRow("do not disturb",r.dnd,n->{r.dnd=n;contextsChanged();}),
-                conditionRow("media playing",r.playing,n->{r.playing=n;if(n!=0&&!mediaAccess())message(str(R.string.media_playing),str(R.string.enable_72f_media_controls_in_notificatio_2));contextsChanged();})));
-        }
-
-        page.addView(sectionLabel(str(R.string.then_open_on)));
-        ArrayList<String> targets=new ArrayList<>();targets.add("");targets.addAll(editableCategories());targets.add("all apps");
-        View[] cats=new View[targets.size()];
-        for(int i=0;i<cats.length;i++){String c=targets.get(i);cats[i]=chip(c.isEmpty()?str(R.string.favorites):c,r.category.equals(c),v->{r.category=c;contextsChanged();});}
-        page.addView(chipRow(cats));
-
-        page.addView(sectionLabel(str(R.string.then_top_zone_height)));
-        int[] heights={-1,0,10,20,30,40};View[] hs=new View[heights.length];
-        for(int i=0;i<heights.length;i++){int h=heights[i];hs[i]=chip(h<0?str(R.string.default_label):h==0?str(R.string.off):h+"%",r.header==h,v->{r.header=h;contextsChanged();});}
-        page.addView(chipRow(hs));
-
-        page.addView(sectionLabel(str(R.string.then_top_zone_items)));
-        ArrayList<View> itemRows=new ArrayList<>();
-        for(int i=0;i<r.widgets.size();i++){
-            final int index=i;String item=r.widgets.get(i);
-            LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(18),dp(4),dp(8),dp(4));line.setMinimumHeight(dp(56));
-            TextView label=text(itemLabel(item),17,fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            if(index>0){TextView upButton=chip("↑",false,v->{Collections.swap(r.widgets,index,index-1);contextsChanged();});upButton.setContentDescription(str(R.string.move_x_up, itemLabel(item)));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(upButton,p);}
-            TextView remove=chip(str(R.string.remove),false,v->{removeContextItem(r,item);contextsChanged();});remove.setContentDescription(str(R.string.remove_x, itemLabel(item)));line.addView(remove);
-            itemRows.add(line);
-        }
-        ArrayList<String> addable=new ArrayList<>();for(String w:ContextRules.WIDGETS)if(!r.widgets.contains(w)&&(Build.VERSION.SDK_INT>=29||!w.equals("smartspace")))addable.add(w);
-        itemRows.add(settingRow(str(R.string.add_item),r.widgets.size()>=ContextStore.MAX_WIDGETS?str(R.string.this_context_is_full_2):str(R.string.clock_alarm_agenda_media_smartspacer_or),v->{
-            if(r.widgets.size()>=ContextStore.MAX_WIDGETS){toast(str(R.string.this_context_is_full));return;}
-            ArrayList<String> labels=new ArrayList<>();for(String w:addable)labels.add(itemLabel(w));labels.add("app widget…");
-            menu(str(R.string.add_to_top_zone),labels.toArray(new String[0]),n->{
-                if(n==addable.size()){addAppWidget(r);return;}
-                String w=addable.get(n);r.widgets.add(w);
-                if(w.equals("agenda")&&!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);
-                if(w.equals("media")&&!mediaAccess())message(str(R.string.media_controls),str(R.string.enable_72f_media_controls_in_notificatio));
-                contextsChanged();
-            });
-        }));
-        page.addView(group(itemRows.toArray(new View[0])));
-
-        if(!r.fallback){
-            page.addView(sectionLabel(str(R.string.order)));
-            int position=contexts.indexOf(r);
-            page.addView(group(settingRow(str(R.string.priority),str(R.string.x_of_y_the_first_match_wins, (position+1), (contexts.size()-1)),v->menu(str(R.string.priority),new String[]{str(R.string.move_up),str(R.string.move_down)},n->{int p=contexts.indexOf(r),to=p+(n==0?-1:1);if(to>=0&&to<contexts.size()-1){Collections.swap(contexts,p,to);contextsChanged();}})),
-            settingRow(str(R.string.hold_this_context),str(R.string.use_it_now_regardless_of_conditions),v->{prefs.edit().putString("contextPin",r.id).putLong("contextPinUntil",System.currentTimeMillis()+3600000L).apply();contextsChanged();toast(str(R.string.x_held_for_1_hour, r.name));}),
-            settingRow(str(R.string.delete_context),null,v->showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.delete_x, r.name)).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.delete),(a,b)->{
-                for(String item:new ArrayList<>(r.widgets))if(item.startsWith("widget:")){r.widgets.remove(item);removeContextItem(r,item);}
-                contexts.remove(r);if(r.id.equals(prefs.getString("contextPin","")))prefs.edit().remove("contextPin").remove("contextPinUntil").apply();sheet.back();contextsChanged();}).create()))));
-            View bottom=new View(this);page.addView(bottom,new LinearLayout.LayoutParams(-1,dp(12)));
-        }
-        return page;
-    }
     private interface IntChoice{void accept(int n);}
-    private View conditionRow(String label,int value,IntChoice change){
-        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(18),dp(8),dp(8),dp(8));line.setMinimumHeight(dp(64));
-        line.addView(text(label,16,fg),new LinearLayout.LayoutParams(0,-2,1));
-        line.addView(segmented(label,TRI,value,change));
-        return line;
-    }
     private void pickTime(ContextRules.Rule r,boolean start){
         int current=start?(r.allDay()?7*60:r.start):(r.allDay()?9*60:r.end);
         TimePickerDialog picker=new TimePickerDialog(this,(view,h,m)->{
@@ -1868,11 +1641,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             contextsChanged();
         },current/60,current%60,android.text.format.DateFormat.is24HourFormat(this));
         track(picker);picker.show();
-    }
-    private void renameContext(ContextRules.Rule r){
-        EditText input=new EditText(this);input.setSingleLine();input.setText(r.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.rename_context)).setView(input).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.save),null).create();showDialog(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);if(name.isEmpty()){input.setError(str(R.string.enter_a_name));return;}r.name=name;d.dismiss();contextsChanged();});
     }
 
     private String legibilitySummary(){
@@ -1887,127 +1655,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         });
     }
     private void defaultHome(){try{if(Build.VERSION.SDK_INT>=29){RoleManager rm=getSystemService(RoleManager.class);if(rm.isRoleAvailable(RoleManager.ROLE_HOME)&&!rm.isRoleHeld(RoleManager.ROLE_HOME)){startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME),43);return;}}safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));}}
-    // Onboarding: a five-step, skippable first-run tour drawn over the live launcher with the current theme.
-    private static final int TOUR_PAGES=5;
-    private int tourPage=-1;
-    private FrameLayout tour;
+    /** The first-run tour is a Compose overlay (ui/Tour.kt); its page lives in [eigen]. */
     private void welcome(){if(isFinishing()||isDestroyed())return;startTour(0);}
-    private void startTour(int page){if(sheet!=null)sheet.dismiss();dismissDialogs();tourPage=page;attachTour(0);}
-    private void endTour(){
-        prefs.edit().putBoolean("introduced",true).apply();tourPage=-1;
-        if(tour!=null){View old=tour;tour=null;old.animate().alpha(0).setDuration(theme.motionMs>0?200:0).withEndAction(()->{if(old.getParent()!=null)((android.view.ViewGroup)old.getParent()).removeView(old);}).start();}
-    }
-    private void tourStep(int delta){
-        int next=tourPage+delta;if(next<0)return;if(next>=TOUR_PAGES){endTour();return;}
-        tourPage=next;attachTour(delta);
-    }
-    /** (Re)builds the tour over the current scene; called again after theme changes rebuild the UI. */
-    private void attachTour(int direction){
-        if(tourPage<0||scene==null)return;
-        if(tour!=null&&tour.getParent()!=null)((android.view.ViewGroup)tour.getParent()).removeView(tour);
-        tour=new FrameLayout(this);tour.setBackgroundColor(bg);tour.setClickable(true);tour.setFocusable(true);
-        tour.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
-        LinearLayout frame=column();tour.addView(frame,new FrameLayout.LayoutParams(-1,-1));
-        // Top: progress and skip.
-        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(dp(26),dp(8),dp(10),0);
-        for(int i=0;i<TOUR_PAGES;i++){View dot=new View(this);GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(3));d.setColor(i==tourPage?accent:MetroArt.alpha(muted,.35f));dot.setBackground(d);
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(i==tourPage?22:6),dp(6));p.setMargins(0,0,dp(6),0);top.addView(dot,p);}
-        top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        if(tourPage<TOUR_PAGES-1){TextView skip=text(str(R.string.skip),15,muted);skip.setGravity(Gravity.CENTER);skip.setMinHeight(dp(48));skip.setMinWidth(dp(64));skip.setContentDescription(str(R.string.skip_setup));skip.setOnClickListener(v->endTour());skip.setFocusable(true);top.addView(skip);}
-        frame.addView(top,new LinearLayout.LayoutParams(-1,dp(56)));
-        ScrollView scroll=new ScrollView(this);scroll.setVerticalScrollBarEnabled(false);scroll.setFillViewport(true);
-        View content=tourContent(tourPage);scroll.addView(content);
-        frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        // Bottom: back and the primary action.
-        LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER_VERTICAL);bottom.setPadding(dp(18),dp(8),dp(18),dp(18));
-        if(tourPage>0){TextView back=text(str(R.string.back),16,fg);back.setGravity(Gravity.CENTER);back.setMinHeight(dp(52));back.setMinWidth(dp(72));back.setOnClickListener(v->tourStep(-1));back.setFocusable(true);back.setContentDescription(str(R.string.previous_step));bottom.addView(back);}
-        bottom.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        boolean last=tourPage==TOUR_PAGES-1;
-        TextView next=text(last?str(R.string.let_s_go):str(R.string.next),17,onPrimaryContainer);next.setGravity(Gravity.CENTER);next.setPadding(dp(28),0,dp(28),0);next.setMinHeight(dp(52));
-        GradientDrawable fill=new GradientDrawable();fill.setColor(primaryContainer);fill.setCornerRadius(theme.expressive||theme.liquid?dp(26):dp(12));next.setBackground(fill);
-        next.setOnClickListener(v->tourStep(1));next.setFocusable(true);next.setContentDescription(last?str(R.string.finish_setup):str(R.string.next_step));
-        bottom.addView(next);
-        frame.addView(bottom);
-        scene.addView(tour,new FrameLayout.LayoutParams(-1,-1));tour.requestApplyInsets();
-        if(direction!=0&&Motion.on()){final float w=Math.max(1,getResources().getDisplayMetrics().widthPixels);
-            new Motion.Spring(Motion.SPATIAL,(x,v)->{content.setTranslationX(x);content.setAlpha(1-Math.min(1,Math.abs(x)/(w*.3f)));}).animate(direction*w*.3f,0,0,null);}
-        content.announceForAccessibility(str(R.string.step_x_of_y, (tourPage+1), TOUR_PAGES));
-    }
-    private TextView tourTitle(String s){TextView t=text(s,38,fg);t.setTypeface(theme.expressive?Typeface.create(theme.typeface,800,false):theme.typeface);t.setLetterSpacing(-.03f);t.setPadding(dp(26),dp(18),dp(26),dp(10));t.setAccessibilityHeading(true);return t;}
-    private TextView tourBody(String s){TextView t=text(s,16,muted);t.setLineSpacing(dp(4),1);t.setPadding(dp(26),0,dp(26),dp(12));return t;}
-    private View tourHint(String mark,String title,String body){
-        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(10),dp(26),dp(10));
-        MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,mark,accent,false);icon.setFocusable(false);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        line.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
-        LinearLayout words=column();words.setPadding(dp(16),0,0,0);words.addView(text(title,18,fg));TextView b=text(body,14,muted);b.setPadding(0,dp(3),0,0);words.addView(b);
-        line.addView(words,new LinearLayout.LayoutParams(0,-2,1));line.setFocusable(true);line.setContentDescription(title+". "+body);return line;
-    }
+    private void startTour(int page){if(sheet!=null)sheet.dismiss();dismissDialogs();eigen.setSettingsOpen(false);eigen.setContextsPage(null);eigen.setTourPage(page);}
+    private void endTour(){prefs.edit().putBoolean("introduced",true).apply();eigen.setTourPage(-1);}
     private boolean isDefaultHome(){if(Build.VERSION.SDK_INT<29)return false;RoleManager rm=getSystemService(RoleManager.class);return rm!=null&&rm.isRoleHeld(RoleManager.ROLE_HOME);}
-    private View tourContent(int page){
-        LinearLayout c=column();c.setPadding(0,dp(12),0,dp(12));
-        switch(page){
-            case 0:{
-                TextView mark=text(str(R.string.s_72f),76,fg);mark.setTypeface(theme.titleTypeface);mark.setLetterSpacing(-.04f);mark.setPadding(dp(26),dp(24),dp(26),0);c.addView(mark);
-                c.addView(tourBody(str(R.string.horizontal_categories_vertical_app_lists_2)));
-                c.addView(tourBody(str(R.string.this_takes_a_minute_everything_here_can)));
-                boolean home=isDefaultHome();
-                c.addView(chipRow(chip(home?str(R.string.s_72f_is_your_home_screen):str(R.string.make_72f_your_home_screen),home,v->{if(!isDefaultHome())defaultHome();})));
-                break;}
-            case 1:{
-                c.addView(tourTitle(str(R.string.pick_a_look)));
-                c.addView(tourBody(str(R.string.palettes_and_layouts_styles_combine_with)));
-                c.addView(swatches());
-                c.addView(sectionLabel(str(R.string.style)));
-                ArrayList<View> styles=new ArrayList<>();
-                styles.add(chip(str(R.string.expressive),theme.expressive,v->changeEffect("expressive",!theme.expressive)));
-                if(Build.VERSION.SDK_INT>=31)styles.add(chip(str(R.string.wallpaper_colors),theme.dynamic,v->changeEffect("dynamic",!theme.dynamic)));
-                styles.add(chip(str(R.string.glass),theme.glass>0&&!theme.liquid,v->setGlass(theme.glass>0&&!theme.liquid?0:40,false)));
-                styles.add(chip(str(R.string.liquid_glass),theme.liquid,v->setGlass(theme.liquid?0:65,!theme.liquid)));
-                c.addView(chipRow(styles.toArray(new View[0])));
-                c.addView(sectionLabel(str(R.string.app_icons)));
-                String icons=prefs.getString("icons",theme.iconStyle);
-                c.addView(chipRow(chip(str(R.string.monochrome),icons.equals("mono"),v->setIcons("mono")),chip(str(R.string.color_2),icons.equals("color"),v->setIcons("color")),chip(str(R.string.text_only),icons.equals("none"),v->setIcons("none"))));
-                break;}
-            case 2:{
-                c.addView(tourTitle(str(R.string.how_it_works)));
-                c.addView(tourHint("arrow",str(R.string.swipe_sideways),str(R.string.move_between_categories_or_tap_and_slide)));
-                c.addView(tourHint("all apps",str(R.string.scroll_and_scrub),str(R.string.scroll_a_list_or_drag_the_side_alphabet)));
-                c.addView(tourHint("favorites",str(R.string.hold_an_app),str(R.string.its_shortcuts_favorites_categories_renam)));
-                c.addView(tourHint("search",str(R.string.tap_search),str(R.string.the_round_button_finds_any_app_hold_it_o)));
-                break;}
-            case 3:{
-                c.addView(tourTitle(str(R.string.the_top_zone)));
-                c.addView(tourBody(str(R.string.the_space_above_your_apps_contexts_chang)));
-                ContextRules.Rule everyday=contexts.get(contexts.size()-1);
-                c.addView(sectionLabel(str(R.string.usually_show)));
-                String[][] layouts={{"clock"},{"clock","media"},{"clock","agenda"},{}};String[] names={"clock","clock + media","clock + agenda","nothing"};
-                View[] options=new View[layouts.length];
-                for(int i=0;i<layouts.length;i++){final String[] items=layouts[i];boolean on=everyday.widgets.equals(Arrays.asList(items));
-                    options[i]=chip(names[i],on,v->{everyday.widgets.clear();everyday.widgets.addAll(Arrays.asList(items));if(items.length==0)everyday.header=0;else if(everyday.header==0)everyday.header=-1;
-                        if(Arrays.asList(items).contains("agenda")&&!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);contextsChanged();attachTour(0);});}
-                c.addView(chipRow(options));
-                c.addView(sectionLabel(str(R.string.add_contexts)));
-                String[] kinds={"morning","work","headphones","night"};View[] adds=new View[kinds.length];
-                for(int i=0;i<kinds.length;i++){final String kind=kinds[i];ContextRules.Rule existing=null;for(ContextRules.Rule r:contexts)if(r.name.equals(kind))existing=r;final ContextRules.Rule found=existing;
-                    adds[i]=chip(kind,found!=null,v->{
-                        if(found!=null){for(String item:new ArrayList<>(found.widgets))if(item.startsWith("widget:"))removeContextItem(found,item);contexts.remove(found);}
-                        else if(contexts.size()<ContextStore.MAX_RULES){ContextRules.Rule r=ContextRules.template(kind,ContextStore.newId(contexts));if(!r.category.isEmpty()&&!editableCategories().contains(r.category))r.category="";contexts.add(contexts.size()-1,r);}
-                        contextsChanged();attachTour(0);});}
-                c.addView(chipRow(adds));
-                c.addView(tourBody(str(R.string.morning_and_work_follow_weekday_hours_he)));
-                break;}
-            default:{
-                c.addView(tourTitle(str(R.string.optional_access)));
-                c.addView(tourBody(str(R.string.s_72f_has_no_internet_permission_these_sta)));
-                boolean media=mediaAccess(),calendar=calendarAllowed(),home=isDefaultHome();
-                c.addView(settingRow(str(R.string.notification_access),media?str(R.string.allowed):str(R.string.media_controls_and_notification_dots_app),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
-                c.addView(settingRow(str(R.string.calendar),calendar?str(R.string.allowed):str(R.string.show_upcoming_events_in_the_agenda_item),v->{if(!calendarAllowed())requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}));
-                c.addView(settingRow(str(R.string.home_screen),home?str(R.string.s_72f_is_your_home_screen):str(R.string.use_72f_when_you_press_home),v->{if(!isDefaultHome())defaultHome();}));
-                c.addView(tourBody(str(R.string.hold_the_round_search_button_any_time_fo)));
-            }
-        }
-        return c;
-    }
     private void setGlass(int amount,boolean liquid){try{JSONObject t=themeJson();t.put("glass",amount);t.put("liquid",liquid);if(liquid&&theme.blur==0)t.put("blur",18);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
     private void setIcons(String style){prefs.edit().putString("icons",style).apply();buildUi();}
     private interface Choice{void accept(int i);}
