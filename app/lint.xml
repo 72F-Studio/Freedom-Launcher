@@ -2,4 +2,6 @@
 <lint>
     <!-- 72F's copy is deliberately lowercase ("cancel", "save"), including dialog buttons. -->
     <issue id="ButtonCase" severity="ignore" />
+    <!-- Eigen uses no AppCompat: legacy settings controls are platform views, the rest is Kelvin on Compose. -->
+    <issue id="AppCompatCustomView" severity="ignore" />
 </lint>

@@ -20,6 +20,11 @@ final class Motion {
     static final float[] RUBBER = {420f, .58f};           // a stretched control returning to rest: lively bounce
     static final float[] SQUASH = {650f, .60f};           // squash-and-stretch scale on press
     static final float[] WAVE = {700f, .86f};             // alphabet rail wave and bubble
+    // Kelvin springs (stiffness, damping ratio), named as in the Kelvin guidelines.
+    static final float[] K_SNAPPY = {700f, .82f};         // press, lift, switch knob
+    static final float[] K_SPATIAL = {420f, .76f};        // things that move: drawers, sheets, pages
+    static final float[] K_GENTLE = {260f, .90f};         // things that change: size, colour
+    static final float[] K_WOBBLE = {400f, .55f};         // a soft control settling after release
 
     private static boolean enabled = true;
     /** Called when the theme changes: theme.motionMs == 0 turns motion off. */
@@ -85,6 +90,32 @@ final class Motion {
     /** Convenience: animate a view property with a fresh spring. */
     static Spring translationX(View v, float[] preset) { return new Spring(preset, (x, s) -> v.setTranslationX(x)); }
     static Spring translationY(View v, float[] preset) { return new Spring(preset, (y, s) -> v.setTranslationY(y)); }
+
+    /**
+     * Kelvin press: the view squashes like warm wax while held (a little wider and lower) and springs back with a
+     * small wobble on release. Leaves the view's click handling alone.
+     */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    static void springPress(View v) {
+        Spring spring = new Spring(K_SNAPPY, (x, s) -> { v.setScaleX(1 + (1 - x) * .35f); v.setScaleY(x); }).precision(.001f);
+        spring.snap(1f);
+        v.setOnTouchListener((view, e) -> {
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN: spring.set(K_SNAPPY).retarget(.94f, null); tick(view); break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL: spring.set(K_WOBBLE).retarget(1f, null); break;
+            }
+            return false;
+        });
+    }
+
+    /** Rises a view into place (fade + lift) on the spatial spring, staggered by its index. */
+    static void rise(View v, int index, float fromPx) {
+        if (!on()) { v.setAlpha(1); v.setTranslationY(0); return; }
+        v.setAlpha(0); v.setTranslationY(fromPx);
+        v.postDelayed(() -> new Spring(K_SPATIAL, (y, s) -> { v.setTranslationY(y); v.setAlpha(Math.max(0, Math.min(1, 1 - y / fromPx))); })
+                .animate(fromPx, 0, 0, null), index * 24L);
+    }
 
     // Haptics, from lightest to strongest. Newer Android has more precise constants.
     static void tick(View v) { v.performHapticFeedback(Build.VERSION.SDK_INT >= 34 ? HapticFeedbackConstants.SEGMENT_FREQUENT_TICK : HapticFeedbackConstants.CLOCK_TICK); }

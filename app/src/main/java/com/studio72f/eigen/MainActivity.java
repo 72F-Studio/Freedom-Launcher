@@ -30,7 +30,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
 
-public final class MainActivity extends Activity {
+public final class MainActivity extends androidx.activity.ComponentActivity {
     private static final String[] BUILT_INS = {"social", "music", "video", "photos", "games", "travel", "tools"};
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -82,12 +82,20 @@ public final class MainActivity extends Activity {
     private final ArrayList<ContextRules.Rule> contexts = new ArrayList<>();
     private ContextRules.Rule activeContext;
     private String appliedLayout = "";
-    private LauncherPager pager;
-    private RootPageView rootPageView;
-    private TreePageView treePageView;
-    private RatioGridHomescreen ratioGrid;
-    private LocalAiChatSheet localAiSheet;
-    private BinaryClockView binaryClock;
+    // The Compose UI (home, side pages, search, assistant) reads this state; the activity keeps apps, widgets,
+    // settings and dialogs. Created once, so the UI keeps its place across rebuilds.
+    private final com.studio72f.eigen.ui.EigenState eigen = new com.studio72f.eigen.ui.EigenState();
+    private final com.studio72f.eigen.ui.EigenHost host = new com.studio72f.eigen.ui.EigenHost() {
+        @Override public void launch(App app) { MainActivity.this.launch(app, null); eigen.setSearching(false); eigen.setQuery(""); }
+        @Override public void appMenu(App app) { MainActivity.this.appMenu(app); }
+        @Override public void homeMenu() { homescreenMenu(); }
+        @Override public void openSettings() { MainActivity.this.openSettings(); }
+        @Override public void addWidget() { if (activeContext != null) addAppWidget(activeContext); }
+        @Override public void openAlarms() { safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)); }
+        @Override public void media(int action) { mediaAction(action); }
+        @Override public void openNotificationAccess() { safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
+        @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
+    };
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
     private AppWidgetManager widgetManager;
@@ -149,7 +157,7 @@ public final class MainActivity extends Activity {
         if (state != null) { category = state.getString("category", category); query = state.getString("query", ""); searching = state.getBoolean("searching"); tourPage = state.getInt("tour", -1); }
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         launcher.registerCallback(appChanges, handler);
-        MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); });
+        MediaAccessService.setListener(() -> { if (adapter != null && !isDestroyed()) adapter.notifyDataSetChanged(); eigen.setDotsVersion(eigen.getDotsVersion() + 1); });
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         buildUi(); loadApps();
         EigenBilling.getInstance(this).addListener(billingListener);
@@ -158,14 +166,14 @@ public final class MainActivity extends Activity {
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
     @Override protected void onResume() { super.onResume(); foreground = true; if (returningFromApp) { returningFromApp = false; homeEntrance(); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); if (tourPage >= 0) attachTour(0); }
-    @Override protected void onPause() { foreground = false; if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
+    @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", tourPage); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); if (localAiSheet != null && localAiSheet.isShowing()) localAiSheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); buildUi(); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
     // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
-    @android.annotation.SuppressLint("GestureBackNavigation") @Override public void onBackPressed() { handleBack(); }
-    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (localAiSheet != null && localAiSheet.isShowing()) { localAiSheet.dismiss(); return; } if (sheet != null && sheet.back()) return; if (pager != null && pager.handleBackPressed()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
+    @android.annotation.SuppressLint({"GestureBackNavigation","MissingSuperCall"}) @Override public void onBackPressed() { handleBack(); } // Back is routed by handleBack, never the default finish
+    private void handleBack() { if (tourPage >= 0) { if (tourPage == 0) endTour(); else tourStep(-1); return; } if (sheet != null && sheet.back()) return; if (eigen.handleBack()) return; if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); } else selectCategory(startCategory(activeContext), true); }
 
     private void readState() {
         favorites.clear();custom.clear();disabled.clear();assignments.clear();merges.clear();hidden.clear();labels.clear();order.clear();
@@ -279,92 +287,47 @@ public final class MainActivity extends Activity {
         for(GlassSurface glass:glassSurfaces)glass.stop();glassSurfaces.clear();glassBackdrop.clear();
         root=column();scene=new FrameLayout(this);backdropView=new View(this);
         scene.addView(backdropView,new FrameLayout.LayoutParams(-1,-1));
-
-        pager = new LauncherPager(this);
-        rootPageView = new RootPageView(this);
-        rootPageView.setColors(fg, accent);
-        rootPageView.setMediaController(controller);
-        rootPageView.setChatbotActionListener(new ChatbotView.ActionListener() {
-            @Override public void onOpenSettings() { openSettings(); }
-            @Override public void onSetWallpaper() { wallpaperSettings(); }
-        });
-
-        treePageView = new TreePageView(this);
-        treePageView.setColors(fg, accent);
-
-        pager.setPages(rootPageView, root, treePageView);
-        scene.addView(pager, new FrameLayout.LayoutParams(-1,-1));
-
         activeWallpaperMode=prefs.getString("wallpaperMode","solid");legibility=resolveLegibility();
         boolean useSystemWallpaper=activeWallpaperMode.equals("system");
         if(useSystemWallpaper)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         updateBackdrop();
-        pager.setOnApplyWindowInsetsListener((v, insets) -> {
-            int left = insets.getSystemWindowInsetLeft();
-            int top = insets.getSystemWindowInsetTop();
-            int right = insets.getSystemWindowInsetRight();
-            int bottom = insets.getSystemWindowInsetBottom();
-            rootPageView.setPadding(left + dp(16), top + dp(16), right + dp(16), bottom + dp(16));
-            root.setPadding(left, top, right, bottom);
-            treePageView.setPadding(left + dp(16), top + dp(16), right + dp(16), bottom + dp(16));
-            return insets;
-        });
-        getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
-        getWindow().getDecorView().setSystemUiVisibility(Color.luminance(bg) > .5 ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
-        setContentView(scene); pager.requestApplyInsets();
-        if (searching) {
-            // Search: one pill field with the glyph inside and close at its end.
-            LinearLayout row = row(); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16), dp(2), dp(4), dp(2));
-            row.setBackground(rounded(theme.glass>0||overImage()?MetroArt.alpha(surface(),.82f):mix(bg,fg,Color.luminance(bg)>.5?.06f:.09f),100));
-            View glyph = magnifier(secondaryInk(), 7f, 2f); glyph.setFocusable(false); glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); glyph.setMinimumWidth(0);
-            row.addView(glyph, new LinearLayout.LayoutParams(dp(28), dp(48)));
-            search = new EditText(this); search.setTextColor(fg); search.setHintTextColor(secondaryInk()); search.setTextSize(20); search.setSingleLine(); search.setHint(str(R.string.find_an_app)); search.setTypeface(theme.typeface); search.setText(query);
-            search.setBackground(null); search.setPadding(dp(10), 0, dp(4), 0); search.setHighlightColor(MetroArt.alpha(accent,.35f));
-            row.addView(search,new LinearLayout.LayoutParams(0,dp(56),1)); row.addView(iconButton("close", "Close search", false, v -> onBackPressed()));
-            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.setMargins(dp(16), dp(10), dp(16), dp(10)); root.addView(row, sp);
-            search.addTextChangedListener(new TextWatcher() { public void beforeTextChanged(CharSequence s,int a,int c,int f) {} public void onTextChanged(CharSequence s,int a,int b,int c) { query=s.toString(); refreshList(true); } public void afterTextChanged(Editable e) {} });
-            search.setOnEditorActionListener((v,a,e) -> { if (!visible.isEmpty()) launch(visible.get(0), null); return true; });
-
-            listArea = new FrameLayout(this);
-            list = new ListView(this); list.setDivider(null); list.setCacheColorHint(Color.TRANSPARENT); list.setVerticalScrollBarEnabled(false); list.setClipToPadding(false);
-            list.setPadding(dp(18), dp(2), dp(18), dp(12));
-            adapter = new AppAdapter(); list.setAdapter(adapter); listArea.addView(list, new FrameLayout.LayoutParams(-1, -1));
-            list.setOnItemClickListener((p, v, pos, id) -> launch(visible.get(pos), v));
-            list.setOnItemLongClickListener((p, v, pos, id) -> { appMenu(visible.get(pos)); return true; });
-            empty = text("", 20, secondaryInk()); legible(empty); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(40), 0, dp(40), 0); listArea.addView(empty, new FrameLayout.LayoutParams(-1, -1));
-            root.addView(listArea, new LinearLayout.LayoutParams(-1, 0, 1));
-        } else {
-            buildTopZone();
-            ratioGrid = new RatioGridHomescreen(this);
-            ratioGrid.setColors(fg, accent);
-            ratioGrid.setMonochromeIcons(prefs.getString("icons", "mono").equals("mono"));
-            ratioGrid.setLaunchListener(new RatioGridHomescreen.AppLaunchListener() {
-                @Override public void onLaunchApp(App app, View view) { launch(app, view); }
-                @Override public void onAppMenu(App app) { appMenu(app); }
-                @Override public void onOpenSearch() { searching = true; buildUi(); }
-                @Override public void onOpenSettings() { openSettings(); }
-                @Override public void onOpenWallpaper() { wallpaperSettings(); }
-                @Override public void onHomescreenMenu() { homescreenMenu(); }
-                @Override public void onOpenAiChat() { openLocalAiChat(); }
-            });
-            ratioGrid.setApps(apps, categories, assignments, merges);
-            root.addView(ratioGrid, new LinearLayout.LayoutParams(-1, 0, 1));
-        }
+        // Edge to edge: Compose pads for the system bars itself.
+        if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
+        else getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        getWindow().setStatusBarColor(Color.TRANSPARENT); getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        buildWidgets();
+        pushState(); pushApps();
+        scene.addView(com.studio72f.eigen.ui.EigenUi.create(this, eigen, host), new FrameLayout.LayoutParams(-1,-1));
+        setContentView(scene);
         refreshCategories(); refreshList(false); updateMedia(); attachSheet(); rebuilding = false;
+    }
+    /** Copies the look and wallpaper into the Compose state. */
+    private void pushState(){
+        eigen.setAccent(accent);
+        eigen.setMonoIcons(prefs.getString("icons",theme.iconStyle).equals("mono"));
+        eigen.setGlass(prefs.getFloat("glass_level",.3f));
+        eigen.setReduceMotion(theme.motionMs==0);
+        eigen.setClockStyle(prefs.getString("clock_face","ratio"));
+        eigen.setWallpaperMode(activeWallpaperMode==null?"solid":activeWallpaperMode);
+        eigen.setWallpaper(wallpaper); eigen.setSoftWallpaper(softWallpaper);
+        eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)));
+        eigen.setBlur(theme.blur);
+        eigen.setNotificationAccess(mediaAccess());
+    }
+    /** Drawers for home (in the person's category order) and every app for search (hidden apps stay searchable). */
+    private void pushApps(){
+        ArrayList<com.studio72f.eigen.ui.Drawer> drawers=new ArrayList<>();
+        for(String c:categories){List<App> in=appsIn(c);if(!in.isEmpty())drawers.add(new com.studio72f.eigen.ui.Drawer(c,in));}
+        eigen.setDrawers(drawers);eigen.setAllApps(new ArrayList<>(apps));
     }
     private void updateClock() {
         if (date != null) {
             Date now = new Date();
-            String day = new SimpleDateFormat("EEE",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault());
-            String text = str(R.string.date_lines, day, new SimpleDateFormat("d MMMM",Locale.getDefault()).format(now).toLowerCase(Locale.getDefault()));
+            String text = new SimpleDateFormat("EEEE, d MMMM",Locale.getDefault()).format(now);
             date.setText(activeContext == null || activeContext.fallback ? text : str(R.string.date_with_context, text, activeContext.name));
         }
-        if (clock != null) {
-            boolean is24 = android.text.format.DateFormat.is24HourFormat(this);
-            Date now = new Date();
-            clock.setText(new SimpleDateFormat(is24 ? "HH:mm" : "h:mm",Locale.getDefault()).format(now));
-        }
+
     }
     private void selectCategory(String next, boolean animate) {
         if (category.equals(next)) return;
@@ -419,7 +382,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void refreshList(boolean reset) {
-        if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+        pushApps();
         if (adapter == null) return;
         visible.clear(); String needle = CategoryRules.normalized(query.trim());
         if (!searching && category.equals("favorites")) {
@@ -611,7 +574,7 @@ public final class MainActivity extends Activity {
         if(Motion.on()){View bar=(View)search.getParent();bar.setAlpha(0);new Motion.Spring(Motion.SPATIAL,(y,v)->{bar.setTranslationY(y);bar.setAlpha(Math.max(0,1-Math.abs(y)/dp(24)));}).animate(-dp(24),0,0,null);cascadeRows(0);}
         search.postDelayed(() -> { if (searching && search != null) getSystemService(InputMethodManager.class).showSoftInput(search,InputMethodManager.SHOW_IMPLICIT); },150);
     }
-    private void hideKeyboard() { if (root!=null) getSystemService(InputMethodManager.class).hideSoftInputFromWindow(root.getWindowToken(),0); }
+    private void hideKeyboard() { if (scene!=null) getSystemService(InputMethodManager.class).hideSoftInputFromWindow(scene.getWindowToken(),0); }
 
     private final class CategoryTitles extends HorizontalScrollView {
         float downX, downY;
@@ -818,7 +781,15 @@ public final class MainActivity extends Activity {
         }catch(SecurityException e){if(controller!=null)controller.unregisterCallback(mediaCallback);controller=null;}
         updateMedia();
     }
-    private void updateMedia(){if(rootPageView!=null)rootPageView.setMediaController(controller);if(mediaBox==null)return;boolean show=controller!=null;mediaBox.setVisibility(show?View.VISIBLE:View.GONE);if(!show)return;MediaMetadata m=controller.getMetadata();mediaTitle.setText(m==null?str(R.string.now_playing):m.getDescription().getTitle());mediaArtist.setText(m==null?"":m.getDescription().getSubtitle());if(playButton!=null)playButton.setMark(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING?"pause":"play",fg);}
+    private void updateMedia(){pushMedia();if(mediaBox==null)return;boolean show=controller!=null;mediaBox.setVisibility(show?View.VISIBLE:View.GONE);if(!show)return;MediaMetadata m=controller.getMetadata();mediaTitle.setText(m==null?str(R.string.now_playing):m.getDescription().getTitle());mediaArtist.setText(m==null?"":m.getDescription().getSubtitle());if(playButton!=null)playButton.setMark(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING?"pause":"play",fg);}
+    private void pushMedia(){
+        MediaMetadata m=controller==null?null:controller.getMetadata();
+        CharSequence title=m==null?null:m.getDescription().getTitle(), artist=m==null?null:m.getDescription().getSubtitle();
+        eigen.setMediaTitle(controller==null?null:title==null?str(R.string.now_playing):title.toString());
+        eigen.setMediaArtist(artist==null?null:artist.toString());
+        PlaybackState ps=controller==null?null:controller.getPlaybackState();
+        eigen.setMediaPlaying(ps!=null&&ps.getState()==PlaybackState.STATE_PLAYING);
+    }
     private void mediaAction(int action){if(controller==null)return;MediaController.TransportControls c=controller.getTransportControls();if(action==0)c.skipToPrevious();else if(action==2)c.skipToNext();else if(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING)c.pause();else c.play();}
 
     private void themeSettings(){menu(str(R.string.appearance),new String[]{str(R.string.retro_cyan),str(R.string.retro_cobalt),str(R.string.retro_magenta),str(R.string.paper_light),str(R.string.wave),str(R.string.liquid_retro),str(R.string.material_3_expressive),str(R.string.import_theme),str(R.string.export_theme_package),str(R.string.title_size),str(R.string.app_icons),str(R.string.app_icon_packs),str(R.string.effects),str(R.string.launcher_icon_set)},i->{
@@ -900,7 +871,7 @@ public final class MainActivity extends Activity {
                 prefs.edit().putFloat("glass_level", lvl).apply();
                 FrostedCard.setGlassLevel(lvl);
                 shown.setText("Level: " + getGlassLabel(lvl) + " (" + String.format(Locale.ROOT, "%.2f", lvl) + ")");
-                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                pushApps();
                 updateBackdrop();
             }
             public void onStartTrackingTouch(SeekBar b){}
@@ -926,7 +897,7 @@ public final class MainActivity extends Activity {
             .setNeutralButton("Reset (0.30)",(a,b)->{
                 prefs.edit().putFloat("glass_level", 0.30f).apply();
                 FrostedCard.setGlassLevel(0.30f);
-                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                pushApps();
                 updateBackdrop();
             })
             .setPositiveButton(str(R.string.done),null).create();
@@ -1029,7 +1000,7 @@ public final class MainActivity extends Activity {
                         bright=light?Math.max(.7,primary):Math.max(.25,Math.min(1,primary*1.8));dark=light?Math.min(.3,primary):primary*.5;}}
                 catch(RuntimeException ignored){}
             }
-            automatic=Legibility.auto(Color.luminance(fg),Color.luminance(bg),dark,bright,prefs.getInt("wallpaperDim",60)/100.0);
+            automatic=Legibility.auto(Color.luminance(fg),Color.luminance(bg),dark,bright,prefs.getInt("wallpaperDim",35)/100.0);
         }
         return Legibility.resolve(prefs.getString("legibility","auto"),overImage(),automatic);
     }
@@ -1046,10 +1017,16 @@ public final class MainActivity extends Activity {
         if(backdropView==null)return;glassBackdrop.clear();for(GlassSurface surface:glassSurfaces)surface.invalidateSelf();
         Bitmap image=Build.VERSION.SDK_INT<31&&softWallpaper!=null?softWallpaper:wallpaper;
         boolean system=activeWallpaperMode.equals("system");
-        backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",60)/100f+(float)Legibility.extraDim(legibility)),system));
+        backdropView.setBackground(new MetroArt.Backdrop(activeWallpaperMode.equals("photo")?image:null,bg,theme.backdrop.equals("solid")?bg:accent,Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)),system));
         float gLvl = prefs.getFloat("glass_level", 0.30f);
         int blurAmount = theme.blur > 0 ? theme.blur : Math.round(24f * Math.max(0f, 1f - gLvl * 0.8f));
-        if(Build.VERSION.SDK_INT>=31){backdropView.setRenderEffect(blurAmount>0?RenderEffect.createBlurEffect(dp(blurAmount),dp(blurAmount),Shader.TileMode.CLAMP):null);getWindow().setBackgroundBlurRadius(system?dp(blurAmount):0);}
+        boolean grey=EigenPalette.isGreyscale(accent);
+        ColorMatrix desaturate=new ColorMatrix();desaturate.setSaturation(grey?0:1.12f); // a little extra colour survives the blur, as on HyperOS
+        if(Build.VERSION.SDK_INT>=31){
+            RenderEffect colour=RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(desaturate));
+            backdropView.setRenderEffect(blurAmount>0?RenderEffect.createChainEffect(colour,RenderEffect.createBlurEffect(dp(blurAmount),dp(blurAmount),Shader.TileMode.CLAMP)):colour);
+            getWindow().setBackgroundBlurRadius(system?dp(blurAmount):0);
+        }else{Paint layer=new Paint();layer.setColorFilter(new ColorMatrixColorFilter(desaturate));backdropView.setLayerType(View.LAYER_TYPE_HARDWARE,layer);}
     }
     private void prepareSoftWallpaper(){
         final int request=++effectGeneration;final Bitmap source=wallpaper;final int amount=theme.blur;
@@ -1103,15 +1080,16 @@ public final class MainActivity extends Activity {
         });
     }
     private void wallpaperSettings() {
-        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary())},i -> {
+        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary()),"Set as phone wallpaper"},i -> {
+            if(i==6){systemWallpaper();return;}
             if(i==5){legibilitySettings();return;}
             if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast(str(R.string.no_image_picker_available));}}
             if(i==1||i==2){prefs.edit().putString("wallpaperMode",i==1?"system":"solid").apply();buildUi();}
             if(i==3){
                 LinearLayout box=column();box.setPadding(dp(24),dp(12),dp(24),dp(18));
-                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",60)),24,fg);box.addView(value);
+                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",35)),24,fg);box.addView(value);
                 TextView explanation=text(str(R.string.adjust_the_wallpaper_brightness_behind_a),14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
-                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
+                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",35));
                 styleSlider(dimmer);
                 dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
                     public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(str(R.string.x_dim, amount));updateBackdrop();}
@@ -1124,166 +1102,95 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private void chatbotSettings() {
-        String key = prefs.getString("gemini_api_key", "");
-        String currentModel = prefs.getString("gemini_model", "gemini-2.5-flash");
-        boolean preferLocal = prefs.getBoolean(AiCoreEngine.PREF_PREFER_LOCAL, true);
-        boolean aiCoreAvailable = AiCoreEngine.getInstance().isAiCoreAvailable(this);
-        boolean liteRtAvailable = AiCoreEngine.getInstance().isLiteRtAvailable();
-
-        menu("✦ AI Assistant & Local Engine", new String[]{
-            preferLocal ? "Engine Priority: On-Device (AICore / LiteRT) ✓" : "Engine Priority: Gemini Cloud API ✓",
-            "AICore Status: " + (aiCoreAvailable ? "Active (Gemini Nano on-device)" : "Not Detected on this device"),
-            "LiteRT Status: " + (liteRtAvailable ? "Active (On-Device Runtime)" : "Not Active"),
-            key.isEmpty() ? "Gemini Cloud API Key (Optional Fallback)" : "Gemini API Key: Saved",
-            "Select Cloud Model: " + currentModel,
-            "Clear Chat History",
-            "About Local AI Core & Privacy"
-        }, i -> {
-            if (i == 0) {
-                boolean next = !preferLocal;
-                prefs.edit().putBoolean(AiCoreEngine.PREF_PREFER_LOCAL, next).apply();
-                getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putBoolean(AiCoreEngine.PREF_PREFER_LOCAL, next).apply();
-                toast(next ? "Prioritizing on-device AI (AICore / LiteRT)" : "Prioritizing Gemini Cloud API");
-                if (rootPageView != null) rootPageView.refreshChatbot();
-                if (localAiSheet != null) localAiSheet.refreshEngineBadge();
-                if (sheet != null) sheet.refresh();
-            } else if (i == 1 || i == 2) {
-                message("On-Device AI Engine", "• Android AICore: Provides direct hardware-accelerated access to Google's system Gemini Nano foundation model on Android 12+ (e.g. Pixel 8+, Samsung Galaxy S24+).\n\n• Google LiteRT: High-performance on-device machine learning runtime executing models directly on your phone CPU/GPU/NPU with zero data transmission.\n\n• Status: " + (aiCoreAvailable ? "AICore is supported and active!" : "Running LiteRT local fallback engine."));
-            } else if (i == 3) {
-                EditText input = new EditText(this);
-                input.setSingleLine();
-                input.setText(key);
-                input.setHint("AIzaSy...");
-                AlertDialog d = new AlertDialog.Builder(this)
-                    .setTitle("Google Gemini API Key")
-                    .setMessage("Enter your API key from Google AI Studio to enable Gemini cloud fallback.")
-                    .setView(input)
-                    .setNegativeButton(str(R.string.cancel), null)
-                    .setNeutralButton("Clear Key", (a, b) -> {
-                        prefs.edit().remove("gemini_api_key").apply();
-                        getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().remove("gemini_api_key").apply();
-                        toast("Gemini API Key cleared. Assistant is now using on-device engines.");
-                        if (rootPageView != null) rootPageView.refreshChatbot();
-                        if (localAiSheet != null) localAiSheet.refreshEngineBadge();
-                        if (sheet != null) sheet.refresh();
-                    })
-                    .setPositiveButton(str(R.string.save), (a, b) -> {
-                        String newKey = input.getText().toString().trim();
-                        prefs.edit().putString("gemini_api_key", newKey).apply();
-                        getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putString("gemini_api_key", newKey).apply();
-                        toast("Gemini API Key saved!");
-                        if (rootPageView != null) rootPageView.refreshChatbot();
-                        if (localAiSheet != null) localAiSheet.refreshEngineBadge();
-                        if (sheet != null) sheet.refresh();
-                    }).create();
-                showDialog(d);
-            } else if (i == 4) {
-                String[] models = {"gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"};
-                menu("Select Model", models, m -> {
-                    prefs.edit().putString("gemini_model", models[m]).apply();
-                    getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().putString("gemini_model", models[m]).apply();
-                    toast("Model set to " + models[m]);
-                    if (rootPageView != null) rootPageView.refreshChatbot();
-                    if (localAiSheet != null) localAiSheet.refreshEngineBadge();
-                    if (sheet != null) sheet.refresh();
-                });
-            } else if (i == 5) {
-                getSharedPreferences("launcher_chatbot", Context.MODE_PRIVATE).edit().remove("chatbot_history").apply();
-                toast("Chat history cleared");
-                if (rootPageView != null) rootPageView.refreshChatbot();
-            } else if (i == 6) {
-                message("✦ Local AI Core & Privacy", "Ratio AI Assistant is powered by LiteRT and Android AICore:\n\n• Zero data leaves your device when using local models.\n• Instant response for system control ('battery', 'time', 'open spotify', 'calculate 15 * 8').\n• Gemini Nano leverages on-device Tensor/Snapdragon NPUs for private reasoning.\n• Cloud Gemini API is only used as an optional fallback when an API key is configured and local mode is disabled.");
-            }
+    /**
+     * Pushes the launcher's photo to Android as the home and/or lock screen wallpaper. It goes unblurred: Android
+     * shows it as-is, and only the copy inside Eigen gets blur, glass and greyscale.
+     */
+    private void systemWallpaper() {
+        File file=BackupStore.wallpaperFile(this,prefs);
+        if(!file.exists()){toast(str(R.string.choose_a_photo_first));return;}
+        menu("Set as phone wallpaper",new String[]{"Home screen","Lock screen","Home and lock screen"},n->{
+            int which=n==0?android.app.WallpaperManager.FLAG_SYSTEM:n==1?android.app.WallpaperManager.FLAG_LOCK:android.app.WallpaperManager.FLAG_SYSTEM|android.app.WallpaperManager.FLAG_LOCK;
+            worker.execute(()->{
+                try(java.io.InputStream in=new java.io.FileInputStream(file)){
+                    android.app.WallpaperManager.getInstance(this).setStream(in,null,true,which);
+                    handler.post(()->toast(n==1?"Lock screen wallpaper set":n==0?"Phone wallpaper set":"Home and lock screen wallpaper set"));
+                }catch(Exception e){handler.post(()->message("Couldn't set the wallpaper",e.getMessage()==null?"Android refused the image. Try a different photo.":e.getMessage()));}
+            });
+        });
+    }
+    private void assistantSettings() {
+        boolean ready = !com.studio72f.eigen.ai.EigenAssistant.statusLabel().startsWith("Quick");
+        menu("Assistant", new String[]{ com.studio72f.eigen.ai.EigenAssistant.statusLabel(), "Start a new conversation", "How your data is handled" }, i -> {
+            if (i == 0) message("On-device model", ready
+                ? "Eigen uses Gemini Nano through Android AICore. It runs on this phone's own chip, works offline, and nothing you type is sent anywhere."
+                : "This phone doesn't have Android AICore, so Eigen can't run a language model here. Quick answers still work: open an app, ask the time or battery, or do a sum.");
+            else if (i == 1) { com.studio72f.eigen.ai.EigenAssistant.clearHistory(); eigen.getChat().clear(); toast("Started a new conversation"); }
+            else message("Your data", "The assistant and search answers run entirely on this phone. Eigen has no internet permission, keeps no chat log on disk, and sends nothing to any server.");
         });
     }
 
     private void homescreenMenu() {
-        menu("Ratio Launcher", new String[]{
-            "✦ Local AI Chat (On-Device)",
-            "⚙ Open Settings",
-            "🖼 Change Wallpaper",
-            "✦ AI Assistant (Root Cards)",
-            "🎨 Themes & Glass",
-            "🔍 Search Apps"
-        }, i -> {
-            if (i == 0) openLocalAiChat();
+        menu("Eigen", new String[]{"Assistant", "Settings", "Wallpaper", "Clock style", "Colour", "Widgets", "Search apps"}, i -> {
+            if (i == 0) openAssistant(null);
             else if (i == 1) openSettings();
             else if (i == 2) wallpaperSettings();
-            else if (i == 3) {
-                if (pager != null) pager.setCurrentItem(LauncherPager.PAGE_ROOT, true);
-            }
-            else if (i == 4) effectsSettings();
-            else if (i == 5) { searching = true; buildUi(); }
+            else if (i == 3) clockSettings();
+            else if (i == 4) colourSettings();
+            else if (i == 5) eigen.showPage(com.studio72f.eigen.ui.EigenState.PAGE_WIDGETS);
+            else eigen.setSearching(true);
         });
+    }
+    private void clockSettings() {
+        menu("Clock style", com.studio72f.eigen.ui.ClockStyles.NAMES, n -> { prefs.edit().putString("clock_face", com.studio72f.eigen.ui.ClockStyles.IDS[n]).apply(); buildUi(); if (sheet != null && sheet.isShowing()) sheet.refresh(); });
+    }
+    /** Kesar and its warm siblings, or Greyscale: monochrome icons, a white accent and a desaturated in-launcher wallpaper. */
+    private void colourSettings() {
+        menu("Colour", EigenPalette.ACCENT_NAMES, n -> {
+            try {
+                JSONObject t = themeJson();
+                t.put("accent", String.format("#%06X", EigenPalette.ACCENTS[n] & 0xFFFFFF));
+                boolean grey = EigenPalette.isGreyscale(EigenPalette.ACCENTS[n]);
+                t.put("iconStyle", grey ? "mono" : "color");
+                prefs.edit().remove("icons").apply();
+                applyTheme(t); persistTheme(); buildUi(); updateBackdrop();
+                if (sheet != null && sheet.isShowing()) sheet.refresh();
+            } catch (Exception e) { fileError(e); }
+        });
+    }
+    private String colourName() {
+        for (int i = 0; i < EigenPalette.ACCENTS.length; i++) if (EigenPalette.ACCENTS[i] == accent) return EigenPalette.ACCENT_NAMES[i];
+        return EigenPalette.isGreyscale(accent) ? "Greyscale" : "Custom";
     }
 
     // Top zone: the active context decides which items fill the header and how tall it is.
-    private void buildTopZone() {
-        clock=null; date=null; mediaBox=null; alarmText=null; agendaText=null; playButton=null;
+    /**
+     * Home shows only the clock (drawn in Compose). Everything else the active context asks for goes to the widgets
+     * page on the right: the next alarm, the agenda and the app widgets. Smartspacer and media use their own cards.
+     */
+    private void buildWidgets() {
+        clock=null; date=null; mediaBox=null; playButton=null;
+        alarmText=new TextView(this); agendaText=new TextView(this);
+        eigen.setAlarm(null); eigen.setAgenda(null);
         ContextRules.Rule rule=activeContext;
-        int percent=rule!=null&&rule.header>=0?rule.header:prefs.getInt("header",20);
-        if(percent<=0||rule==null||rule.widgets.isEmpty())return;
-        LinearLayout header=column(); header.setPadding(dp(28),dp(10),dp(28),dp(4)); header.setGravity(Gravity.BOTTOM|Gravity.START); // sits just above the categories
-        int height=Math.max(90,(int)(getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density*percent/100));
-        boolean first=true;WidgetHosting.Stack stack=null;
-        for(String item:rule.widgets){
-            switch(item){
-                case "clock":{
-                    LinearLayout block=column();
-                    String clockStyle = prefs.getString("clock_face", "binary");
-                    if ("binary".equals(clockStyle)) {
-                        binaryClock = new BinaryClockView(this);
-                        binaryClock.setColors(fg, secondaryInk(), accent);
-                        binaryClock.setOnClickListener(v -> safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
-                        block.addView(binaryClock, new LinearLayout.LayoutParams(-2, -2));
-                    } else {
-                        clock=text("",percent<=10?44:64,fg);legible(clock);
-                        clock.setTypeface(Typeface.create(theme.typeface,300,false)); clock.setLetterSpacing(-.02f); clock.setSingleLine(true);
-                        clock.setContentDescription(str(R.string.clock_tap_to_open_alarms)); clock.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)));
-                        block.addView(clock,new LinearLayout.LayoutParams(-2,-2));
-                    }
-                    date=text("",16,secondaryInk());legible(date); date.setTypeface(Typeface.create(theme.typeface,400,false)); date.setLetterSpacing(.01f); date.setSingleLine(true);
-                    date.setContentDescription(str(R.string.date_and_active_context_tap_for_quick_se)); date.setOnClickListener(v->openSettings()); date.setMinHeight(dp(48)); date.setGravity(Gravity.CENTER_VERTICAL);
-                    LinearLayout.LayoutParams dateParams=new LinearLayout.LayoutParams(-2,-2);dateParams.setMargins(0,dp("binary".equals(clockStyle)?2:-6),0,0);block.addView(date,dateParams);
-                    header.addView(block); updateClock();
-                    break;}
-                case "alarm":
-                    alarmText=text("",13,secondaryInk());legible(alarmText); alarmText.setLetterSpacing(.08f); alarmText.setPadding(0,first?0:dp(12),0,0); alarmText.setSingleLine();
-                    alarmText.setOnClickListener(v->safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS))); header.addView(alarmText); updateAlarm(); break;
-                case "agenda":
-                    agendaText=text("",14,fg);legible(agendaText); agendaText.setLineSpacing(dp(4),1); agendaText.setPadding(0,first?0:dp(12),0,0); agendaText.setMaxLines(3); agendaText.setEllipsize(TextUtils.TruncateAt.END);
-                    header.addView(agendaText); updateAgenda(); break;
-                case "smartspace":{
-                    View smartspace=smartspaceView(first);
-                    if(smartspace!=null)header.addView(smartspace);
-                    break;}
-                case "media":{
-                    mediaBox=column(); mediaBox.setPadding(0,first?0:dp(18),0,0);
-                    TextView playing=text(str(R.string.now_playing),9,accent); playing.setLetterSpacing(.14f); mediaBox.addView(playing);
-                    LinearLayout mediaRow=row(); mediaRow.setGravity(Gravity.CENTER_VERTICAL);
-                    LinearLayout metadata=column(); metadata.setPadding(0,dp(6),dp(8),0);
-                    mediaTitle=text("",18,fg); mediaArtist=text("",12,secondaryInk()); legible(mediaTitle); legible(mediaArtist);
-                    mediaTitle.setSingleLine(); mediaTitle.setEllipsize(TextUtils.TruncateAt.END); mediaArtist.setSingleLine();
-                    metadata.addView(mediaTitle); metadata.addView(mediaArtist); mediaRow.addView(metadata,new LinearLayout.LayoutParams(0,-2,1));
-                    playButton=iconButton("play","Play or pause",true,v->mediaAction(1));
-                    mediaRow.addView(iconButton("previous","Previous track",false,v->mediaAction(0)));
-                    mediaRow.addView(playButton); mediaRow.addView(iconButton("next","Next track",false,v->mediaAction(2)));
-                    mediaBox.addView(mediaRow); mediaBox.setVisibility(View.GONE); header.addView(mediaBox);
-                    break;}
-                default:{
-                    // All app widgets of a context share one swipeable stack at the first widget's position.
-                    View widget=hostedWidget(rule,item);
-                    if(widget==null)break;
-                    if(stack==null){stack=new WidgetHosting.Stack(this,accent,MetroArt.alpha(muted,.45f));LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(-1,0,1);wp.setMargins(-dp(8),first?0:dp(10),-dp(8),0);header.addView(stack,wp);}
-                    stack.add(widget);
-                }
-            }
-            first=false;
+        ArrayList<View> views=new ArrayList<>();
+        if(rule!=null)for(String item:rule.widgets){
+            if(item.equals("alarm"))updateAlarm();
+            else if(item.equals("agenda"))updateAgenda();
+            else{View widget=hostedWidget(rule,item);if(widget!=null)views.add(widget);}
         }
-        if(stack!=null){final String id=rule.id;stack.setPage(stackPages.getOrDefault(id,0),page->stackPages.put(id,page));stack.setContentDescription(str(R.string.x_widgets_swipe_sideways_to_switch_hold, stack.count()));}
-        if(theme.glass>0){header.setBackground(glassSurface(header));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,dp(height));hp.setMargins(dp(16),dp(8),dp(16),dp(8));root.addView(header,hp);}
-        else root.addView(header,new LinearLayout.LayoutParams(-1,dp(height)));
+        eigen.setWidgetViews(views);
+    }
+    private LinearLayout.LayoutParams slotParams(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(14));return p;}
+    private List<App> appsIn(String c){
+        ArrayList<App> out=new ArrayList<>();
+        if(c.equals("favorites")){for(String id:favorites)for(App a:apps)if(a.id.equals(id)){out.add(a);break;}}
+        else for(App a:apps)if(!hidden.contains(a.id)&&(c.equals("all apps")||group(a).equals(c)))out.add(a);
+        return out;
+    }
+    private void openAssistant(String question){
+        if(sheet!=null&&sheet.isShowing())sheet.back();
+        eigen.openAssistant(question);
     }
     // Smartspacer (optional app, API 29+): its Client SDK view renders At a Glance targets and complications.
     static final String SMARTSPACER="com.kieronquinn.app.smartspacer";
@@ -1305,16 +1212,17 @@ public final class MainActivity extends Activity {
     private void updateAlarm(){
         if(alarmText==null)return;
         AlarmManager.AlarmClockInfo next=getSystemService(AlarmManager.class).getNextAlarmClock();
-        if(next==null){alarmText.setVisibility(View.GONE);return;}
+        if(next==null){alarmText.setVisibility(View.GONE);eigen.setAlarm(null);return;}
         String pattern=android.text.format.DateFormat.is24HourFormat(this)?"EEE HH:mm":"EEE h:mm a";
         alarmText.setVisibility(View.VISIBLE);alarmText.setText(str(R.string.alarm_x, new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault())));
         alarmText.setContentDescription(str(R.string.next_alarm_x_tap_to_open_alarms, alarmText.getText()));
+        eigen.setAlarm("Alarm "+new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())));
     }
     private boolean calendarAllowed(){return checkSelfPermission(android.Manifest.permission.READ_CALENDAR)==PackageManager.PERMISSION_GRANTED;}
     private void updateAgenda(){
         if(agendaText==null)return;
         agendaLoaded=System.currentTimeMillis();
-        if(!calendarAllowed()){agendaText.setTextColor(secondaryInk());agendaText.setText(str(R.string.tap_to_show_your_calendar_here));agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));return;}
+        if(!calendarAllowed()){agendaText.setTextColor(secondaryInk());agendaText.setText(str(R.string.tap_to_show_your_calendar_here));agendaText.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49));eigen.setAgenda("Allow calendar access in Settings to see your day here.");return;}
         final TextView target=agendaText;final boolean is24=android.text.format.DateFormat.is24HourFormat(this);
         target.setOnClickListener(v->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("content://com.android.calendar/time/"+System.currentTimeMillis()))));
         worker.execute(()->{
@@ -1331,7 +1239,7 @@ public final class MainActivity extends Activity {
                 }
             }catch(RuntimeException ignored){}
             String result=out.length()==0?"nothing in the next 24 hours":out.toString();
-            handler.post(()->{if(target==agendaText){target.setTextColor(out.length()==0?secondaryInk():fg);target.setText(result);}});
+            handler.post(()->{if(target==agendaText){target.setTextColor(out.length()==0?secondaryInk():fg);target.setText(result);eigen.setAgenda(out.length()==0?"Nothing in the next 24 hours":result);}});
         });
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
@@ -1372,12 +1280,8 @@ public final class MainActivity extends Activity {
         getSystemService(AudioManager.class).unregisterAudioDeviceCallback(audioDevices);
         try{unregisterReceiver(signalReceiver);}catch(IllegalArgumentException ignored){}
     }
-    private boolean mediaWanted(){
-        if(rootPageView!=null)return true;
-        if(activeContext!=null&&activeContext.widgets.contains("media"))return true;
-        for(ContextRules.Rule r:contexts)if(r.enabled&&r.playing!=ContextRules.ANY)return true;
-        return false;
-    }
+    // The widgets page always shows what is playing, so media sessions are always watched while Home is up.
+    private boolean mediaWanted(){ return true; }
     private boolean mediaAccess(){String enabled=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners");return enabled!=null&&enabled.contains(new ComponentName(this,MediaAccessService.class).flattenToString());}
     private void contextsChanged(){
         ContextRules.normalize(contexts);ContextStore.save(prefs,contexts);
@@ -1494,24 +1398,7 @@ public final class MainActivity extends Activity {
         sheet.requestApplyInsets();
         if(sheet.isShowing())sheet.refresh();
 
-        if (localAiSheet == null) {
-            localAiSheet = new LocalAiChatSheet(this);
-            localAiSheet.setListener(new LocalAiChatSheet.Listener() {
-                @Override public void onDismiss() {}
-                @Override public void onOpenSettings() { chatbotSettings(); }
-            });
-        }
-        if (localAiSheet.getParent() != null) ((android.view.ViewGroup) localAiSheet.getParent()).removeView(localAiSheet);
-        scene.addView(localAiSheet, new FrameLayout.LayoutParams(-1, -1));
-        localAiSheet.setColors(fg, accent);
-        localAiSheet.requestApplyInsets();
-
         if(tourPage>=0)attachTour(0);
-    }
-    private void openLocalAiChat() {
-        if (searching) { searching = false; query = ""; hideKeyboard(); buildUi(); }
-        if (sheet != null && sheet.isShowing()) sheet.back();
-        if (localAiSheet != null) localAiSheet.show();
     }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}sheet.open(this::quickPage);}
     private final class SwipeUpFooter extends LinearLayout {
@@ -1704,7 +1591,7 @@ public final class MainActivity extends Activity {
                 FrostedCard.setGlassLevel(level);
                 glassLabel.setText("Glass: " + getGlassLabel(level));
                 glassVal.setText(String.format(Locale.ROOT, "%.2f", level));
-                if (ratioGrid != null) ratioGrid.setApps(apps, categories, assignments, merges);
+                pushApps();
                 updateBackdrop();
             }
             public void onStartTrackingTouch(SeekBar bar){ bar.getParent().requestDisallowInterceptTouchEvent(true); }
@@ -1717,8 +1604,8 @@ public final class MainActivity extends Activity {
 
         // Wallpaper dimming.
         LinearLayout dim=row();dim.setGravity(Gravity.CENTER_VERTICAL);dim.setPadding(dp(18),dp(2),dp(6),dp(2));
-        TextView dimLabel=text(str(R.string.dim_x, prefs.getInt("wallpaperDim",60)),14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
-        SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",60));
+        TextView dimLabel=text(str(R.string.dim_x, prefs.getInt("wallpaperDim",35)),14,fg);dim.addView(dimLabel,new LinearLayout.LayoutParams(dp(68),-2));
+        SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",35));
         styleSlider(dimmer);
         dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();dimLabel.setText(str(R.string.dim_x, amount));updateBackdrop();}
@@ -1729,7 +1616,7 @@ public final class MainActivity extends Activity {
 
         View quickActions=chipRow(
             chip("🖼 Change Wallpaper",false,v->wallpaperSettings()),
-            chip("✦ AI Assistant",false,v->chatbotSettings()),
+            chip("Assistant",false,v->assistantSettings()),
             chip("Tune Glass",false,v->glassTuning())
         );
         quickActions.setPadding(dp(16),dp(4),dp(16),0);page.addView(quickActions);
@@ -1767,7 +1654,8 @@ public final class MainActivity extends Activity {
         page.addView(group(contextRows.toArray(new View[0])));
         page.addView(sectionLabel(str(R.string.home_categories)));
         page.addView(group(
-            settingRow(str(R.string.clock_style),prefs.getString("clock_face","binary").equals("binary")?str(R.string.clock_binary):str(R.string.clock_digital),v->menu(str(R.string.clock_style),new String[]{str(R.string.clock_digital),str(R.string.clock_binary)},n->{prefs.edit().putString("clock_face",n==1?"binary":"digital").apply();buildUi();sheet.refresh();})),
+            settingRow(str(R.string.clock_style),com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],v->clockSettings()),
+            settingRow("Colour",colourName(),v->colourSettings()),
             settingRow(str(R.string.set_as_default_launcher),null,v->defaultHome()),settingRow(str(R.string.categories_folders),str(R.string.x_create_hide_merge_rename, (prefs.getBoolean("categories",true)?str(R.string.x_visible, editableCategories().size()-disabled.size()):str(R.string.off))),v->categorySettings()),settingRow(str(R.string.category_order),String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size())))+"…",v->sheet.push(this::orderPage)),
             settingRow(str(R.string.notification_dots),!mediaAccess()?str(R.string.needs_notification_access_only_app_names):prefs.getBoolean("dots",true)?str(R.string.on):str(R.string.off),v->{
                 if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}
@@ -1781,10 +1669,9 @@ public final class MainActivity extends Activity {
         page.addView(group(settingRow(str(R.string.default_height),prefs.getInt("header",20)==0?str(R.string.off):str(R.string.x_of_the_screen_contexts_can_override, prefs.getInt("header",20)),v->menu(str(R.string.top_zone_height),new String[]{str(R.string.none),"10%","20%","30%","40%"},n->{prefs.edit().putInt("header",n*10).apply();appliedLayout="";buildUi();})),settingRow(str(R.string.media_access),mediaAccess()?str(R.string.allowed):str(R.string.needed_for_media_controls_and_the_media),v->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),settingRow(str(R.string.calendar_access),calendarAllowed()?str(R.string.allowed):str(R.string.needed_for_the_agenda_item),v->headerSettings())));
         page.addView(sectionLabel(str(R.string.background)));
         String mode=prefs.getString("wallpaperMode","solid");
-        page.addView(group(settingRow(str(R.string.wallpaper),str(R.string.x_y_dim, (mode.equals("photo")?str(R.string.photo):mode.equals("system")?str(R.string.phone_wallpaper):str(R.string.solid)), prefs.getInt("wallpaperDim",60)),v->wallpaperSettings()),settingRow(str(R.string.text_legibility),legibilitySummary(),v->legibilitySettings())));
-        page.addView(sectionLabel("AI Assistant & Chatbot"));
-        String geminiKey=prefs.getString("gemini_api_key","");
-        page.addView(group(settingRow("✦ Assistant Configuration",geminiKey.isEmpty()?"Offline mode · Tap to enter Gemini API Key":"Gemini 2.5 Active · Tap to configure",v->chatbotSettings())));
+        page.addView(group(settingRow(str(R.string.wallpaper),str(R.string.x_y_dim, (mode.equals("photo")?str(R.string.photo):mode.equals("system")?str(R.string.phone_wallpaper):str(R.string.solid)), prefs.getInt("wallpaperDim",35)),v->wallpaperSettings()),settingRow(str(R.string.text_legibility),legibilitySummary(),v->legibilitySettings())));
+        page.addView(sectionLabel("Assistant"));
+        page.addView(group(settingRow("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),v->assistantSettings())));
         page.addView(sectionLabel(str(R.string.support_72f)));
         page.addView(group(settingRow(str(R.string.support_72f_title),str(R.string.support_72f_summary),v->sheet.push(this::supportPage))));
         page.addView(sectionLabel(str(R.string.backup_about)));

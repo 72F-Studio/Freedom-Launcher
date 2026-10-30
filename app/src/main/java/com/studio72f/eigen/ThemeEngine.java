@@ -29,7 +29,7 @@ final class ThemeEngine {
         name = json.optString("name", "custom theme");
         if (name.length() > 80) throw new IOException("Theme name is too long");
         background = color("background", "#000000"); text = color("text", "#F1F2F3");
-        muted = color("muted", "#97989B"); accent = color("accent", "#FFEA00");
+        muted = color("muted", "#97989B"); accent = color("accent", "#FF8A1F");
         if (contrast(background,text)<4.5 || contrast(background,muted)<3 || contrast(background,accent)<3)
             throw new IOException("Theme colors need more contrast");
         layout = choice("layout", "grid", "grid", "metro");
@@ -38,14 +38,14 @@ final class ThemeEngine {
         font = choice("font", "sans-serif", "sans-serif", "sans-serif-light", "sans-serif-thin", "sans-serif-condensed");
         choice("wallpaperMode","solid","solid","photo","system");
         String pack=json.optString("iconPack","");if(pack.length()>200||(!pack.isEmpty()&&!pack.matches("[A-Za-z0-9_.]+")))throw new IOException("Invalid icon pack reference");
-        iconStyle = choice("iconStyle", "mono", "mono", "color", "none");
+        iconStyle = choice("iconStyle", "color", "mono", "color", "none");
         titleSize = number("titleSize", 36, 24, 80);
         appSize = number("appSize", 20, 14, 36);
         rowHeight = number("rowHeight", 56, 48, 96);
         iconSize = number("iconSize", 40, 20, 48);
         motionMs = number("motionMs", 230, 0, 600);
         animated = json.optBoolean("animated", true);
-        blur = number("blur",20,0,40); glass = number("glass",30,0,90);
+        blur = number("blur",32,0,40); glass = number("glass",30,0,90);
         glassBlur = number("glassBlur",-1,-1,40); glassTint = number("glassTint",0,-100,100); refraction = number("refraction",50,0,100);
         liquid = json.optBoolean("liquid",false);
         // Material 3 Expressive: tonal containers, pill indicators, springy motion and emphasized type.
@@ -112,9 +112,10 @@ final class ThemeEngine {
             t.put("font","sans-serif");t.put("titleSize",44);t.put("appSize",20);t.put("rowHeight",56);t.put("iconSize",40);
             t.put("iconStyle","color");t.put("motionMs",350);
         } else if(name.equals("Ratio Frosted")||name.equals("Kelvin Dark")) {
-            t.put("name","Ratio Frosted");t.put("uiIconSet","material");t.put("layout","grid");t.put("backdrop","solid");t.put("background","#000000");
-            t.put("text","#F1F2F3");t.put("muted","#97989B");t.put("accent","#FFEA00");t.put("glass",30);t.put("blur",20);
-            t.put("font","sans-serif");t.put("titleSize",24);t.put("appSize",14);t.put("iconSize",38);t.put("rowHeight",64);t.put("iconStyle","mono");
+            // Eigen: Kesar accent, colour icons, HyperOS-strength blur.
+            t.put("name","Eigen");t.put("uiIconSet","material");t.put("layout","grid");t.put("backdrop","solid");t.put("background","#000000");
+            t.put("text","#F1F2F3");t.put("muted","#97989B");t.put("accent","#FF8A1F");t.put("glass",30);t.put("blur",32);
+            t.put("font","sans-serif");t.put("titleSize",24);t.put("appSize",14);t.put("iconSize",38);t.put("rowHeight",64);t.put("iconStyle","color");
         } else if(name.equals("Kelvin Ember")) {
             t.put("name","Kelvin Ember");t.put("uiIconSet","material");t.put("layout","grid");t.put("backdrop","solid");t.put("background","#000000");
             t.put("text","#F1F2F3");t.put("muted","#97989B");t.put("accent","#FE6208");t.put("glass",30);t.put("blur",20);

@@ -1,0 +1,111 @@
+package com.studio72f.eigen.ui
+
+import android.graphics.Bitmap
+import android.view.View
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.studio72f.eigen.MainActivity
+
+/** One line in the Assistant tab. [source] is set on Eigen's finished answers. */
+data class ChatLine(val mine: Boolean, val text: String, val source: String? = null, val failed: Boolean = false)
+
+/** A drawer on home: its name and the apps in it, in order. */
+data class Drawer(val name: String, val apps: List<MainActivity.App>)
+
+/** What the Compose UI asks of the activity, which still owns apps, widgets, settings and dialogs. */
+interface EigenHost {
+    fun launch(app: MainActivity.App)
+    fun appMenu(app: MainActivity.App)
+    fun homeMenu()
+    fun openSettings()
+    fun addWidget()
+    fun openAlarms()
+    fun media(action: Int)
+    fun openNotificationAccess()
+    fun hasDot(app: MainActivity.App): Boolean
+}
+
+/**
+ * Everything the Compose UI shows, set by MainActivity (Java) and read as Compose state. UI-only state that the
+ * activity must be able to reset (search, the open drawer, the current page) lives here too.
+ */
+class EigenState {
+    // Apps
+    var drawers by mutableStateOf(emptyList<Drawer>())
+    var allApps by mutableStateOf(emptyList<MainActivity.App>())
+    /** Bumped when notification dots change so cards redraw. */
+    var dotsVersion by mutableIntStateOf(0)
+
+    // Look
+    var accent by mutableIntStateOf(0xFFFF8A1F.toInt())
+    var monoIcons by mutableStateOf(false)
+    var glass by mutableStateOf(0.3f)
+    var reduceMotion by mutableStateOf(false)
+    var clockStyle by mutableStateOf("ratio")
+
+    // Wallpaper drawn inside Eigen (blurred, dimmed, greyscale in Greyscale mode). "system" shows Android's.
+    var wallpaperMode by mutableStateOf("solid")
+    var wallpaper by mutableStateOf<Bitmap?>(null)
+    /** Pre-blurred copy for Android 11 and older, which have no RenderEffect blur. */
+    var softWallpaper by mutableStateOf<Bitmap?>(null)
+    var dim by mutableStateOf(0.35f)
+    var blur by mutableIntStateOf(32)
+
+    // Widgets page
+    var widgetViews by mutableStateOf(emptyList<View>())
+    var alarm by mutableStateOf<String?>(null)
+    var agenda by mutableStateOf<String?>(null)
+    var mediaTitle by mutableStateOf<String?>(null)
+    var mediaArtist by mutableStateOf<String?>(null)
+    var mediaPlaying by mutableStateOf(false)
+    var notificationAccess by mutableStateOf(false)
+
+    // UI state the activity can reset
+    var page by mutableIntStateOf(PAGE_HOME)
+    var pageRequest by mutableIntStateOf(0)
+    var openDrawer by mutableStateOf<String?>(null)
+    var searching by mutableStateOf(false)
+    var query by mutableStateOf("")
+    var leftTab by mutableIntStateOf(TAB_CONVERSATIONS)
+    /** A question handed to the Assistant tab (from search or the home menu), consumed once. */
+    var pendingQuestion by mutableStateOf<String?>(null)
+    /** The Assistant conversation. Kept here so it survives the page leaving the screen; never written to disk. */
+    val chat = mutableStateListOf<ChatLine>()
+    var thinking by mutableStateOf(false)
+
+    val greyscale: Boolean get() {
+        val r = (accent shr 16) and 0xFF; val g = (accent shr 8) and 0xFF; val b = accent and 0xFF
+        return kotlin.math.abs(r - g) < 12 && kotlin.math.abs(g - b) < 12
+    }
+
+    fun showPage(target: Int) { page = target; pageRequest++ }
+
+    fun openAssistant(question: String?) {
+        searching = false; query = ""
+        leftTab = TAB_ASSISTANT
+        if (!question.isNullOrBlank()) pendingQuestion = question
+        showPage(PAGE_LEFT)
+    }
+
+    /** The Home button: back to a closed, centred home. */
+    fun goHome() { searching = false; query = ""; openDrawer = null; showPage(PAGE_HOME) }
+
+    /** Back, innermost first. Returns false when there was nothing to close. */
+    fun handleBack(): Boolean = when {
+        searching -> { searching = false; query = ""; true }
+        page != PAGE_HOME -> { showPage(PAGE_HOME); true }
+        openDrawer != null -> { openDrawer = null; true }
+        else -> false
+    }
+
+    companion object {
+        const val PAGE_LEFT = 0
+        const val PAGE_HOME = 1
+        const val PAGE_WIDGETS = 2
+        const val TAB_CONVERSATIONS = 0
+        const val TAB_ASSISTANT = 1
+    }
+}

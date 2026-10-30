@@ -1,6 +1,6 @@
 import java.util.Properties
 
-plugins { id("com.android.application") }
+plugins { id("com.android.application"); kotlin("plugin.compose") }
 
 // Production signing: create it with scripts/make-release-key.sh. keystore.properties and the .jks stay
 // out of git; without them, release builds are unsigned and scripts/release.sh signs with the dev key.
@@ -42,6 +42,7 @@ android {
         }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    buildFeatures { compose = true }
 }
 dependencies {
     // Optional Smartspacer top-zone item. The SDK needs API 29+; every call site is guarded.
@@ -50,8 +51,16 @@ dependencies {
     implementation("androidx.viewpager:viewpager:1.1.0") // referenced directly by layout-v29/smartspacer_view.xml
     implementation("com.android.billingclient:billing:9.1.0")
 
-    // Google LiteRT (Lite Runtime for on-device GenAI & ML)
-    implementation("com.google.ai.edge.litert:litert-api:1.4.2")
-    // Google AI Core (On-device Gemini Nano Foundation Model integration)
-    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp02")
+    // UI: Kelvin (72F design system) on Compose. Home, the side pages, search and the assistant are Compose.
+    implementation(project(":kelvin"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+
+    // On-device AI: Gemini Nano through Android AICore, via ML Kit's GenAI Prompt API (the engine Tofu uses).
+    // AICore downloads and runs the model itself; Eigen has no internet permission.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 }

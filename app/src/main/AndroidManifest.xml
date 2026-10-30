@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-    <uses-sdk tools:overrideLibrary="com.kieronquinn.app.smartspacer.sdk.client,com.kieronquinn.app.smartspacer.sdk,com.google.ai.edge.aicore"/>
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-sdk tools:overrideLibrary="com.kieronquinn.app.smartspacer.sdk.client,com.kieronquinn.app.smartspacer.sdk"/>
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES"/>
+    <uses-permission android:name="android.permission.SET_WALLPAPER"/>
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="com.kieronquinn.app.smartspacer.permission.ACCESS_SMARTSPACER"/>
     <queries>
