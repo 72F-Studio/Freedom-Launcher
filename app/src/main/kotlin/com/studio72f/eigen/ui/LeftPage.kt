@@ -46,6 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -186,7 +190,11 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
     val status by EigenAssistant.status.collectAsState()
     var draft by remember { mutableStateOf("") }
     val list = rememberLazyListState()
+    val composer = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { EigenAssistant.refreshStatus() }
+    // Cleared last: clearing the key first would cancel this effect before it focuses.
+    LaunchedEffect(state.composerFocus) { if (state.composerFocus) { delay(350); runCatching { composer.requestFocus() }; keyboard?.show(); state.composerFocus = false } }
     fun send(text: String) {
         val q = text.trim()
         if (q.isEmpty() || state.thinking) return
@@ -229,7 +237,7 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
-                BasicTextField(draft, { draft = it }, Modifier.fillMaxWidth(), maxLines = 4, textStyle = Kelvin.type.body.copy(color = c.ink, fontSize = 16.sp), cursorBrush = SolidColor(c.accent),
+                BasicTextField(draft, { if (it.endsWith("\n") && it.isNotBlank()) send(it) else draft = it }, Modifier.fillMaxWidth().focusRequester(composer), maxLines = 4, textStyle = Kelvin.type.body.copy(color = c.ink, fontSize = 16.sp), cursorBrush = SolidColor(c.accent),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { send(draft) }))
                 if (draft.isEmpty()) KText("Message Eigen", style = Kelvin.type.body.copy(fontSize = 16.sp), color = c.ink2, maxLines = 1)

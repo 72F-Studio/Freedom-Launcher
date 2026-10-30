@@ -94,6 +94,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void openAlarms() { safeStart(new Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)); }
         @Override public void media(int action) { mediaAction(action); }
         @Override public void openNotificationAccess() { safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
+        @Override public void setGlassLevel(float level) { prefs.edit().putFloat("glass_level", level).apply(); FrostedCard.setGlassLevel(level); updateBackdrop(); }
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
     };
     private WidgetHosting.Host widgetHost;
@@ -314,6 +315,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",35)/100f+(float)Legibility.extraDim(legibility)));
         eigen.setBlur(theme.blur);
         eigen.setNotificationAccess(mediaAccess());
+        if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
     /** Drawers for home (in the person's category order) and every app for search (hidden apps stay searchable). */
     private void pushApps(){
@@ -1400,7 +1402,40 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
 
         if(tourPage>=0)attachTour(0);
     }
-    private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}sheet.open(this::quickPage);}
+    private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}eigen.setSettings(settingsModel());eigen.setSettingsOpen(true);}
+    private com.studio72f.eigen.ui.SettingsRow row(String title,String summary,String value,String icon,String tile,Boolean toggle,Runnable action){return new com.studio72f.eigen.ui.SettingsRow(title,summary,value,icon,tile,toggle,action);}
+    /**
+     * The Kelvin settings page's rows. Rows that still lead to an older editor (contexts, drawer order, support)
+     * open it in the legacy sheet.
+     */
+    private List<com.studio72f.eigen.ui.SettingsSection> settingsModel(){
+        ArrayList<com.studio72f.eigen.ui.SettingsSection> out=new ArrayList<>();
+        String mode=prefs.getString("wallpaperMode","solid"),icons=prefs.getString("icons",theme.iconStyle);
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Look",Arrays.asList(
+            row("Colour",null,colourName(),"palette","orange",null,this::colourSettings),
+            row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
+            row("Wallpaper",mode.equals("photo")?"Your photo, blurred inside Eigen":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
+            row("App icons",null,icons.equals("mono")?"Monochrome":!prefs.getString("iconPack","").isEmpty()?"Icon pack":"Colour","apps","teal",null,()->menu("App icons",new String[]{"Colour","Monochrome","Icon pack"},n->{if(n==2)chooseIconPack();else setIcons(n==0?"color":"mono");})),
+            row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Home",Arrays.asList(
+            row("Drawers","Create, hide, merge and rename",null,"folder","blue",null,this::categorySettings),
+            row("Drawer order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size()))),null,"sort","blue",null,()->sheet.open(this::orderPage)),
+            row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),
+            row("Notification dots",mediaAccess()?null:"Needs notification access",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Your day",Arrays.asList(
+            row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->sheet.open(this::fullSettings)),
+            row("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),null,"sparkles","orange",null,this::assistantSettings))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Access",Arrays.asList(
+            row("Notification access","Conversations, replies and dots",mediaAccess()?"On":"Off","message","green",null,()->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),
+            row("Calendar access","Your agenda on the widgets page",calendarAllowed()?"On":"Off","calendar","red",null,()->{if(calendarAllowed())safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}),
+            row("Default home app",null,isDefaultHome()?"Eigen":null,"home","blue",null,this::defaultHome))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and about",Arrays.asList(
+            row("Backup and restore","Drawers, contexts, look and wallpaper",null,"archive","grey",null,this::backupSettings),
+            row("Support Eigen",null,null,"heart","red",null,()->sheet.open(this::supportPage)),
+            row("Replay the tour",null,null,"refresh","grey",null,()->{eigen.setSettingsOpen(false);startTour(0);}),
+            row("About Eigen",version(),null,"info","grey",null,this::aboutSettings))));
+        return out;
+    }
     private final class SwipeUpFooter extends LinearLayout {
         float downX,downY;boolean opened;
         SwipeUpFooter(){super(MainActivity.this);setOrientation(VERTICAL);}
@@ -1979,36 +2014,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     /** Rounded sheet surface for menus and dialogs: top corners only, it sits on the bottom edge. */
     private GradientDrawable sheetSurface(){GradientDrawable d=new GradientDrawable();d.setColor(surface());float r=dp(28);d.setCornerRadii(new float[]{r,r,r,r,0,0,0,0});return d;}
     private View sheetHandle(){View h=new View(this);h.setBackground(rounded(MetroArt.alpha(muted,.4f),2));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(32),dp(4));p.gravity=Gravity.CENTER_HORIZONTAL;p.setMargins(0,0,0,dp(14));h.setLayoutParams(p);return h;}
+    /** Every menu is a Kelvin sheet in its own window (it can open over the settings sheet). */
     private void menu(String title,String[] options,Choice action){
         if(options.length==0){toast(str(R.string.no_categories_available));return;}
-        Dialog dialog=new Dialog(this);
-        LinearLayout sheet=column();sheet.setPadding(dp(12),dp(10),dp(12),dp(16));
-        sheet.setBackground(sheetSurface());sheet.addView(sheetHandle());
-        TextView heading=text(title,26,fg);heading.setPadding(dp(14),dp(4),dp(14),dp(14));heading.setAccessibilityHeading(true);sheet.addView(heading);
-        ScrollView scroller=new ScrollView(this);scroller.setVerticalScrollBarEnabled(false);
-        LinearLayout choices=column();choices.setBackground(rounded(card(),22));choices.setClipToOutline(true);scroller.addView(choices);
-        for(int i=0;i<options.length;i++){
-            final int index=i;
-            if(i>0){View line=new View(this);line.setBackgroundColor(MetroArt.alpha(fg,.07f));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,Math.max(1,dp(.75f)));lp.setMargins(dp(18),0,0,0);choices.addView(line,lp);}
-            LinearLayout option=row();option.setGravity(Gravity.CENTER_VERTICAL);option.setMinimumHeight(dp(56));option.setPadding(dp(18),dp(12),dp(18),dp(12));
-            // "name · detail" options show the detail quieter.
-            String o=options[i];int dot=o.indexOf(" · ");
-            android.text.SpannableString styled=new android.text.SpannableString(o);
-            if(dot>0)styled.setSpan(new android.text.style.ForegroundColorSpan(muted),dot,o.length(),android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            TextView label=text("",17,fg);label.setText(styled);label.setContentDescription(o);
-            option.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            option.setFocusable(true);pressFeedback(option);option.setOnClickListener(v->{dialog.dismiss();action.accept(index);});choices.addView(option);
-        }
-        int maxHeight=(int)(getResources().getDisplayMetrics().heightPixels*.60f);
-        choices.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(24),View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
-        sheet.addView(scroller,new LinearLayout.LayoutParams(-1,Math.min(maxHeight,choices.getMeasuredHeight())));
-        TextView close=text(str(R.string.close),15,fg);close.setGravity(Gravity.CENTER);close.setMinHeight(dp(52));close.setBackground(rounded(MetroArt.alpha(fg,.07f),100));foregroundRipple(close);
-        close.setOnClickListener(v->dialog.dismiss());close.setFocusable(true);
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.setMargins(0,dp(12),0,0);sheet.addView(close,cp);
-        track(dialog);dialog.setContentView(sheet);Window window=dialog.getWindow();
-        if(window!=null){window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.5f);window.setGravity(Gravity.BOTTOM);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);}
-        if(window!=null)window.setWindowAnimations(R.style.SheetMotion);
-        dialog.show();if(window!=null)window.setLayout(-1,-2);riseIn(sheet);
+        track(com.studio72f.eigen.ui.EigenSheets.menu(this,eigen,title,options,action::accept));
     }
     /** Open dialogs, closed when Home is pressed so Home always lands on a clean home screen. */
     private final ArrayList<Dialog> openDialogs=new ArrayList<>();
@@ -2029,7 +2038,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private MetroArt.Icon iconButton(String mark,String description,boolean ring,View.OnClickListener click){
         MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,mark,fg,ring);icon.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));icon.setContentDescription(description);icon.setOnClickListener(click);pressFeedback(icon);return icon;
     }
-    private void message(String title,String body){showDialog(new AlertDialog.Builder(this).setTitle(title).setMessage(body).setPositiveButton(str(R.string.okay),null).create());}
+    private void message(String title,String body){track(com.studio72f.eigen.ui.EigenSheets.message(this,eigen,title,body==null?"":body));}
     private void safeStart(Intent intent){try{startActivity(intent);}catch(Exception e){toast(str(R.string.no_app_available_for_this_action));}}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     /** UI text from res/values/strings.xml (translatable); formats only when there are arguments. */

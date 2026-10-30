@@ -73,12 +73,14 @@ fun EigenTheme(state: EigenState, content: @Composable () -> Unit) {
 
 @Composable
 fun EigenApp(state: EigenState, host: EigenHost) {
+    LaunchedEffect(Unit) { com.studio72f.eigen.ai.EigenAssistant.refreshStatus() }
     EigenTheme(state) {
         // Glass refracts the wallpaper layer only; the pages themselves are never recorded (no glass on glass).
         val backdrop = rememberKelvinBackdrop(ground = if (state.wallpaperMode == "system") Color.Black.copy(alpha = 0.3f) else Color.Black)
         Box(Modifier.fillMaxSize()) {
             Wallpaper(state, Modifier.fillMaxSize().kelvinBackdrop(backdrop))
             Pages(state, host, backdrop)
+            SettingsOverlay(state, host)
         }
     }
 }
@@ -89,7 +91,11 @@ private fun Pages(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) 
     val spatial = Kelvin.motion.spatial<Float>()
     // The activity (Back, Home, menus) asks for a page; a swipe tells the state where we are.
     LaunchedEffect(state.pageRequest) { if (pager.currentPage != state.page) pager.animateScrollToPage(state.page, animationSpec = spatial) }
-    LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { state.page = it } }
+    // A rebuilt view can restore the pager's old saved page; the state's page wins.
+    LaunchedEffect(pager) {
+        if (pager.currentPage != state.page) pager.scrollToPage(state.page)
+        snapshotFlow { pager.settledPage }.collect { state.page = it }
+    }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { page ->
         when (page) {
             EigenState.PAGE_LEFT -> LeftPage(state, host, backdrop)

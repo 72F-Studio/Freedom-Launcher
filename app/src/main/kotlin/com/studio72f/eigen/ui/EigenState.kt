@@ -25,6 +25,7 @@ interface EigenHost {
     fun openAlarms()
     fun media(action: Int)
     fun openNotificationAccess()
+    fun setGlassLevel(level: Float)
     fun hasDot(app: MainActivity.App): Boolean
 }
 
@@ -75,6 +76,10 @@ class EigenState {
     /** The Assistant conversation. Kept here so it survives the page leaving the screen; never written to disk. */
     val chat = mutableStateListOf<ChatLine>()
     var thinking by mutableStateOf(false)
+    var settingsOpen by mutableStateOf(false)
+    var settings by mutableStateOf(emptyList<SettingsSection>())
+    /** Set to put the cursor in the Assistant's composer (opening it from search or the menu); cleared once used. */
+    var composerFocus by mutableStateOf(false)
 
     val greyscale: Boolean get() {
         val r = (accent shr 16) and 0xFF; val g = (accent shr 8) and 0xFF; val b = accent and 0xFF
@@ -86,15 +91,16 @@ class EigenState {
     fun openAssistant(question: String?) {
         searching = false; query = ""
         leftTab = TAB_ASSISTANT
-        if (!question.isNullOrBlank()) pendingQuestion = question
+        if (!question.isNullOrBlank()) pendingQuestion = question else composerFocus = true
         showPage(PAGE_LEFT)
     }
 
     /** The Home button: back to a closed, centred home. */
-    fun goHome() { searching = false; query = ""; openDrawer = null; showPage(PAGE_HOME) }
+    fun goHome() { settingsOpen = false; searching = false; query = ""; openDrawer = null; composerFocus = false; showPage(PAGE_HOME) }
 
     /** Back, innermost first. Returns false when there was nothing to close. */
     fun handleBack(): Boolean = when {
+        settingsOpen -> { settingsOpen = false; true }
         searching -> { searching = false; query = ""; true }
         page != PAGE_HOME -> { showPage(PAGE_HOME); true }
         openDrawer != null -> { openDrawer = null; true }
