@@ -115,6 +115,8 @@ class EigenState {
     var textureSheet by mutableStateOf(false)
     /** Cards per row in drawers: 4 (roomy), 5 or 6 (compact). */
     var columns by mutableIntStateOf(4)
+    /** How much the home wallpaper is blurred: 0 sharp, 0.5 soft, 1 frosted. */
+    var homeBlur by mutableStateOf(0f)
     /** Black and white over everything, set by the activity on its window. */
     var monochrome by mutableStateOf(false)
     /** Minutes in the foreground today, by package; empty without usage access. */

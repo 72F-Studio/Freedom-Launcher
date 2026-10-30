@@ -137,10 +137,12 @@ private fun Wallpaper(state: EigenState, modifier: Modifier) {
             photo != null -> {
                 val image = remember(photo) { photo.asImageBitmap() }
                 val matrix = remember(state.greyscale) { ColorMatrix().apply { setToSaturation(if (state.greyscale) 0f else 1.15f) } }
-                // Home shows the wallpaper sharp, only dimmed; the app drawer is a frosted pane over it (FrostedPane).
+                // Home shows the wallpaper sharp by default, only dimmed; Settings can soften or frost it. The app
+                // drawer is a frosted pane over it either way (FrostedPane).
+                val homeBlur = (maxOf(state.blur, 28) * state.homeBlur).dp
                 Image(
-                    image, null,
-                    Modifier.fillMaxSize(),
+                    if (!modern && state.homeBlur > 0f) state.softWallpaper?.let { remember(it) { it.asImageBitmap() } } ?: image else image, null,
+                    Modifier.fillMaxSize().then(if (modern && state.homeBlur > 0f) Modifier.blur(homeBlur, BlurredEdgeTreatment.Rectangle) else Modifier),
                     contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(matrix),
                 )

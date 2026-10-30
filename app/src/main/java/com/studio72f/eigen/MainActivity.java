@@ -420,6 +420,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setConversationApps(new HashSet<>(prefs.getStringSet("conversation_apps",new HashSet<>())));
         eigen.setMonochrome(prefs.getBoolean("monochrome",false));
         eigen.setColumns(prefs.getInt("grid_columns",4));
+        eigen.setHomeBlur(prefs.getFloat("home_blur",0f));
     }
     /** Monochrome only: a black-and-white filter over the whole window, Compose and legacy views alike. */
     private void applyMonochrome(){
@@ -1542,6 +1543,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Colour",null,colourName(),"palette","orange",null,this::colourSettings),
             row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
             row("Wallpaper",mode.equals("photo")?"Your photo, or an Eigen texture":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
+            row("Home wallpaper","Blur behind your drawers",prefs.getFloat("home_blur",0f)==0f?"Sharp":prefs.getFloat("home_blur",0f)<1f?"Soft":"Frosted","photo","blue",null,()->menu("Home wallpaper",new String[]{"Sharp · just dimmed","Soft · a light blur","Frosted · a full blur"},n->{prefs.edit().putFloat("home_blur",new float[]{0f,.45f,1f}[n]).apply();pushState();})),
             row("App icons",null,icons.equals("mono")?"Monochrome":!prefs.getString("iconPack","").isEmpty()?"Icon pack":"Colour","apps","teal",null,()->menu("App icons",new String[]{"Colour","Monochrome","Icon pack"},n->{if(n==2)chooseIconPack();else setIcons(n==0?"color":"mono");})),
             row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings),
             row("Monochrome only","Black and white over everything",null,"adjust","grey",prefs.getBoolean("monochrome",false),()->{prefs.edit().putBoolean("monochrome",!prefs.getBoolean("monochrome",false)).apply();pushState();}))));

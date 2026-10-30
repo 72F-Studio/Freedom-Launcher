@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -535,7 +536,7 @@ private fun EdgeScroller(list: androidx.compose.foundation.lazy.LazyListState, l
         if (letter != shownLetter) { shownLetter = letter; haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
     }
     Box(
-        modifier.width(48.dp)
+        modifier.width(48.dp).fillMaxHeight()
             .onGloballyPositioned { trackHeight = it.size.height.toFloat().coerceAtLeast(1f) }
             .pointerInput(letters) {
                 detectVerticalDragGestures(
