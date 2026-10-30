@@ -417,14 +417,14 @@ private fun AppGrid(state: EigenState, host: EigenHost, apps: List<MainActivity.
  * another as a drawer opens.
  */
 @Composable
-fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: Int, modifier: Modifier, animate: Boolean = false, interactive: Boolean = true, backdrop: KelvinBackdrop? = null) {
+fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: Int, modifier: Modifier, animate: Boolean = false, interactive: Boolean = true, backdrop: KelvinBackdrop? = null, styleOverride: String? = null) {
     val c = Kelvin.colors
     val reduce = Kelvin.reduceMotion
     val appear = remember { Animatable(if (reduce || !animate) 1f else 0f) }
     val spatial = Kelvin.motion.spatial<Float>()
     LaunchedEffect(Unit) { if (appear.value < 1f) { delay(minOf(index, 15) * 22L); appear.animateTo(1f, spatial) } }
     val dot = remember(state.dotsVersion, app) { host.hasDot(app) }
-    val style = state.cardStyles[app.id] ?: "classic"
+    val style = styleOverride ?: state.cardStyles[app.id] ?: "classic"
     val wide = app.id in state.wideCards
     val fill = when (style) { "marker" -> c.accent; "bright" -> c.ink.copy(alpha = 0.20f); else -> c.ink.copy(alpha = 0.08f) }
     val ink = if (style == "marker") c.onAccent else c.ink

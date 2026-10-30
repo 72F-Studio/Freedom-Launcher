@@ -104,6 +104,8 @@ final class BackupStore {
         String relative="imports/"+pending.directory.getName();
         Map<String,?> previous=prefs.getAll();
         SharedPreferences.Editor edit=prefs.edit().clear();JSONObject values=pending.preferences;
+        // Plus belongs to this install and its Play account, not to the backup: keep it across the clear.
+        for(String key:new String[]{"plus_checked",EigenBilling.PREF_OWNED,EigenBilling.PREF_GRANDFATHERED})if(previous.get(key) instanceof Boolean)edit.putBoolean(key,(Boolean)previous.get(key));
         Iterator<String> keys=values.keys();while(keys.hasNext()){String key=keys.next();Object v=values.get(key);if(v instanceof Boolean)edit.putBoolean(key,(Boolean)v);else if(v instanceof Number)edit.putInt(key,((Number)v).intValue());else edit.putString(key,(String)v);}
         edit.putString("themeDir",relative+"/theme");
         edit.putString("wallpaperPath",relative+"/wallpaper.jpg");

@@ -90,6 +90,8 @@ private val RowShape = ContinuousShape(22.dp)
 /** The left page: the unified messaging timeline and the on-device assistant, one segmented control apart. */
 @Composable
 fun LeftPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+    // Without Plus the page opens on the assistant, which is free, rather than on a Plus notice.
+    LaunchedEffect(Unit) { if (!state.plus && state.leftTab == EigenState.TAB_CONVERSATIONS) state.leftTab = EigenState.TAB_ASSISTANT }
     val gentle = Kelvin.motion.gentle<Float>()
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 16.dp)) {
         AnimatedContent(state.leftTab, transitionSpec = { (fadeIn(gentle) togetherWith fadeOut(gentle)).using(SizeTransform(clip = false)) }, label = "left title") { tab ->
@@ -105,6 +107,13 @@ fun LeftPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
 
 @Composable
 private fun Conversations(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+    if (!state.plus) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            KelvinEmptyState(Message, "Every chat in one place", "Conversations gathers your messaging apps into one timeline, and you can reply without leaving home. It comes with Eigen Plus.",
+                actionText = "See Eigen Plus", onAction = { state.plusSheet = "Conversations" })
+        }
+        return
+    }
     val c = Kelvin.colors
     var items by remember { mutableStateOf(MediaAccessService.getConversations().toList()) }
     var connected by remember { mutableStateOf(MediaAccessService.isServiceConnected()) }

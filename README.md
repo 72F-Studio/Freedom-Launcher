@@ -48,6 +48,10 @@ All launcher controls use a complete vector icon set: original **Retro**, origin
 
 **Settings → backup & restore** exports `.72fbackup.zip` files with favorites, category settings/assignments/merges, appearance, imported assets, saved photo, header/media preferences, and handedness. Restore validates the entire package, shows a replacement summary, then applies it. Apps, icon-pack applications, Android permissions, and the default-home role must be installed/granted on the destination phone separately. Keep exported backups in a safe location: they include your selected photo and app organization.
 
+## Eigen Plus
+
+Eigen is a complete launcher for free. **Eigen Plus** is a one-time Play purchase (`eigen_plus`, non-consumable) that adds: unlimited contexts (free: everyday plus one), the Outline, Kesar split and Binary clocks, every texture (free: Ember and Silk), Stained and Lit card styles and wide cards, the Screen time, Focus timer, World clocks, Calculator and Notes widgets, and Conversations. Plus faces and card styles can be tried on before buying; the rules live in `ui/Plus.kt`. Gates sit where something is chosen, so anything already set up keeps working. Installs from before Plus existed keep it for good (`plus_grandfathered`). Ownership comes from Play's purchase cache on the phone, with no account or server, and Plus survives a backup restore without being written into backups. Tips under Support Eigen unlock nothing.
+
 ## Build
 
 Use JDK 21 and Android SDK 37 / Build Tools 37.0.0. The build uses Android Gradle Plugin 9.4.1 and Gradle 9.8.1; the app targets SDK 37 and uses predictive back. Set `ANDROID_HOME` or your local `sdk.dir` in untracked `local.properties`.

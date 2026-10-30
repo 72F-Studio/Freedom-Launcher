@@ -110,8 +110,11 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
         }
     }
     val today = state.usageMinutes[pkg] ?: hourly.sum()
-    val style = state.cardStyles[app.id] ?: "classic"
+    // A Plus style can be tried on in the preview card; it is only saved with Plus.
+    var trial by remember { mutableStateOf<String?>(null) }
+    val style = trial ?: state.cardStyles[app.id] ?: "classic"
     val wide = app.id in state.wideCards
+    LaunchedEffect(state.plus) { if (state.plus) trial?.let { host.setCardStyle(app, it); trial = null } }
     val docked = app.id in state.dockIds
     // The header scrolls with the page, so content never slides under a hard edge.
     Column(Modifier.fillMaxSize().background(c.canvas).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -149,14 +152,18 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     // A live preview of the card as it will look on home.
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        AppCard(state, host, app, 0, Modifier.width(if (wide) 168.dp else 84.dp), interactive = false)
+                        AppCard(state, host, app, 0, Modifier.width(if (wide) 168.dp else 84.dp), interactive = false, styleOverride = trial)
                     }
-                    KelvinSegmented(STYLES.map { it.second }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i -> host.setCardStyle(app, STYLES[i].first) })
+                    KelvinSegmented(STYLES.map { it.second + if (!state.plus && Plus.cardStyle(it.first)) " ✦" else "" }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i ->
+                        val id = STYLES[i].first
+                        if (state.plus || !Plus.cardStyle(id)) { trial = null; host.setCardStyle(app, id) } else trial = id
+                    })
+                    if (trial != null) KelvinButton("Keep ${STYLES.first { it.first == trial }.second} with Plus", { state.plusSheet = "${STYLES.first { it.first == trial }.second} cards" }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, icon = KelvinIcons.Sparkles)
                 }
             }
             Spacer(Modifier.height(8.dp))
             KelvinGroup {
-                KelvinRow("Wide card", summary = "Takes two columns, with the name beside the icon", icon = Wide, tile = KelvinTiles.Violet, trailing = { KelvinSwitch(wide, { host.setWide(app, it) }) })
+                KelvinRow("Wide card", summary = "Takes two columns, with the name beside the icon", icon = Wide, tile = KelvinTiles.Violet, trailing = { KelvinSwitch(wide, { if (state.plus || !it) host.setWide(app, it) else state.plusSheet = "Wide cards" }) })
                 KelvinRow("In the dock", summary = if (docked) "Above the search bar" else "Up to four apps", icon = Dock, tile = KelvinTiles.Blue, trailing = { KelvinSwitch(docked, { host.toggleDock(app) }) })
                 KelvinRow("Favourite", summary = "Shown first on home", icon = KelvinIcons.Heart, tile = KelvinTiles.Red, trailing = { KelvinSwitch(host.isFavorite(app), { host.toggleFavorite(app) }) })
             }
@@ -192,19 +199,30 @@ private fun Bars(values: IntArray, modifier: Modifier) {
 /** The clock style sheet from a long-press on the clock: a live preview, the styles, and a way to all settings. */
 @Composable
 fun ClockSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
-    KelvinSheet(state.clockSheet, { state.clockSheet = false }, "Clock style", "Close", backdrop) {
+    // A Plus face can be tried on here: home shows it while the sheet is open, and it goes back on close.
+    var saved by remember { mutableStateOf(state.clockStyle) }
+    LaunchedEffect(state.clockSheet) { if (state.clockSheet) saved = state.clockStyle }
+    val trying = !state.plus && state.clockStyle != saved && Plus.clock(state.clockStyle)
+    val close = { if (!state.plus && Plus.clock(state.clockStyle)) state.clockStyle = saved; state.clockSheet = false }
+    KelvinSheet(state.clockSheet, close, "Clock style", "Close", backdrop) {
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
             HomeClock(state.clockStyle, onTime = {}, onDate = {}, scale = 0.6f)
         }
         CarouselRow(16.dp) {
             ClockStyles.IDS.forEachIndexed { i, id ->
                 val on = state.clockStyle == id
-                KText(ClockStyles.NAMES[i], Modifier.height(48.dp).kelvinPill(on, backdrop).eigenPress({ host.setClock(id) }, shape = studio72f.kelvin.CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp),
-                    Kelvin.type.label, kelvinPillInk(on), maxLines = 1)
+                Row(Modifier.height(48.dp).kelvinPill(on, backdrop).eigenPress({ if (state.plus || !Plus.clock(id)) { host.setClock(id); saved = id } else state.clockStyle = id }, shape = studio72f.kelvin.CapsuleShape, label = ClockStyles.NAMES[i]).padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    KText(ClockStyles.NAMES[i], style = Kelvin.type.label, color = kelvinPillInk(on), maxLines = 1)
+                    if (Plus.clock(id)) PlusMark(state)
+                }
             }
         }
-        KelvinButton("Launcher settings", { state.clockSheet = false; host.openSettings() }, Modifier.fillMaxWidth().padding(top = 8.dp), kind = ButtonKind.Secondary, icon = KelvinIcons.Settings)
+        if (trying) KelvinButton("Keep ${ClockStyles.NAMES[ClockStyles.IDS.indexOf(state.clockStyle)]} with Plus", { state.plusSheet = ClockStyles.NAMES[ClockStyles.IDS.indexOf(state.clockStyle)] }, Modifier.fillMaxWidth().padding(top = 8.dp), icon = KelvinIcons.Sparkles)
+        else KelvinButton("Launcher settings", { close(); host.openSettings() }, Modifier.fillMaxWidth().padding(top = 8.dp), kind = ButtonKind.Secondary, icon = KelvinIcons.Settings)
     }
+    // Bought while trying it on: keep it.
+    LaunchedEffect(state.plus) { if (state.plus && state.clockSheet && state.clockStyle != saved) { host.setClock(state.clockStyle); saved = state.clockStyle } }
 }
 
 /**
@@ -230,6 +248,7 @@ fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                 for (t in row) Column(
                     Modifier.weight(1f).eigenPress({
                         if (busy != null) return@eigenPress
+                        if (!state.plus && Plus.texture(t.id)) { state.plusSheet = "The ${t.name} texture"; return@eigenPress }
                         busy = t.id
                         scope.launch {
                             val m = context.resources.displayMetrics
@@ -243,7 +262,10 @@ fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                         previews[t.id]?.let { androidx.compose.foundation.Image(it, t.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
                         if (busy == t.id) studio72f.kelvin.KelvinSpinner()
                     }
-                    KText(t.name, Modifier.padding(top = 8.dp), Kelvin.type.label, maxLines = 1)
+                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        KText(t.name, style = Kelvin.type.label, maxLines = 1)
+                        if (Plus.texture(t.id)) PlusMark(state)
+                    }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }

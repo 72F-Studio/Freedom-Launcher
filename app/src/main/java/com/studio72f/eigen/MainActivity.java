@@ -92,6 +92,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void changed() { contextsChanged(); }
         @Override public void addContext() {
             if (contexts.size() >= ContextStore.MAX_RULES) { toast(str(R.string.up_to_x_contexts, ContextStore.MAX_RULES)); return; }
+            // Everyday is always there; a free install gets one more.
+            if (!eigen.getPlus() && contexts.size() - 1 >= com.studio72f.eigen.ui.Plus.FREE_CONTEXTS) { eigen.setPlusSheet("Another context"); return; }
             String[] kinds = {"morning", "work", "headphones", "night", "charging", "blank"};
             menu("Add a context", new String[]{"Morning", "Work", "Headphones", "Night", "Charging", "Blank"}, i -> {
                 ContextRules.Rule r = ContextRules.template(kinds[i].equals("blank") ? "new context" : kinds[i], ContextStore.newId(contexts));
@@ -142,10 +144,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void addWidget() {
             ArrayList<String> ids = new ArrayList<>(), names = new ArrayList<>();
             String[] all = com.studio72f.eigen.ui.EigenWidgets.IDS, labels = com.studio72f.eigen.ui.EigenWidgets.NAMES;
-            for (int i = 0; i < all.length; i++) if (!eigen.getWidgetOrder().contains(all[i])) { ids.add(all[i]); names.add(labels[i] + " · Eigen"); }
+            for (int i = 0; i < all.length; i++) if (!eigen.getWidgetOrder().contains(all[i])) { ids.add(all[i]); names.add(labels[i] + (!eigen.getPlus() && com.studio72f.eigen.ui.Plus.widget(all[i]) ? " · Plus" : " · Eigen")); }
             names.add("App widget · from your apps");
             menu("Add a widget", names.toArray(new String[0]), n -> {
                 if (n == ids.size()) { if (activeContext != null) addAppWidget(activeContext); return; }
+                if (!eigen.getPlus() && com.studio72f.eigen.ui.Plus.widget(ids.get(n))) { eigen.setPlusSheet(labels[Arrays.asList(all).indexOf(ids.get(n))]); return; }
                 ArrayList<String> order = new ArrayList<>(eigen.getWidgetOrder()); order.add(ids.get(n)); setWidgetOrder(order);
             });
         }
@@ -203,6 +206,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void setDim(float dim) { prefs.edit().putInt("wallpaperDim", Math.round(dim * 100)).apply(); eigen.setDim(dim); }
         @Override public String drawerOf(App app) { return group(app); }
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
+        @Override public void buyPlus() { EigenBilling.getInstance(MainActivity.this).launchPlus(MainActivity.this); }
+        @Override public void restorePlus() { EigenBilling.getInstance(MainActivity.this).restorePurchases(); toast("Checking Google Play…"); }
     };
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
@@ -219,8 +224,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void onReceive(Context c, Intent i) { signalChanged(); }
     };
     private final EigenBilling.Listener billingListener = new EigenBilling.Listener() {
-        @Override public void onProductDetailsUpdated() { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
+        @Override public void onProductDetailsUpdated() { pushPlus(); if (sheet != null && sheet.isShowing()) sheet.refresh(); }
         @Override public void onPurchaseCompleted(String productId) { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
+        @Override public void onPlusChanged(boolean plus) { pushPlus(); }
     };
     private final MediaController.Callback mediaCallback = new MediaController.Callback() {
         @Override public void onMetadataChanged(MediaMetadata m) { updateMedia(); }
@@ -258,6 +264,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         ContextRules.localize(getResources().getStringArray(R.array.rule_words), getResources().getStringArray(R.array.rule_days));
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new WidgetHosting.Host(this, 7272);
+        grandfatherPlus();
         readState();
         FrostedCard.setGlassLevel(prefs.getFloat("glass_level", 0.30f));
         restoreWallpaper();
@@ -424,7 +431,22 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",75)/100f+(float)Legibility.extraDim(legibility)));
         eigen.setBlur(theme.blur);
         eigen.setNotificationAccess(mediaAccess());
-        pushLayoutPrefs(); applyMonochrome();
+        pushPlus(); pushLayoutPrefs(); applyMonochrome();
+        if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
+    }
+    /**
+     * Installs from before Plus existed keep everything, for good: checked once, on the first launch of a build with
+     * Plus. An install that has loaded its apps ("seeded") or finished the tour is not new.
+     */
+    private void grandfatherPlus(){
+        if(prefs.getBoolean("plus_checked",false))return;
+        SharedPreferences.Editor edit=prefs.edit().putBoolean("plus_checked",true);
+        if(prefs.getBoolean("seeded",false)||prefs.getBoolean("introduced",false))edit.putBoolean(EigenBilling.PREF_GRANDFATHERED,true);
+        edit.apply();
+    }
+    private void pushPlus(){
+        eigen.setPlus(EigenBilling.hasPlus(this));
+        eigen.setPlusPrice(EigenBilling.getInstance(this).getFormattedPrice(EigenBilling.PLUS,EigenBilling.PLUS_FALLBACK_PRICE));
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
     /** Per-app card styles, wide cards, the dock, the unread mark and which apps feed Conversations. */
@@ -1284,9 +1306,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             else eigen.setSearching(true);
         });
     }
-    private void clockSettings() {
-        menu("Clock style", com.studio72f.eigen.ui.ClockStyles.NAMES, n -> { prefs.edit().putString("clock_face", com.studio72f.eigen.ui.ClockStyles.IDS[n]).apply(); buildUi(); if (sheet != null && sheet.isShowing()) sheet.refresh(); });
-    }
+    /** The clock sheet, where Plus faces can be tried on before they're bought. */
+    private void clockSettings() { eigen.setClockSheet(true); }
     /** Kesar and its warm siblings, or Greyscale: monochrome icons, a white accent and a desaturated in-launcher wallpaper. */
     private void colourSettings() {
         int current = -1; for (int i = 0; i < EigenPalette.ACCENTS.length; i++) if (EigenPalette.ACCENTS[i] == accent) current = i;
@@ -1587,6 +1608,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Default home app",null,isDefaultHome()?"Eigen":null,"home","blue",null,this::defaultHome))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and about",Arrays.asList(
             row("Backup and restore","Drawers, contexts, look and wallpaper",null,"archive","grey",null,this::backupSettings),
+            row("Eigen Plus",eigen.getPlus()?"Thank you for backing Eigen":"Contexts, clocks, widgets and more",eigen.getPlus()?"On":eigen.getPlusPrice(),"sparkles","orange",null,()->eigen.setPlusSheet("")),
             row("Support Eigen",null,null,"heart","red",null,()->sheet.open(this::supportPage)),
             row("Replay the tour",null,null,"refresh","grey",null,()->{eigen.setSettingsOpen(false);startTour(0);}),
             row("About Eigen",version(),null,"info","grey",null,this::aboutSettings))));

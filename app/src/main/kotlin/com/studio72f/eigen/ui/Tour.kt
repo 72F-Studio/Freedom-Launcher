@@ -168,7 +168,9 @@ private fun ClockPage(state: EigenState, host: EigenHost) {
     HomeClock(state.clockStyle, onTime = {}, onDate = {}, scale = 0.62f)
     Spacer(Modifier.height(24.dp))
     CarouselRow(24.dp) {
+        // The tour shows what's free; Plus faces wait in the clock sheet.
         ClockStyles.IDS.forEachIndexed { i, id ->
+            if (Plus.clock(id) && !state.plus) return@forEachIndexed
             val on = state.clockStyle == id
             KText(ClockStyles.NAMES[i], Modifier.height(48.dp).kelvinPill(on, null).eigenPress({ host.setClock(id) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp),
                 Kelvin.type.label, kelvinPillInk(on), maxLines = 1)

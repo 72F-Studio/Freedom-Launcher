@@ -61,6 +61,8 @@ interface EigenHost {
     /** Removes a widget from the page: an Eigen widget is hidden, an app widget is unbound. */
     fun removeWidget(id: String)
     fun hasDot(app: MainActivity.App): Boolean
+    fun buyPlus()
+    fun restorePlus()
 }
 
 /**
@@ -70,6 +72,13 @@ interface EigenHost {
 class EigenState {
     /** Work that must outlive any one screen (an assistant answer still streaming when the UI is rebuilt). */
     val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+
+    // Eigen Plus
+    var plus by mutableStateOf(false)
+    /** Play's price for Plus once known, in the local currency. */
+    var plusPrice by mutableStateOf("₹349")
+    /** null: closed; "": opened from Settings; otherwise what was tapped ("Binary"), named at the top. */
+    var plusSheet by mutableStateOf<String?>(null)
 
     // Apps
     var drawers by mutableStateOf(emptyList<Drawer>())
@@ -186,11 +195,12 @@ class EigenState {
     }
 
     /** The Home button: back to a closed, centred home. */
-    fun goHome() { contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawers = emptySet(); appDrawerOpen = false; pillMenu = null; dashboardApp = null; composerFocus = false; showPage(PAGE_HOME) }
+    fun goHome() { plusSheet = null; contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawers = emptySet(); appDrawerOpen = false; pillMenu = null; dashboardApp = null; composerFocus = false; showPage(PAGE_HOME) }
 
     /** Back, innermost first. Returns false when there was nothing to close. */
     fun handleBack(): Boolean = when {
         tourPage > 0 -> { tourPage--; true }
+        plusSheet != null -> { plusSheet = null; true }
         pillMenu != null -> { pillMenu = null; true }
         clockSheet -> { clockSheet = false; true }
         textureSheet -> { textureSheet = false; true }

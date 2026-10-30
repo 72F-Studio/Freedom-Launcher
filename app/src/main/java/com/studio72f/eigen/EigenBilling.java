@@ -2,11 +2,13 @@ package com.studio72f.eigen;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.android.billingclient.api.AcknowledgePurchaseParams;
 import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
@@ -27,15 +29,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Google Play Billing client handling optional donation tiers for Eigen.
- * Donations offer no functional benefit or tier unlock; purchases are consumed so they
+ * Google Play Billing for Eigen: Eigen Plus, a one-time unlock, and optional tips.
+ * Plus is acknowledged and never consumed, so it stays owned. Tips unlock nothing; they are consumed so they
  * do not auto-refund and can be made repeatedly.
+ * Ownership is checked against Play's own purchase cache on the phone; there is no account or license server.
  */
 public final class EigenBilling implements PurchasesUpdatedListener {
     public static final String DONATION_COFFEE = "eigen_donation_coffee";
     public static final String DONATION_SNACK = "eigen_donation_snack";
     public static final String DONATION_MEAL = "eigen_donation_meal";
     public static final String DONATION_SUPPORTER = "eigen_donation_supporter";
+
+    public static final String PLUS = "eigen_plus";
+    public static final String PLUS_FALLBACK_PRICE = "₹349";
+    /** Prefs that remember Plus: bought (re-checked against Play on every connection) or kept from before Plus existed. */
+    public static final String PREF_OWNED = "plus_owned", PREF_GRANDFATHERED = "plus_grandfathered";
 
     public static final List<String> DONATION_PRODUCT_IDS = List.of(
         DONATION_COFFEE,
@@ -70,6 +78,14 @@ public final class EigenBilling implements PurchasesUpdatedListener {
     public interface Listener {
         void onProductDetailsUpdated();
         void onPurchaseCompleted(String productId);
+        /** Plus was bought, restored or refunded. */
+        default void onPlusChanged(boolean plus) { }
+    }
+
+    /** Whether Plus is unlocked: bought, or kept by an install from before Plus existed. */
+    public static boolean hasPlus(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
+        return prefs.getBoolean(PREF_OWNED, false) || prefs.getBoolean(PREF_GRANDFATHERED, false);
     }
 
     private static EigenBilling instance;
@@ -105,7 +121,7 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         if (billingClient == null) return;
         if (billingClient.isReady()) {
             queryProductDetails();
-            consumeExistingPurchases();
+            checkPurchases();
             return;
         }
         if (isConnecting) return;
@@ -117,7 +133,7 @@ public final class EigenBilling implements PurchasesUpdatedListener {
                 isConnecting = false;
                 if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
                     queryProductDetails();
-                    consumeExistingPurchases();
+                    checkPurchases();
                 }
             }
 
@@ -140,7 +156,9 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         if (billingClient == null || !billingClient.isReady()) return;
 
         List<QueryProductDetailsParams.Product> productList = new ArrayList<>();
-        for (String id : DONATION_PRODUCT_IDS) {
+        List<String> ids = new ArrayList<>(DONATION_PRODUCT_IDS);
+        ids.add(PLUS);
+        for (String id : ids) {
             productList.add(
                 QueryProductDetailsParams.Product.newBuilder()
                     .setProductId(id)
@@ -168,7 +186,8 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         });
     }
 
-    private void consumeExistingPurchases() {
+    /** Restores Plus from Play's purchase cache (or drops it after a refund) and consumes any tips left unconsumed. */
+    private void checkPurchases() {
         if (billingClient == null || !billingClient.isReady()) return;
 
         QueryPurchasesParams params = QueryPurchasesParams.newBuilder()
@@ -176,17 +195,41 @@ public final class EigenBilling implements PurchasesUpdatedListener {
             .build();
 
         billingClient.queryPurchasesAsync(params, (billingResult, purchases) -> {
-            if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {
-                for (Purchase p : purchases) {
-                    if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                        for (String prod : p.getProducts()) {
-                            if (DONATION_PRODUCT_IDS.contains(prod)) {
-                                consumePurchase(p, prod);
-                            }
-                        }
-                    }
+            if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK || purchases == null) return;
+            boolean plus = false;
+            for (Purchase p : purchases) {
+                if (p.getPurchaseState() != Purchase.PurchaseState.PURCHASED) continue;
+                for (String prod : p.getProducts()) {
+                    if (PLUS.equals(prod)) { plus = true; acknowledge(p); }
+                    else if (DONATION_PRODUCT_IDS.contains(prod)) consumePurchase(p, prod);
                 }
             }
+            setPlus(plus);
+        });
+    }
+
+    /** Asks Play again, for "Restore purchase". */
+    public void restorePurchases() {
+        if (billingClient == null || !billingClient.isReady()) { startConnection(); return; }
+        checkPurchases();
+    }
+
+    private void acknowledge(Purchase purchase) {
+        if (purchase.isAcknowledged()) return;
+        AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
+            .setPurchaseToken(purchase.getPurchaseToken())
+            .build();
+        billingClient.acknowledgePurchase(params, result -> { });
+    }
+
+    private void setPlus(boolean owned) {
+        SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_OWNED, false) == owned) return;
+        prefs.edit().putBoolean(PREF_OWNED, owned).apply();
+        boolean plus = hasPlus(context);
+        mainHandler.post(() -> {
+            if (owned) Toast.makeText(context, "Eigen Plus is on. Thank you!", Toast.LENGTH_LONG).show();
+            for (Listener l : listeners) l.onPlusChanged(plus);
         });
     }
 
@@ -196,6 +239,10 @@ public final class EigenBilling implements PurchasesUpdatedListener {
             return details.getOneTimePurchaseOfferDetails().getFormattedPrice();
         }
         return fallback;
+    }
+
+    public void launchPlus(Activity activity) {
+        launchDonation(activity, PLUS);
     }
 
     public void launchDonation(Activity activity, String productId) {
@@ -227,11 +274,18 @@ public final class EigenBilling implements PurchasesUpdatedListener {
 
     @Override
     public void onPurchasesUpdated(@NonNull BillingResult billingResult, @Nullable List<Purchase> purchases) {
+        if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            checkPurchases();
+            return;
+        }
         if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {
             for (Purchase purchase : purchases) {
                 if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
                     for (String prod : purchase.getProducts()) {
-                        if (DONATION_PRODUCT_IDS.contains(prod)) {
+                        if (PLUS.equals(prod)) {
+                            acknowledge(purchase);
+                            setPlus(true);
+                        } else if (DONATION_PRODUCT_IDS.contains(prod)) {
                             consumePurchase(purchase, prod);
                         }
                     }
