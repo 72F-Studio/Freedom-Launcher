@@ -495,13 +495,17 @@ private fun Notes() {
     }
 }
 
-/** An Android app widget, hosted by the activity, in a frosted card. */
+/**
+ * An Android app widget, hosted by the activity: edge to edge with no padding of Android's, rounded to the same
+ * corners as Eigen's cards, over frost for widgets that are partly transparent.
+ */
 @Composable
 private fun HostedWidget(state: EigenState, view: View) {
-    Box(Modifier.fillMaxWidth().frostSurface(state, CardShape)) {
+    Box(Modifier.fillMaxWidth().frostSurface(state, CardShape).clip(CardShape)) {
         AndroidView(
-            factory = { (view.parent as? ViewGroup)?.removeView(view); view },
-            modifier = Modifier.fillMaxWidth().height(200.dp),
+            factory = { (view.parent as? ViewGroup)?.removeView(view); view.setPadding(0, 0, 0, 0); view },
+            modifier = Modifier.fillMaxWidth().height(200.dp).clip(CardShape),
+            update = { it.setPadding(0, 0, 0, 0) },
         )
     }
 }
