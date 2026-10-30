@@ -53,7 +53,8 @@ import com.kyant.backdrop.effects.blur
 fun Modifier.veil(backdrop: KelvinBackdrop?, fade: Dp = 32.dp): Modifier = composed {
     val params = Kelvin.glass
     val canvas = Kelvin.colors.canvas
-    val blurDp = if (params.isSolid) 0f else 8f + 22f * (1f - smoothLevel(params.level))
+    // Under Frost the veil melts the page as deeply as the panes do.
+    val blurDp = if (params.isSolid) 0f else if (params.isFrost) params.frostDp else 8f + 22f * (1f - smoothLevel(params.level))
     val wash = veilWash(params, backdrop)
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     this
@@ -88,7 +89,9 @@ fun Modifier.veil(backdrop: KelvinBackdrop?, fade: Dp = 32.dp): Modifier = compo
 
 /** How much of the canvas washes over the blurred page at the top of the veil. */
 internal fun veilWash(params: GlassParams, backdrop: KelvinBackdrop?): Float =
-    if (params.isSolid || backdrop == null) 1f else 0.25f + 0.65f * (1f - smoothLevel(params.level))
+    if (params.isSolid || backdrop == null) 1f
+    else if (params.isFrost) 0.2f + 0.7f * params.tintAlpha
+    else 0.25f + 0.65f * (1f - smoothLevel(params.level))
 
 private fun smoothLevel(level: Float): Float {
     val t = level.coerceIn(0f, 1f)

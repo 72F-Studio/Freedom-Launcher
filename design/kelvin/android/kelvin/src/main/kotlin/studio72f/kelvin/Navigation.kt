@@ -223,7 +223,8 @@ fun KelvinDock(
             val slotPx = with(LocalDensity.current) { slot.toPx() }
             val padPx = with(LocalDensity.current) { DockSidePad.toPx() }
             val padYPx = with(LocalDensity.current) { 6.dp.toPx() }
-            val lens = g.deform > 0f && !g.isSolid
+            // The lifted lens is liquid glass; under Frost the droplet stays a solid drop.
+            val lens = g.deform > 0f && !g.isSolid && !g.isFrost
             Box(
                 Modifier.fillMaxSize().pointerInput(items.size) {
                     detectHorizontalDragGestures(
@@ -358,7 +359,7 @@ fun KelvinTabs(
     // sliding over them.
     val scroll = rememberScrollState()
     // A carousel: room for the chosen pill's glow, and a fade at whichever end has more.
-    Box(modifier.fillMaxWidth().glowRoom(12.dp).carouselFade(scroll).horizontalScroll(scroll).padding(horizontal = 12.dp, vertical = 12.dp)) {
+    Box(modifier.fillMaxWidth().glowRoom().carouselFade(scroll).horizontalScroll(scroll).padding(horizontal = 12.dp, vertical = GlowRoom)) {
         val speed = (abs(x.velocity) / 4000f).coerceAtMost(0.3f) * deform
         Box(
             Modifier
@@ -407,7 +408,8 @@ fun KelvinSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Uni
                 .width(slot)
                 .fillMaxHeight()
                 .graphicsLayer { scaleX = 1f + speed; scaleY = 1f - speed * 0.3f }
-                .pebble(ContinuousShape(13.dp), c.accent),
+                // Seated in a clipped well: no glow, which the track would cut into a hard band.
+                .pebble(ContinuousShape(13.dp), c.accent, glow = false),
         )
         Row(Modifier.fillMaxSize()) {
             options.forEachIndexed { i, o ->

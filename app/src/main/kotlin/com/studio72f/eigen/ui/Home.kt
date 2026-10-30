@@ -60,6 +60,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -127,6 +131,7 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     val scope = rememberCoroutineScope()
     val spatial = Kelvin.motion.spatial<Float>()
     // Usage minutes reload whenever home comes back.
+    LaunchedEffect(state.allApps) { withContext(Dispatchers.Default) { prewarmIcons(state.allApps) } }
     LaunchedEffect(state.resumeCount) {
         val (access, minutes) = withContext(Dispatchers.IO) { Usage.hasAccess(context) to Usage.todayMinutes(context) }
         state.usageAccess = access; state.usageMinutes = minutes
@@ -158,8 +163,10 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                     val names = state.drawers.map { it.name }
                     val closing = state.openDrawers.containsAll(names)
                     scope.launch {
+                        state.bulkOpening = true
                         if (closing) for (n in names.reversed()) { state.openDrawers = state.openDrawers - n; delay(32) }
                         else for (n in names) { state.openDrawers = state.openDrawers + n; delay(48) }
+                        delay(400); state.bulkOpening = false
                     }
                 }
                 p < 0f && (-p > upThreshold || velocity < -1800f) -> state.appDrawerOpen = true
@@ -193,17 +200,21 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         if (drawer.value > 0f || state.appDrawerOpen) AppDrawer(state, host, backdrop, drawer.value, heightPx) { closing, v ->
             if (closing == null) scope.launch { drawer.snapTo(v) } else if (closing) state.appDrawerOpen = false else scope.launch { drawer.animateTo(1f, spatial) }
         }
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+        // Home's content runs the full height and scrolls under the handle, dock and search capsule, which float on top.
+        var barHeight by remember { mutableFloatStateOf(0f) }
+        val bottomInset = with(density) { barHeight.toDp() }
+        Box(Modifier.fillMaxSize().imePadding()) {
             val gentle = Kelvin.motion.gentle<Float>()
             AnimatedContent(
-                state.searching, Modifier.weight(1f).graphicsLayer { alpha = 1f - drawer.value },
+                state.searching, Modifier.fillMaxSize().statusBarsPadding().graphicsLayer { alpha = 1f - drawer.value },
                 transitionSpec = { (fadeIn(gentle) togetherWith fadeOut(gentle)).using(SizeTransform(clip = false)) },
                 label = "home or search",
             ) { searching ->
-                if (searching) SearchResults(state, host, backdrop)
+                if (searching) SearchResults(state, host, backdrop, bottomInset)
                 else if (state.appDrawerOpen) Spacer(Modifier.fillMaxSize()) // the open drawer takes the touches
-                else Drawers(state, host, Modifier.nestedScroll(connection), pull, downThreshold, backdrop)
+                else Drawers(state, host, Modifier.nestedScroll(connection), pull, downThreshold, backdrop, bottomInset)
             }
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onGloballyPositioned { barHeight = it.size.height.toFloat() }.navigationBarsPadding()) {
             if (!state.searching) {
                 // The line bends into an up chevron as you pull up; drag or tap it for the app drawer.
                 val bend = if (state.appDrawerOpen) 1f else (-pull / upThreshold).coerceIn(0f, 1f)
@@ -216,6 +227,7 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                 Dock(state, host, backdrop)
             }
             SearchCapsule(state, host, backdrop, Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp))
+            }
         }
         PillMenuOverlay(state, host, backdrop)
     }
@@ -233,13 +245,17 @@ private fun Handle(bend: Float) {
 }
 
 @Composable
-private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull: Float, threshold: Float, backdrop: KelvinBackdrop) {
+private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull: Float, threshold: Float, backdrop: KelvinBackdrop, bottomInset: androidx.compose.ui.unit.Dp) {
     var origin by remember { mutableStateOf(Offset.Zero) }
     // Coming back from an app, home settles in: a touch small and soft, easing to rest.
     val settle = remember { Animatable(1f) }
     val spatial = Kelvin.motion.spatial<Float>()
     LaunchedEffect(state.returnPulse) { if (state.returnPulse > 0) { settle.snapTo(0f); settle.animateTo(1f, spatial) } }
     val allOpen = state.drawers.isNotEmpty() && state.openDrawers.containsAll(state.drawers.map { it.name })
+    val density = LocalDensity.current
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var clockHeight by remember { mutableFloatStateOf(0f) }
     BoxWithConstraints(
         Modifier.fillMaxSize()
             .onGloballyPositioned { origin = it.positionInRoot() }
@@ -253,25 +269,71 @@ private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull
             Modifier.align(Alignment.TopCenter).padding(top = 12.dp).graphicsLayer { alpha = (pull / threshold).coerceIn(0f, 1f) },
             Kelvin.type.label, Kelvin.colors.ink2,
         )
-        Column(
-            Modifier.fillMaxWidth().graphicsLayer {
+        val drawers = state.drawers.filter { it.apps.isNotEmpty() }
+        // The drawer names sit in the optical centre below the clock while closed; opening drawers grows the list down.
+        val titleHeight = 58.dp
+        val centreGap = with(density) { ((maxHeight - bottomInset).toPx() - clockHeight - drawers.size * titleHeight.toPx()) / 2f }.coerceAtLeast(with(density) { 24.dp.toPx() })
+        // Lazy, so only the cards on screen are built: opening every drawer stays smooth.
+        LazyColumn(
+            Modifier.fillMaxSize().graphicsLayer {
                 translationY = shift
                 val v = settle.value; scaleX = 0.94f + 0.06f * v; scaleY = scaleX; alpha = 0.4f + 0.6f * v
-            }.verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 12.dp),
+            },
+            state = list,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = bottomInset + 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            var clockBounds by remember { mutableStateOf(Rect.Zero) }
-            HomeClock(
-                state.clockStyle, onTime = host::openAlarms, onDate = host::openCalendar,
-                modifier = Modifier.padding(top = 28.dp).onGloballyPositioned { clockBounds = it.boundsInRoot() },
-                onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Launcher settings" to host::openSettings)) },
-            )
-            Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                for (drawer in state.drawers) if (drawer.apps.isNotEmpty()) DrawerSection(state, host, drawer, backdrop)
+            item(key = "clock") {
+                var clockBounds by remember { mutableStateOf(Rect.Zero) }
+                HomeClock(
+                    state.clockStyle, onTime = host::openAlarms, onDate = host::openCalendar,
+                    modifier = Modifier.padding(top = 28.dp).onGloballyPositioned { clockBounds = it.boundsInRoot(); clockHeight = it.size.height.toFloat() },
+                    onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Launcher settings" to host::openSettings)) },
+                )
             }
-            Spacer(Modifier.height(8.dp))
+            item(key = "gap") { Spacer(Modifier.height(with(density) { centreGap.toDp() })) }
+            var cardIndex = 0
+            for (drawer in drawers) {
+                val open = drawer.name in state.openDrawers
+                item(key = "title:" + drawer.name) {
+                    DrawerTitle(state, host, drawer, open, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = Kelvin.motion.spatial())) {
+                        // A drawer opened near the bottom scrolls up so its cards show.
+                        if (!open) scope.launch {
+                            delay(120)
+                            val info = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "title:" + drawer.name } ?: return@launch
+                            if (info.offset > list.layoutInfo.viewportEndOffset * 0.55f) list.animateScrollToItem(info.index, -with(density) { 24.dp.roundToPx() })
+                        }
+                    }
+                }
+                if (open) {
+                    val rows = rows(state, drawer.apps)
+                    rows.forEachIndexed { r, row ->
+                        val start = cardIndex
+                        item(key = "row:" + drawer.name + ":" + r) {
+                            CardRow(state, host, row, start, !state.bulkOpening, backdrop,
+                                Modifier.animateItem(fadeInSpec = Kelvin.motion.gentle(), fadeOutSpec = Kelvin.motion.gentle(), placementSpec = Kelvin.motion.spatial()))
+                        }
+                        cardIndex += row.size
+                    }
+                    item(key = "end:" + drawer.name) { Spacer(Modifier.height(12.dp).animateItem()) }
+                }
+            }
         }
+    }
+}
+
+/** One row of cards in an open drawer (a wide card takes two of the row's units). */
+@Composable
+private fun CardRow(state: EigenState, host: EigenHost, row: List<MainActivity.App>, start: Int, animate: Boolean, backdrop: KelvinBackdrop?, modifier: Modifier) {
+    val columns = state.columns
+    Row(modifier.fillMaxWidth()) {
+        var used = 0
+        row.forEachIndexed { i, app ->
+            val wide = app.id in state.wideCards
+            AppCard(state, host, app, start + i, Modifier.weight(if (wide) 2f else 1f), animate = animate, backdrop = backdrop)
+            used += if (wide) 2 else 1
+        }
+        if (used < columns) Spacer(Modifier.weight((columns - used).toFloat()))
     }
 }
 
@@ -291,38 +353,29 @@ private fun appMenu(state: EigenState, host: EigenHost, app: MainActivity.App, b
 ), app, bounds)
 
 @Composable
-private fun DrawerSection(state: EigenState, host: EigenHost, drawer: Drawer, backdrop: KelvinBackdrop) {
+private fun DrawerTitle(state: EigenState, host: EigenHost, drawer: Drawer, open: Boolean, modifier: Modifier, onOpening: () -> Unit) {
     val c = Kelvin.colors
-    val open = drawer.name in state.openDrawers
     val locale = LocalConfiguration.current.locales[0]
     val unread = remember(state.dotsVersion, drawer) { drawer.apps.any(host::hasDot) }
     val showUnread = unread && !open && state.dotStyle != "off"
     val base = if (state.openDrawers.isEmpty() || open) c.ink else c.ink.copy(alpha = 0.42f)
     val ink by animateColorAsState(if (showUnread && state.dotStyle == "colour") c.accent else base, Kelvin.motion.gentle(), label = "drawer ink")
-    // An opened drawer scrolls itself into view once it has grown, so its cards never hide under the dock.
-    val reveal = remember { BringIntoViewRequester() }
-    LaunchedEffect(open) { if (open && state.openDrawers.size == 1) { delay(320); reveal.bringIntoView() } }
     var titleBounds by remember { mutableStateOf(Rect.Zero) }
-    Column(Modifier.fillMaxWidth().bringIntoViewRequester(reveal), horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
             Modifier.onGloballyPositioned { titleBounds = it.boundsInRoot() }
                 .eigenPress(
-                    onClick = { state.openDrawers = if (open) state.openDrawers - drawer.name else state.openDrawers + drawer.name },
+                    onClick = { onOpening(); state.openDrawers = if (open) state.openDrawers - drawer.name else state.openDrawers + drawer.name },
                     onLongClick = { state.pillMenu = homeMenu(state, host, titleBounds.left, titleBounds.bottom) },
                     shape = CardShape, label = if (open) "Close" else "Open",
                 ).padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
             KText(drawer.name.replaceFirstChar { it.titlecase(locale) }, style = Kelvin.type.display.copy(fontSize = 31.sp, lineHeight = 38.sp), color = ink, maxLines = 1, align = TextAlign.Center)
-            // Unread: a short accent dash (Ratio's mark) or a dot, just after the name.
+            // Unread: a short accent dash or a dot, just after the name.
             if (showUnread && state.dotStyle == "dash") Box(Modifier.padding(start = 6.dp, top = 9.dp).size(16.dp, 6.dp).clip(CapsuleShape).background(c.accent))
             if (showUnread && state.dotStyle == "dot") Box(Modifier.padding(start = 6.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(c.accent))
         }
-        AnimatedVisibility(
-            open,
-            enter = expandVertically(Kelvin.motion.spatial()) + fadeIn(Kelvin.motion.gentle()),
-            exit = shrinkVertically(Kelvin.motion.spatial()) + fadeOut(Kelvin.motion.gentle()),
-        ) { AppGrid(state, host, drawer.apps, animate = true, backdrop = backdrop) }
     }
 }
 
@@ -376,28 +429,35 @@ fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: In
     val fill = when (style) { "marker" -> c.accent; "bright" -> c.ink.copy(alpha = 0.20f); else -> c.ink.copy(alpha = 0.08f) }
     val ink = if (style == "marker") c.onAccent else c.ink
     val minutes = state.usageMinutes[app.component.packageName] ?: 0
-    var bounds by remember { mutableStateOf(Rect.Zero) }
+    // The card's place on screen, read only while drawing or on a tap, so a card moving (a drawer opening) redraws
+    // its frost without recomposing.
+    val boundsState = remember { mutableStateOf(Rect.Zero) }
     // Real Kelvin glass over the wallpaper: it refracts through its rim, frosts at the Glass level, leans toward the
     // finger and thaws where it is pressed. Marker is stained accent glass; Bright is lit glass.
-    val thaw = studio72f.kelvin.rememberThaw()
-    val press = studio72f.kelvin.rememberGlassPress(thaw)
+    val thaw = if (state.frost) null else studio72f.kelvin.rememberThaw()
+    val press = if (state.frost) null else studio72f.kelvin.rememberGlassPress(thaw)
     val surface = when {
         backdrop == null -> Modifier.clip(CardShape).background(if (style == "marker") c.accent else fill)
-        style == "marker" -> Modifier.glass(backdrop, CardShape, GlassContent.Colored, tint = c.accent, thaw = thaw, motion = press.layerBlock, pebble = press)
-        style == "bright" -> Modifier.litGlass(backdrop, CardShape, motion = press.layerBlock)
-        else -> Modifier.glass(backdrop, CardShape, GlassContent.Text, thaw = thaw, motion = press.layerBlock, pebble = press)
+        // Frost (the default): every card shows its slice of one frosted copy of the wallpaper, lined up behind it,
+        // with a milky lift. One blur for the whole screen, so opening every drawer stays smooth.
+        state.frost && style != "marker" -> Modifier.clip(CardShape).frosted(state, { boundsState.value }, lit = style == "bright")
+        state.frost -> Modifier.clip(CardShape).background(c.accent)
+        style == "marker" -> Modifier.glass(backdrop, CardShape, GlassContent.Colored, tint = c.accent, thaw = thaw, motion = press?.layerBlock, pebble = press)
+        style == "bright" -> Modifier.litGlass(backdrop, CardShape, motion = press?.layerBlock)
+        else -> Modifier.glass(backdrop, CardShape, GlassContent.Text, thaw = thaw, motion = press?.layerBlock, pebble = press)
     }
     Box(
         modifier.padding(3.dp).height(when (state.columns) { 4 -> 128.dp; 6 -> 104.dp; else -> 116.dp })
-            .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .onGloballyPositioned { boundsState.value = it.boundsInRoot() }
             .graphicsLayer {
                 val v = appear.value
                 alpha = v.coerceIn(0f, 1f); translationY = (1f - v) * 22.dp.toPx()
                 scaleX = 0.94f + 0.06f * v; scaleY = scaleX
             }
-            .then(if (interactive) Modifier.glassCardClick({ host.launchFrom(app, bounds.left.roundToInt(), bounds.top.roundToInt(), bounds.width.roundToInt(), bounds.height.roundToInt()) }, { state.pillMenu = appMenu(state, host, app, bounds) }, app.title()) else Modifier)
+            .then(if (interactive) Modifier.glassCardClick({ val b = boundsState.value; host.launchFrom(app, b.left.roundToInt(), b.top.roundToInt(), b.width.roundToInt(), b.height.roundToInt()) }, { state.pillMenu = appMenu(state, host, app, boundsState.value) }, app.title()) else Modifier)
             .then(surface)
-            .then(if (interactive && backdrop != null) press.gestures else Modifier),
+            .then(if (interactive && press != null) press.gestures else Modifier)
+            .then(if (interactive && state.frost) Modifier.frostPress(CardShape) else Modifier),
     ) {
         val label = Kelvin.type.caption.copy(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
         if (wide) Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -672,11 +732,11 @@ private fun submitSearch(state: EigenState, host: EigenHost) {
 }
 
 @Composable
-private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
+private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop, bottomInset: androidx.compose.ui.unit.Dp) {
     val c = Kelvin.colors
     val q = state.query.trim()
     val found = remember(q, state.allApps) { results(state) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.Bottom) {
+    Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = bottomInset), verticalArrangement = Arrangement.Bottom) {
         if (q.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 KText("Type an app's name, or ask a question.\nAnswers come from the model on this phone.", style = Kelvin.type.body, color = c.ink2, align = TextAlign.Center)
@@ -754,4 +814,53 @@ private fun Modifier.glassCardClick(onClick: () -> Unit, onLongClick: () -> Unit
         onLongClick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLongClick() },
         onClick = onClick,
     )
+}
+
+/**
+ * Frost for a card: its slice of the frosted wallpaper (blurred once, kept by the activity), placed where the real
+ * wallpaper sits behind it, then a smoky shade and a milky lift so the card glows a little brighter than the dimmed
+ * wallpaper around it. [lit] lifts it further. Without a photo wallpaper it falls back to a milky fill.
+ */
+@Composable
+private fun Modifier.frosted(state: EigenState, bounds: () -> Rect, lit: Boolean): Modifier {
+    val soft = state.softWallpaper
+    val milk = if (lit) 0.20f else 0.11f
+    if (state.wallpaperMode != "photo" || soft == null) return background(Color.White.copy(alpha = milk + 0.04f))
+    val image = remember(soft) { soft.asImageBitmap() }
+    val root = androidx.compose.ui.platform.LocalView.current.rootView
+    val filter = remember(state.greyscale) {
+        androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(if (state.greyscale) 0f else 1.35f) })
+    }
+    return drawBehind {
+        val w = root.width.toFloat(); val h = root.height.toFloat()
+        if (w <= 0f || h <= 0f) return@drawBehind
+        val b = bounds() // a read in the draw phase: moving redraws, it never recomposes
+        val scale = maxOf(w / image.width, h / image.height)
+        val dw = image.width * scale; val dh = image.height * scale
+        drawImage(
+            image,
+            dstOffset = IntOffset(((w - dw) / 2f - b.left).roundToInt(), ((h - dh) / 2f - b.top).roundToInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(dw.roundToInt(), dh.roundToInt()),
+            colorFilter = filter,
+        )
+        drawRect(Color.Black.copy(alpha = (state.dim * 0.45f + 0.08f).coerceAtMost(0.6f)))
+        drawRect(Color.White.copy(alpha = milk))
+    }
+}
+
+/** Frost has no lean or thaw; it presses like Kelvin's other matte surfaces (warm-wax squash and a sheen). */
+private fun Modifier.frostPress(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
+    val press = remember { Animatable(0f) }
+    val snappy = Kelvin.motion.snappy<Float>(); val wobble = Kelvin.motion.wobble<Float>()
+    val scope = rememberCoroutineScope()
+    pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val down = e.changes.any { it.pressed }
+                scope.launch { press.animateTo(if (down) 1f else 0f, if (down) snappy else wobble) }
+            }
+        }
+    }.graphicsLayer { val p = press.value; scaleX = 1f + 0.02f * p; scaleY = 1f - 0.035f * p }
+        .drawWithContent { drawContent(); if (press.value > 0f) drawOutline(shape.createOutline(size, layoutDirection, this), Color.White.copy(alpha = 0.12f * press.value)) }
 }

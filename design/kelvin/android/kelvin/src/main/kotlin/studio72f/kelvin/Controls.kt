@@ -366,11 +366,14 @@ fun KelvinSlider(
     }
 }
 
-/** End labels for the Glass slider, and the note shown as it nears Clear. */
+/**
+ * End labels for the Glass slider, and the note shown as it nears Clear. Frost's range ends at
+ * Sheer and keeps its contrast floor, so it has no warning: pass null.
+ */
 data class GlassRangeLabels(
     val opaque: String,
     val clear: String,
-    val clearWarning: String,
+    val clearWarning: String?,
 )
 
 /**
@@ -395,7 +398,7 @@ fun KelvinGlassControl(
             KText(labels.opaque, Modifier.weight(1f), Kelvin.type.caption, Kelvin.colors.ink2)
             KText(labels.clear, style = Kelvin.type.caption, color = Kelvin.colors.ink2)
         }
-        if (level >= GlassLevel.Liquid + 0.08f) {
+        if (labels.clearWarning != null && level >= GlassLevel.Liquid + 0.08f) {
             KText(labels.clearWarning, Modifier.padding(top = 4.dp), Kelvin.type.summary, Kelvin.colors.caution)
         }
     }

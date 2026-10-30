@@ -72,7 +72,10 @@ object Kelvin {
 }
 
 /**
- * Kelvin theme. [glass] is the person's Glass setting (0 Solid … 1 Liquid); the theme lowers it
+ * Kelvin theme. [texture] is the glass material the person picked and [glass] its intensity:
+ * for [GlassTexture.Liquid] the Glass level (0 near-opaque … 1 Clear), for [GlassTexture.Frost]
+ * the frost (0 Opaque … 1 Sheer). Keep one intensity per texture so switching back restores it.
+ * The theme lowers it
  * when the system asks for high-contrast text or battery saving. [reduceMotion] is the app's own
  * setting; the system animator scale is honoured on top of it. [adjust] lets an app make a
  * documented variation of the palette (for example a darker group colour for AMOLED screens).
@@ -82,6 +85,7 @@ fun KelvinTheme(
     dark: Boolean = isSystemInDarkTheme(),
     accent: Accent = Accent.Ember,
     glass: Float = GlassLevel.Frosted,
+    texture: GlassTexture = GlassTexture.Liquid,
     reduceMotion: Boolean = false,
     adjust: (KelvinColors) -> KelvinColors = { it },
     content: @Composable () -> Unit,
@@ -89,7 +93,7 @@ fun KelvinTheme(
     val context = LocalContext.current
     val a11y = remember(context, reduceMotion) { context.readAccessibility(reduceMotion) }
     val colors = remember(dark, accent, adjust) { adjust((if (dark) KelvinDark else KelvinLight).withAccent(accent, dark)) }
-    val glassParams = remember(glass, a11y) { glass.resolve(a11y) }
+    val glassParams = remember(glass, texture, a11y) { glass.resolve(a11y, texture) }
     val selection = remember(colors) { TextSelectionColors(colors.accent, colors.accent.copy(alpha = 0.3f)) }
     CompositionLocalProvider(
         LocalKelvinColors provides colors,

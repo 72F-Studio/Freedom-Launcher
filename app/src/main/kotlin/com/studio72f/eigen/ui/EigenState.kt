@@ -31,6 +31,8 @@ interface EigenHost {
     fun media(action: Int)
     fun openNotificationAccess()
     fun setGlassLevel(level: Float)
+    fun setFrost(on: Boolean)
+    fun setFrostLevel(level: Float)
     fun isDefaultHome(): Boolean
     fun makeDefaultHome()
     fun setColour(index: Int)
@@ -72,6 +74,10 @@ class EigenState {
     var accent by mutableIntStateOf(0xFFFF8A1F.toInt())
     var monoIcons by mutableStateOf(false)
     var glass by mutableStateOf(0.3f)
+    /** Kelvin's Frost texture (deep ground glass) instead of Liquid glass; Eigen's default look. */
+    var frost by mutableStateOf(true)
+    /** Frost intensity, 0 Opaque … 1 Sheer; kept apart from the Liquid glass level. */
+    var frostLevel by mutableStateOf(0.75f)
     var reduceMotion by mutableStateOf(false)
     var clockStyle by mutableStateOf("ratio")
 
@@ -97,6 +103,8 @@ class EigenState {
     var pageRequest by mutableIntStateOf(0)
     /** Drawers open on home; several can be open at once. */
     var openDrawers by mutableStateOf(emptySet<String>())
+    /** True while open/close all runs: drawers glide open without each card's own entrance. */
+    var bulkOpening by mutableStateOf(false)
     var appDrawerOpen by mutableStateOf(false)
     /** How far the app drawer is open, 0 … 1, live while the finger pulls; the wallpaper frosts in step. */
     var drawerProgress by mutableStateOf(0f)

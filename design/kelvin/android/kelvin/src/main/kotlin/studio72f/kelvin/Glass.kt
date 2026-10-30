@@ -63,6 +63,26 @@ object GlassLevel {
 }
 
 /**
+ * The two premium materials a person can pick in Settings > Appearance > Glass. [Liquid] is
+ * Kelvin's optic glass: a thick pane that refracts, disperses and thaws, on the Glass level from
+ * near-opaque to Clear. [Frost] is deep ground glass, as on the HyperOS lock screen: no
+ * refraction, the page behind melted into a wide, saturated blur under a smoky coat, on its own
+ * stepless intensity from Opaque to Sheer. Both apply wherever glass does.
+ */
+enum class GlassTexture { Liquid, Frost }
+
+/**
+ * Reference points on the Frost intensity, a stepless 0 to 1 like the Glass level: an opaque
+ * coat at 0, the sheerest frost at 1. Frost never gives up the contrast floor, so even Sheer
+ * keeps text readable.
+ */
+object FrostLevel {
+    const val Opaque = 0f
+    const val Default = 0.5f
+    const val Sheer = 1f
+}
+
+/**
  * Everything Kelvin glass needs, derived from the Glass level after accessibility caps. The
  * pane is modelled as real glass: [thicknessDp] and [bevelDp] shape it (flat on top, rounding
  * to the rim), [ior] and [dispersion] set how it bends light, [frostDp] how rough its surface
@@ -88,9 +108,13 @@ data class GlassParams(
     val solid: Boolean = false,
     /** How milky light glass stays over dark content: 1 toward the opaque end, 0 from Liquid. */
     val milk: Float = 0f,
+    /** Which material draws the pane. Frost keeps [level] on the Liquid scale (how clear it reads, never past Glass) for the veil and the controls' stretch. */
+    val texture: GlassTexture = GlassTexture.Liquid,
 ) {
     /** An opaque pane with no glass, forced by high-contrast text. */
     val isSolid: Boolean get() = solid
+    /** Deep frost: a wide blur under a coat, no refraction, no rim light, no thaw. */
+    val isFrost: Boolean get() = texture == GlassTexture.Frost
 }
 
 internal fun smoothstep(e0: Float, e1: Float, x: Float): Float {
@@ -108,7 +132,8 @@ private fun curve(level: Float, vararg stops: Pair<Float, Float>): Float {
     return stops.last().second
 }
 
-fun Float.resolve(a11y: KelvinAccessibility): GlassParams {
+fun Float.resolve(a11y: KelvinAccessibility, texture: GlassTexture = GlassTexture.Liquid): GlassParams {
+    if (texture == GlassTexture.Frost) return resolveFrost(a11y)
     var level = coerceIn(0f, 1f)
     if (a11y.powerSave) level = level.coerceAtMost(GlassLevel.Frosted)
     val f = GlassLevel.Frosted
@@ -134,6 +159,34 @@ fun Float.resolve(a11y: KelvinAccessibility): GlassParams {
         stainAlpha = curve(level, 0f to 0.99f, f to 0.97f, g to 0.94f, l to 0.9f, 1f to 0.84f),
         deform = if (a11y.reduceMotion) 0f else 0.15f + 0.85f * smoothstep(f, l, level),
         solid = a11y.highContrastText,
+    )
+}
+
+/**
+ * Frost at intensity [this] (0 Opaque … 1 Sheer). The blur stays deep across the range (it is
+ * what makes the material); only the coat thins, and colour behind is pushed further as it does,
+ * so a sunset under the pane glows through as warm light rather than greying out.
+ */
+private fun Float.resolveFrost(a11y: KelvinAccessibility): GlassParams {
+    val t = coerceIn(0f, 1f)
+    // How clear the pane reads, on the Liquid scale: never past the Glass mark.
+    val level = t * GlassLevel.Glass
+    return GlassParams(
+        level = level,
+        frostDp = curve(t, 0f to 44f, 1f to 34f),
+        tintAlpha = curve(t, 0f to 0.96f, FrostLevel.Default to 0.62f, 1f to 0.34f),
+        thicknessDp = 0f,
+        bevelDp = 0f,
+        ior = 1f,
+        dispersion = 0f,
+        floor = 1f,
+        horizon = 0f,
+        saturation = curve(t, 0f to 1.3f, 1f to 1.8f),
+        milk = curve(t, 0f to 1f, 1f to 0.4f),
+        stainAlpha = curve(t, 0f to 0.98f, 1f to 0.9f),
+        deform = if (a11y.reduceMotion) 0f else 0.15f + 0.85f * smoothstep(GlassLevel.Frosted, GlassLevel.Liquid, level),
+        solid = a11y.highContrastText,
+        texture = GlassTexture.Frost,
     )
 }
 
@@ -238,7 +291,7 @@ fun Modifier.glass(
     // clearer than the Glass mark, however far the slider goes.
     val a11y = LocalKelvinAccessibility.current
     val params = Kelvin.glass.let { g ->
-        if (content == GlassContent.Pane && g.level > PaneGlassCap) remember(a11y) { PaneGlassCap.resolve(a11y) } else g
+        if (content == GlassContent.Pane && !g.isFrost && g.level > PaneGlassCap) remember(a11y) { PaneGlassCap.resolve(a11y) } else g
     }
     val colors = Kelvin.colors
     val dark = Kelvin.dark
@@ -251,12 +304,14 @@ fun Modifier.glass(
         colored -> params.stainAlpha
         // Sheets and dialogs carry reading text over whatever is behind them (the dock, a dimmed
         // page): a steady milky coat, so bright shapes behind never show through as smears.
-        pane -> maxOf(params.tintAlpha, 0.86f)
+        // Deep frost already melts what is behind into soft light, so a lighter coat reads.
+        pane -> maxOf(params.tintAlpha, if (params.isFrost) 0.55f else 0.86f)
         else -> params.tintAlpha
     }
     val heat = colors.glassHeat
     val ground = backdrop?.ground ?: colors.canvas
-    val text = content == GlassContent.Text
+    // Frost keeps the contrast floor on dialogs and sheets too: its coat goes sheerer than theirs.
+    val text = content == GlassContent.Text || (params.isFrost && content == GlassContent.Pane)
     val shader = isRuntimeShaderSupported()
     val reduceMotion = Kelvin.reduceMotion
     // A pebble with nothing to refract (no backdrop, high-contrast text, or no shader support)
@@ -275,7 +330,30 @@ fun Modifier.glass(
             if (params.isSolid || backdrop == null) return@drawBackdrop
             val frost = params.frostDp.dp.toPx()
             if (!shader) {
-                blur(maxOf(frost * 0.6f, 1f))
+                blur(maxOf(if (params.isFrost) frost else frost * 0.6f, 1f))
+                return@drawBackdrop
+            }
+            if (params.isFrost) {
+                // Deep frost: the whole depth is one wide blur; the shader only coats, saturates
+                // and grains it. Pad for the blur's full reach.
+                padding = maxOf(padding, frost * 1.8f + 4.dp.toPx())
+                blur(frost)
+                val radii = shape.paneRadii(size, layoutDirection, this)
+                runtimeShaderEffect("kelvin-frost", FROST_AGSL, "content") {
+                    setFloatUniform("size", size.width, size.height)
+                    setFloatUniform("offset", -padding, -padding)
+                    setFloatUniform("cornerRadii", radii)
+                    setFloatUniform("tint", baseTint.red, baseTint.green, baseTint.blue, alpha)
+                    setFloatUniform("floorMin", if (text && !dark) (0.5f + 0.28f * params.milk) * params.floor else 0f)
+                    setFloatUniform("floorMax", if (text && dark) 1f - (0.93f + 0.04f * params.milk) * params.floor else 1f)
+                    setFloatUniform("saturation", params.saturation)
+                    setFloatUniform("body", if (colored) 1f else 0f)
+                    setFloatUniform("ground", ground.red, ground.green, ground.blue)
+                    setFloatUniform("steep", if (isPebble) 1f else 0f)
+                    setFloatUniform("px", density)
+                    setFloatUniform("finish", if (dark) 0.55f else 1f)
+                    setFloatUniform("grain", if (dark) 0.014f else 0.018f)
+                }
                 return@drawBackdrop
             }
             // A pane's rim and thickness scale with the pane: a chip is a thin sliver of glass
@@ -328,7 +406,8 @@ fun Modifier.glass(
         // Every floating pane carries the same one as the buttons, so the dock, the search
         // capsule, pills, menus and badges read as one material. Edge-to-edge bars (a rectangle
         // spanning the screen) and the dock's clear lens do not: there it would rule a line.
-        highlight = if (!params.isSolid && shape != androidx.compose.ui.graphics.RectangleShape && content != GlassContent.Decorative) {
+        // Frost is matte: no rim light, its edge comes from the coat and the shadow.
+        highlight = if (!params.isSolid && !params.isFrost && shape != androidx.compose.ui.graphics.RectangleShape && content != GlassContent.Decorative) {
             { Highlight(width = if (dark) 0.6.dp else 0.35.dp, alpha = if (dark) 0.6f else 0.8f) }
         } else null,
         shadow = when {
@@ -351,7 +430,7 @@ fun Modifier.glass(
         onDrawFront = {
             val front = this; pebble?.run { front.drawPressLight(shape.createOutline(front.size, front.layoutDirection, front)) }
             // Without refraction there is nothing to show the pane's edge, so draw it.
-            if (!colored && (params.isSolid || !shader || backdrop == null)) {
+            if (!colored && (params.isSolid || (!params.isFrost && (!shader || backdrop == null)))) {
                 drawOutline(shape.createOutline(size, layoutDirection, this), colors.glassEdge, style = Stroke(0.5.dp.toPx()))
             }
         },
@@ -575,6 +654,77 @@ half4 main(float2 coord) {
     c = 1.0 - (1.0 - c) * (1.0 - carried);
 
     if (steep > 0.5) c = pebbleFinish(c, -sd, g, (p.y + halfSize.y) / size.y, min(size.x, size.y), px, finish, 0.0);
+    return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
+}
+"""
+
+/**
+ * Kelvin deep frost. The backdrop arrives already melted by a wide blur; here it is saturated so
+ * colour glows through rather than greying, coated with `glass-tint` (stained glass thins at a
+ * pebble's rim), held to the contrast floor, and given a fine grain fixed to the pane, so it
+ * reads as ground glass, not fog. No refraction, no reflection, no rim light.
+ */
+private const val FROST_AGSL = """
+uniform shader content;
+uniform float2 size;
+uniform float2 offset;
+uniform float4 cornerRadii;
+uniform float4 tint;
+uniform float floorMin;
+uniform float floorMax;
+uniform float saturation;
+uniform float body;
+uniform float3 ground;
+uniform float steep;
+uniform float px;
+uniform float finish;
+uniform float grain;
+
+$PaneSdf
+$PebbleLight
+
+float luminance(float3 c) {
+    float3 l = pow(max(c, float3(0.0)), float3(2.2));
+    return dot(l, float3(0.2126, 0.7152, 0.0722));
+}
+
+float hash(float2 p) {
+    p = fract(p * float2(443.897, 441.423));
+    p += dot(p, p.yx + 19.19);
+    return fract((p.x + p.y) * p.x);
+}
+
+half4 main(float2 coord) {
+    float2 halfSize = size * 0.5;
+    float2 p = coord + offset - halfSize;
+    float r = min(radiusAt(p, cornerRadii), min(halfSize.x, halfSize.y));
+    float sd = min(sdPane(p, halfSize, r), 0.0);
+
+    half4 s = content.eval(coord);
+    float3 c = float3(s.rgb) + (1.0 - float(s.a)) * ground;
+    float grey = dot(c, float3(0.2126, 0.7152, 0.0722));
+    c = clamp(mix(float3(grey), c, saturation), 0.0, 1.0);
+
+    float a = tint.a;
+    if (body > 0.5) {
+        // Stained frost is densest in the middle and thins toward a pebble's rim.
+        float path = 0.35 + 0.65 * dropThickness(-sd, min(halfSize.x, halfSize.y) * 0.6);
+        a = 1.0 - pow(1.0 - min(a, 0.999), path);
+    }
+    c = mix(c, tint.rgb, a);
+
+    float lum = luminance(c);
+    float tl = luminance(tint.rgb);
+    if (lum < floorMin && tl > lum) c = mix(c, tint.rgb, clamp((floorMin - lum) / (tl - lum), 0.0, 1.0));
+    if (lum > floorMax && tl < lum) c = mix(c, tint.rgb, clamp((lum - floorMax) / (lum - tl), 0.0, 1.0));
+
+    // Ground glass: a fine grain that stays on the pane while the page moves behind it.
+    c += (hash(p) - 0.5) * grain;
+
+    if (steep > 0.5) {
+        float2 g = normalAt(p, halfSize, min(r * 1.5, min(halfSize.x, halfSize.y)));
+        c = pebbleFinish(c, -sd, g, (p.y + halfSize.y) / size.y, min(size.x, size.y), px, finish, 0.0);
+    }
     return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
 }
 """

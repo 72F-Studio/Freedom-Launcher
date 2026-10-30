@@ -108,6 +108,8 @@ internal fun pebbleRim(minSide: Float, density: Float): Float = minOf(minSide * 
  */
 fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow: Boolean = true): Modifier = composed {
     val dark = Kelvin.dark
+    // Frost is matte: its pebbles keep their body and shadow but draw no rim-light stroke.
+    val matte = Kelvin.glass.isFrost
     // How colourful the fill is, 0 for greys and white to 1 for the accent: it decides between the
     // coloured glow and the neutral shadow, and how much finish the face takes in dark mode.
     val vividness = remember(color) { smoothstep(0.05f, 0.12f, color.chroma()) }
@@ -144,7 +146,7 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
             // with a light page. Grey stones in dark mode take least: their top glow read as a
             // lit edge against the dark group.
             shader.setFloatUniform("strength", if (dark) 0.25f + 0.3f * vividness else 1f)
-            shader.setFloatUniform("rim", if (dark) 0.2f + 0.3f * vividness else 0.8f)
+            shader.setFloatUniform("rim", if (matte) 0f else if (dark) 0.2f + 0.3f * vividness else 0.8f)
             drawOutline(outline, ShaderBrush(shader))
             press?.run { drawPressLight(outline, lift) }
         }
@@ -155,13 +157,19 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
 fun Modifier.pebbleMotion(press: GlassPress): Modifier = graphicsLayer(press.layerBlock).then(press.gestures)
 
 /**
+ * How far a chosen pill's glow reaches past it: its 10dp blur plus the 4dp it falls south-east,
+ * with a little to spare, so it fades out before any edge rather than being cut off.
+ */
+val GlowRoom = 16.dp
+
+/**
  * Room for a carousel's edges: the row is laid out [vertical] taller above and below and
  * [horizontal] wider either side but takes only its original space, so the glow under a chosen
  * pill is never cut off and the carousel can run past its container's padding to the edge of
  * the card or screen. Pad the row's content by the same amounts (LazyRow `contentPadding`, or
  * `padding` inside a `horizontalScroll`).
  */
-fun Modifier.glowRoom(vertical: androidx.compose.ui.unit.Dp = 12.dp, horizontal: androidx.compose.ui.unit.Dp = 0.dp): Modifier = this.then(
+fun Modifier.glowRoom(vertical: androidx.compose.ui.unit.Dp = GlowRoom, horizontal: androidx.compose.ui.unit.Dp = 0.dp): Modifier = this.then(
     Modifier.layout { measurable, constraints ->
         val ev = vertical.roundToPx()
         val eh = horizontal.roundToPx()
@@ -212,7 +220,7 @@ fun Modifier.kelvinCarousel(
     inset: androidx.compose.ui.unit.Dp = 16.dp,
     bleed: androidx.compose.ui.unit.Dp = 0.dp,
 ): Modifier = this
-    .glowRoom(12.dp, bleed)
+    .glowRoom(GlowRoom, bleed)
     .carouselFade(scroll)
     .then(Modifier.horizontalScroll(scroll))
-    .padding(horizontal = inset, vertical = 12.dp)
+    .padding(horizontal = inset, vertical = GlowRoom)

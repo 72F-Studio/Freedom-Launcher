@@ -58,7 +58,8 @@ fun EigenTheme(state: EigenState, content: @Composable () -> Unit) {
     KelvinTheme(
         dark = true,
         accent = if (grey) Accent.Graphite else Accent.Ember,
-        glass = state.glass,
+        glass = if (state.frost) state.frostLevel else state.glass,
+        texture = if (state.frost) studio72f.kelvin.GlassTexture.Frost else studio72f.kelvin.GlassTexture.Liquid,
         reduceMotion = state.reduceMotion,
         adjust = { c ->
             if (grey) c else c.copy(

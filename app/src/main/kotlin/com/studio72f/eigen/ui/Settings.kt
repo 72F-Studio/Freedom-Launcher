@@ -150,16 +150,21 @@ private fun BrightnessRow(state: EigenState, host: EigenHost) {
     }
 }
 
+/** Kelvin's Glass setting: pick the material, Frost or Liquid glass, then its own intensity. */
 @Composable
 private fun GlassRow(state: EigenState, host: EigenHost) {
-    var level by remember { mutableFloatStateOf(state.glass) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         studio72f.kelvin.KText("Glass", style = Kelvin.type.rowTitle)
-        KelvinGlassControl(
-            level, { level = it; state.glass = it },
-            GlassRangeLabels("Opaque", "Clear", "Clear glass has no contrast protection. Text over photos may be hard to read."),
-            "Glass",
-            onLevelChangeFinished = { host.setGlassLevel(level) },
-        )
+        studio72f.kelvin.KelvinSegmented(listOf("Frost", "Liquid glass"), if (state.frost) 0 else 1, { i -> state.frost = i == 0; host.setFrost(i == 0) })
+        if (state.frost) {
+            var level by remember { mutableFloatStateOf(state.frostLevel) }
+            KelvinGlassControl(level, { level = it; state.frostLevel = it }, GlassRangeLabels("Opaque", "Sheer", ""), "Frost",
+                onLevelChangeFinished = { host.setFrostLevel(level) })
+        } else {
+            var level by remember { mutableFloatStateOf(state.glass) }
+            KelvinGlassControl(level, { level = it; state.glass = it },
+                GlassRangeLabels("Opaque", "Clear", "Clear glass has no contrast protection. Text over photos may be hard to read."), "Glass",
+                onLevelChangeFinished = { host.setGlassLevel(level) })
+        }
     }
 }

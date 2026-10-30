@@ -93,6 +93,17 @@ fun Modifier.eigenPress(
 
 private val iconCache = WeakHashMap<android.graphics.drawable.Drawable, androidx.compose.ui.graphics.ImageBitmap>()
 
+/** Converts icons to bitmaps ahead of time (off the main thread), so opening drawers never waits on uploads. */
+fun prewarmIcons(apps: List<MainActivity.App>) {
+    for (a in apps) {
+        val d = a.icon ?: continue
+        synchronized(iconCache) { if (iconCache.containsKey(d)) null else d }?.let { drawable ->
+            val bmp = runCatching { drawable.toBitmap(144, 144).asImageBitmap().also { it.prepareToDraw() } }.getOrNull() ?: return@let
+            synchronized(iconCache) { iconCache.putIfAbsent(drawable, bmp) }
+        }
+    }
+}
+
 /** An app's icon (icon packs and all, as the activity loaded it), optionally desaturated. */
 @Composable
 fun AppIcon(app: MainActivity.App, size: Dp, mono: Boolean, modifier: Modifier = Modifier) {

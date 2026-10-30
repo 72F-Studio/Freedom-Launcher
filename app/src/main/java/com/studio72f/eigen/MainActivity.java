@@ -144,6 +144,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void media(int action) { mediaAction(action); }
         @Override public void openNotificationAccess() { safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
         @Override public void setGlassLevel(float level) { prefs.edit().putFloat("glass_level", level).apply(); FrostedCard.setGlassLevel(level); updateBackdrop(); }
+        @Override public void setFrost(boolean on) { prefs.edit().putString("glass_texture", on ? "frost" : "liquid").apply(); eigen.setFrost(on); }
+        @Override public void setFrostLevel(float level) { prefs.edit().putFloat("frost_level", level).apply(); eigen.setFrostLevel(level); }
         @Override public boolean isDefaultHome() { return MainActivity.this.isDefaultHome(); }
         @Override public void makeDefaultHome() { defaultHome(); }
         @Override public void setColour(int index) { applyColour(index); }
@@ -399,6 +401,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setAccent(accent);
         eigen.setMonoIcons(prefs.getString("icons",theme.iconStyle).equals("mono"));
         eigen.setGlass(prefs.getFloat("glass_level",.3f));
+        eigen.setFrost(!"liquid".equals(prefs.getString("glass_texture","frost")));
+        eigen.setFrostLevel(prefs.getFloat("frost_level",.75f)); // a step sheerer than Kelvin's default: milky, not smoky, over a dimmed wallpaper
         eigen.setReduceMotion(theme.motionMs==0);
         eigen.setClockStyle(prefs.getString("clock_face","ratio"));
         eigen.setWallpaperMode(activeWallpaperMode==null?"solid":activeWallpaperMode);
