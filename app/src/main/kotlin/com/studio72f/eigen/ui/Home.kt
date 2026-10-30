@@ -1,5 +1,6 @@
 package com.studio72f.eigen.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -577,13 +578,16 @@ private fun EdgeScroller(list: androidx.compose.foundation.lazy.LazyListState, l
     var trackHeight by remember { mutableFloatStateOf(1f) }
     var dragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
-    var shownLetter by remember { mutableStateOf(-1) }
-    val total = list.layoutInfo.totalItemsCount.coerceAtLeast(2)
-    // Where the list is, 0 … 1: the first visible item plus how far into it we are.
-    val scrolled = run {
-        val first = list.firstVisibleItemIndex
-        val size = list.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.coerceAtLeast(1) ?: 1
-        ((first + list.firstVisibleItemScrollOffset / size.toFloat()) / (total - 1)).coerceIn(0f, 1f)
+    var shownLetter by remember { mutableIntStateOf(-1) }
+    val total by remember(list) { androidx.compose.runtime.derivedStateOf { list.layoutInfo.totalItemsCount.coerceAtLeast(2) } }
+    // Where the list is, 0 … 1: the first visible item plus how far into it we are. Derived, so scrolling redraws
+    // the thumb without recomposing the scroller.
+    val scrolled by remember(list) {
+        androidx.compose.runtime.derivedStateOf {
+            val first = list.firstVisibleItemIndex
+            val size = list.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.coerceAtLeast(1) ?: 1
+            ((first + list.firstVisibleItemScrollOffset / size.toFloat()) / (total - 1)).coerceIn(0f, 1f)
+        }
     }
     val fraction = if (dragging) dragFraction else scrolled
     val width by androidx.compose.animation.core.animateDpAsState(if (dragging) 10.dp else 5.dp, Kelvin.motion.snappy(), label = "thumb width")

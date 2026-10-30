@@ -1,5 +1,6 @@
 package com.studio72f.eigen.ui
 
+import androidx.core.content.edit
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -487,7 +488,7 @@ private fun Notes() {
     Card {
         Label("Notes")
         Box(Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
-            BasicTextField(text, { text = it; prefs.edit().putString("scratchpad_text", it).apply() }, Modifier.fillMaxWidth(),
+            BasicTextField(text, { text = it; prefs.edit { putString("scratchpad_text", it) } }, Modifier.fillMaxWidth(),
                 textStyle = Kelvin.type.body.copy(color = c.ink, fontSize = 16.sp), cursorBrush = SolidColor(c.accent),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
             if (text.isEmpty()) KText("Jot something down", style = Kelvin.type.body.copy(fontSize = 16.sp), color = c.ink2)

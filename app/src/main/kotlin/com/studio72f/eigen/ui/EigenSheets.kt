@@ -1,8 +1,8 @@
 package com.studio72f.eigen.ui
 
+import androidx.core.graphics.drawable.toDrawable
 import android.app.Dialog
 import android.graphics.Color as AColor
-import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import studio72f.kelvin.ButtonKind
@@ -63,7 +62,7 @@ object EigenSheets {
     fun menu(activity: ComponentActivity, state: EigenState, title: String, options: Array<String>, pick: Pick, swatches: IntArray?, selected: Int): Dialog =
         window(activity, state) { close ->
             Sheet(title) {
-                Column(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.6f).dp).verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = with(androidx.compose.ui.platform.LocalDensity.current) { (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height * 0.6f).toDp() }).verticalScroll(rememberScrollState())) {
                     KelvinGroup(gutter = 0.dp) {
                         options.forEachIndexed { i, o ->
                             val dot = o.indexOf(" · ")
@@ -146,7 +145,7 @@ object EigenSheets {
         dialog.setContentView(view)
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(AColor.TRANSPARENT))
+            setBackgroundDrawable(AColor.TRANSPARENT.toDrawable())
             setGravity(Gravity.BOTTOM)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.35f)

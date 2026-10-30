@@ -198,7 +198,7 @@ private fun FinishPage(state: EigenState, host: EigenHost) {
     Title("Make it yours", "Both are optional, and both can be changed later in Settings.")
     KelvinGroup(gutter = 0.dp) {
         KelvinRow("Choose a wallpaper", summary = "Eigen blurs it beautifully, inside the launcher only", icon = KelvinIcons.Photo, tile = KelvinTiles.Blue, chevron = true, onClick = host::chooseWallpaper)
-        KelvinRow("Allow notification access", summary = "For Conversations, replies and app dots. Nothing leaves your phone.", icon = Message, tile = KelvinTiles.Green,
+        KelvinRow("Allow notification access", summary = "For app dots and what's playing, and Conversations with Plus. Nothing leaves your phone.", icon = Message, tile = KelvinTiles.Green,
             value = if (state.notificationAccess) "On" else null, chevron = !state.notificationAccess, onClick = host::openNotificationAccess)
     }
 }

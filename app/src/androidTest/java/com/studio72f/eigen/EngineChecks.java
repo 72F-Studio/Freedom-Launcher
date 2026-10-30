@@ -15,11 +15,12 @@ public final class EngineChecks extends Instrumentation {
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     private interface Checked{void run()throws Exception;}
     void reject(Checked action)throws Exception {boolean rejected=false;try{action.run();}catch(Exception expected){rejected=true;}if(!rejected)throw new AssertionError("Invalid data accepted");count++;}
-    void yes(boolean value){if(!value)throw new AssertionError("Check failed");count++;}
+    void yes(boolean value){if(!value)throw new AssertionError("Check "+(count+1)+" failed");count++;}
     @Override public void onStart(){Bundle result=new Bundle();try{
         Context c=getTargetContext();File root=new File(c.getFilesDir(),"engine-test-"+UUID.randomUUID());root.mkdirs();clean.add(root);
-        ThemeEngine metro=new ThemeEngine(new JSONObject(),null);yes(metro.layout.equals("metro"));
-        ThemeEngine ps3=new ThemeEngine(ThemeEngine.preset("Wave"),null);yes(ps3.layout.equals("xmb")&&ps3.backdrop.equals("waves"));
+        ThemeEngine plain=new ThemeEngine(new JSONObject(),null);yes(plain.layout.equals("grid"));
+        ThemeEngine eigen=new ThemeEngine(ThemeEngine.preset("Ratio Frosted"),null);yes(eigen.name.equals("Eigen")&&eigen.layout.equals("grid")&&eigen.backdrop.equals("solid"));
+        reject(()->new ThemeEngine(new JSONObject().put("layout","xmb"),null)); // retired with the XMB home
         ThemeEngine expressive=new ThemeEngine(ThemeEngine.preset("Expressive"),null);yes(expressive.expressive&&expressive.dynamic&&expressive.uiIconSet.equals("material"));
         ThemeEngine glass=new ThemeEngine(ThemeEngine.preset("Liquid Retro"),null);yes(glass.liquid&&glass.blur==18&&glass.glass==50);
         reject(()->new ThemeEngine(new JSONObject().put("version",999),null));
@@ -77,7 +78,8 @@ public final class EngineChecks extends Instrumentation {
             .putString("contexts",ContextStore.write(Arrays.asList(ContextRules.template("morning","c1"),ContextRules.everyday(true,true))).toString()).commit();
         ByteArrayOutputStream backup=new ByteArrayOutputStream();BackupStore.export(c,prefs,packed,backup);
         BackupStore.Pending pending=BackupStore.prepare(c,new ByteArrayInputStream(backup.toByteArray()));clean.add(pending.directory);
-        prefs.edit().putBoolean("left",false).putString("favorites","[]").remove("contexts").commit();BackupStore.apply(c,prefs,pending);
+        prefs.edit().putBoolean("left",false).putString("favorites","[]").remove("contexts").putBoolean(EigenBilling.PREF_GRANDFATHERED,true).commit();BackupStore.apply(c,prefs,pending);
+        yes(prefs.getBoolean(EigenBilling.PREF_GRANDFATHERED,false)); // Plus belongs to the install, not the backup
         ArrayList<ContextRules.Rule> restored=ContextStore.load(prefs);yes(restored.size()==2&&restored.get(0).name.equals("morning")&&restored.get(0).days==ContextRules.WEEKDAYS&&restored.get(1).fallback);
         yes(prefs.getBoolean("left",false)&&prefs.getInt("wallpaperDim",0)==72&&prefs.getString("favorites","").contains("com.example"));
         yes(new ThemeEngine(new JSONObject(prefs.getString("theme","{}")),BackupStore.themeDirectory(c,prefs)).icon("ignored","com.example.app").isFile());

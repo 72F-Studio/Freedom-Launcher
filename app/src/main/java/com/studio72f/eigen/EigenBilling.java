@@ -88,6 +88,8 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         return prefs.getBoolean(PREF_OWNED, false) || prefs.getBoolean(PREF_GRANDFATHERED, false);
     }
 
+    // Holds only the application context, which lives as long as the process.
+    @android.annotation.SuppressLint("StaticFieldLeak")
     private static EigenBilling instance;
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the R8 release APK into dist/, signed and checksummed.
 # With keystore.properties (scripts/make-release-key.sh) Gradle signs with the production key;
-# otherwise the APK is signed with the development key that beta 1 through RC4 used.
+# otherwise the APK is signed with the debug key, with a warning.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export JAVA_HOME="${JAVA_HOME:-$HOME/.jdks/jbr-21.0.11}"

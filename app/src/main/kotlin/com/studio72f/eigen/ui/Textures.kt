@@ -1,5 +1,7 @@
 package com.studio72f.eigen.ui
 
+import androidx.core.graphics.scale
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -96,7 +98,7 @@ half4 main(float2 p) {
         shader.setFloatUniform("res", w.toFloat(), h.toFloat())
         shader.setColorUniform("accent", accent)
         shader.setFloatUniform("seed", seed)
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val out = createBitmap(w, h)
         Canvas(out).drawPaint(Paint().apply { this.shader = shader })
         return out
     }
@@ -128,6 +130,6 @@ half4 main(float2 p) {
             px[j * sw + i] = (0xFF shl 24) or ((r * 255).toInt() shl 16) or ((g * 255).toInt() shl 8) or (b * 255).toInt()
         }
         val small = Bitmap.createBitmap(px, sw, sh, Bitmap.Config.ARGB_8888)
-        return Bitmap.createScaledBitmap(small, w, h, true).also { if (it !== small) small.recycle() }
+        return small.scale(w, h).also { if (it !== small) small.recycle() }
     }
 }

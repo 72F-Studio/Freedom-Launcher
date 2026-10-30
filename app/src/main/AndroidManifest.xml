@@ -6,6 +6,9 @@
     <!-- Screen time on cards and app dashboards; granted by the person in Settings > Usage access. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="com.kieronquinn.app.smartspacer.permission.ACCESS_SMARTSPACER"/>
+    <!-- ML Kit brings Google's telemetry uploader, which asks for INTERNET. Eigen never goes online: the assistant runs
+         in AICore and billing talks to the Play Store on the phone, so the permission is dropped and uploads just fail. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
     <queries>
         <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
         <package android:name="com.kieronquinn.app.smartspacer"/>

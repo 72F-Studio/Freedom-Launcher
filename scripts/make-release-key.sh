@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the production signing key for 72F and an untracked keystore.properties.
+# Creates the production signing key for Eigen and an untracked keystore.properties.
 # Run it yourself: keytool asks for passwords in your terminal; nothing is echoed or stored elsewhere.
 # BACK UP the .jks and its passwords. Losing them means you can never ship an update to installs signed with it.
 set -euo pipefail

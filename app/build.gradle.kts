@@ -57,10 +57,12 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     // On-device AI: Gemini Nano through Android AICore, via ML Kit's GenAI Prompt API (the engine Tofu uses).
-    // AICore downloads and runs the model itself; Eigen has no internet permission.
+    // AICore downloads and runs the model itself; prompts and answers never leave the phone.
+    // Held at beta2 for 1.0.0: the Prompt API changes between betas, so move only with an AICore phone to test on.
+    //noinspection GradleDependency
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 }

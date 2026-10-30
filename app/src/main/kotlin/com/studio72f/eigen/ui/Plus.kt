@@ -47,8 +47,8 @@ object Plus {
 
 /** A small mark beside something that comes with Plus. Hidden once Plus is on. */
 @Composable
-fun PlusMark(state: EigenState, modifier: Modifier = Modifier) {
-    if (!state.plus) KIcon(KelvinIcons.Sparkles, "Plus", modifier, size = 14.dp, color = Kelvin.colors.accent)
+fun PlusMark(state: EigenState, modifier: Modifier = Modifier, color: androidx.compose.ui.graphics.Color = Kelvin.colors.accent) {
+    if (!state.plus) KIcon(KelvinIcons.Sparkles, "Plus", modifier, size = 14.dp, color = color)
 }
 
 private val Layers by lazy { tablerIcon("stack-2", "M12 4l-8 4l8 4l8 -4l-8 -4", "M4 12l8 4l8 -4", "M4 16l8 4l8 -4") }
@@ -70,7 +70,7 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         KText(
             when {
                 state.plus -> "Plus is on. Thank you for backing Eigen."
-                reason.isNotEmpty() -> "$reason comes with Plus. Eigen is free; Plus lets it change with your day."
+                reason.isNotEmpty() -> "$reason is part of Plus. Eigen is free; Plus lets it change with your day."
                 else -> "Eigen is free. Plus lets it change with your day."
             },
             Modifier.fillMaxWidth(), Kelvin.type.summary, c.ink2, align = TextAlign.Center,

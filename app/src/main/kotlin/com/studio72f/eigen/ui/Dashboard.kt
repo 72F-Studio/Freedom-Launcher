@@ -154,16 +154,20 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         AppCard(state, host, app, 0, Modifier.width(if (wide) 168.dp else 84.dp), interactive = false, styleOverride = trial)
                     }
-                    KelvinSegmented(STYLES.map { it.second + if (!state.plus && Plus.cardStyle(it.first)) " ✦" else "" }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i ->
+                    KelvinSegmented(STYLES.map { it.second }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i ->
                         val id = STYLES[i].first
                         if (state.plus || !Plus.cardStyle(id)) { trial = null; host.setCardStyle(app, id) } else trial = id
                     })
-                    if (trial != null) KelvinButton("Keep ${STYLES.first { it.first == trial }.second} with Plus", { state.plusSheet = "${STYLES.first { it.first == trial }.second} cards" }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, icon = KelvinIcons.Sparkles)
+                    if (!state.plus && trial == null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        PlusMark(state)
+                        KText("Stained and Lit come with Plus. Tap one to try it.", Modifier.padding(start = 6.dp), Kelvin.type.caption, c.ink2)
+                    }
+                    if (trial != null) KelvinButton("Keep ${STYLES.first { it.first == trial }.second} with Plus", { state.plusSheet = "The ${STYLES.first { it.first == trial }.second} card style" }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, icon = KelvinIcons.Sparkles)
                 }
             }
             Spacer(Modifier.height(8.dp))
             KelvinGroup {
-                KelvinRow("Wide card", summary = "Takes two columns, with the name beside the icon", icon = Wide, tile = KelvinTiles.Violet, trailing = { KelvinSwitch(wide, { if (state.plus || !it) host.setWide(app, it) else state.plusSheet = "Wide cards" }) })
+                KelvinRow("Wide card", summary = "Takes two columns, with the name beside the icon", icon = Wide, tile = KelvinTiles.Violet, trailing = { KelvinSwitch(wide, { if (state.plus || !it) host.setWide(app, it) else state.plusSheet = "A wide card" }) })
                 KelvinRow("In the dock", summary = if (docked) "Above the search bar" else "Up to four apps", icon = Dock, tile = KelvinTiles.Blue, trailing = { KelvinSwitch(docked, { host.toggleDock(app) }) })
                 KelvinRow("Favourite", summary = "Shown first on home", icon = KelvinIcons.Heart, tile = KelvinTiles.Red, trailing = { KelvinSwitch(host.isFavorite(app), { host.toggleFavorite(app) }) })
             }
@@ -214,7 +218,7 @@ fun ClockSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                 Row(Modifier.height(48.dp).kelvinPill(on, backdrop).eigenPress({ if (state.plus || !Plus.clock(id)) { host.setClock(id); saved = id } else state.clockStyle = id }, shape = studio72f.kelvin.CapsuleShape, label = ClockStyles.NAMES[i]).padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     KText(ClockStyles.NAMES[i], style = Kelvin.type.label, color = kelvinPillInk(on), maxLines = 1)
-                    if (Plus.clock(id)) PlusMark(state)
+                    if (Plus.clock(id)) PlusMark(state, color = if (on) kelvinPillInk(true) else Kelvin.colors.accent)
                 }
             }
         }
@@ -231,10 +235,10 @@ fun ClockSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
  */
 @Composable
 fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
-    val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var previews by remember { mutableStateOf<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap()) }
     var busy by remember { mutableStateOf<String?>(null) }
+    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     LaunchedEffect(state.textureSheet, state.accent) {
         if (!state.textureSheet) return@LaunchedEffect
         previews = withContext(Dispatchers.Default) {
@@ -251,8 +255,7 @@ fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                         if (!state.plus && Plus.texture(t.id)) { state.plusSheet = "The ${t.name} texture"; return@eigenPress }
                         busy = t.id
                         scope.launch {
-                            val m = context.resources.displayMetrics
-                            val full = withContext(Dispatchers.Default) { Textures.render(t, m.widthPixels, m.heightPixels, state.accent) }
+                            val full = withContext(Dispatchers.Default) { Textures.render(t, screen.width, screen.height, state.accent) }
                             host.useWallpaper(full); busy = null; state.textureSheet = false
                         }
                     }, shape = ContinuousShape(20.dp), label = t.name),

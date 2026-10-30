@@ -1,5 +1,7 @@
 package com.studio72f.eigen.ui
 
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import android.graphics.Bitmap
 import android.view.View
 import androidx.compose.runtime.getValue
@@ -89,11 +91,11 @@ class EigenState {
     // Look
     var accent by mutableIntStateOf(0xFFFF8A1F.toInt())
     var monoIcons by mutableStateOf(false)
-    var glass by mutableStateOf(0.3f)
+    var glass by mutableFloatStateOf(0.3f)
     /** Kelvin's Frost texture (deep ground glass) instead of Liquid glass; Eigen's default look. */
     var frost by mutableStateOf(true)
     /** Frost intensity, 0 Opaque … 1 Sheer; kept apart from the Liquid glass level. */
-    var frostLevel by mutableStateOf(0.75f)
+    var frostLevel by mutableFloatStateOf(0.75f)
     var reduceMotion by mutableStateOf(false)
     var clockStyle by mutableStateOf("ratio")
 
@@ -102,7 +104,7 @@ class EigenState {
     var wallpaper by mutableStateOf<Bitmap?>(null)
     /** Pre-blurred copy for Android 11 and older, which have no RenderEffect blur. */
     var softWallpaper by mutableStateOf<Bitmap?>(null)
-    var dim by mutableStateOf(0.75f)
+    var dim by mutableFloatStateOf(0.75f)
     var blur by mutableIntStateOf(32)
 
     // Widgets page
@@ -111,8 +113,8 @@ class EigenState {
     /** What the widgets page shows, top to bottom; it stacks from the bottom, by the thumb. */
     var widgetOrder by mutableStateOf(emptyList<String>())
     /** The focus timer: when it ends (running) or how long is left (paused). */
-    var focusEndsAt by mutableStateOf(0L)
-    var focusLeftMs by mutableStateOf(25 * 60_000L)
+    var focusEndsAt by mutableLongStateOf(0L)
+    var focusLeftMs by mutableLongStateOf(25 * 60_000L)
     var alarm by mutableStateOf<String?>(null)
     var agenda by mutableStateOf<String?>(null)
     var mediaTitle by mutableStateOf<String?>(null)
@@ -129,7 +131,7 @@ class EigenState {
     var bulkOpening by mutableStateOf(false)
     var appDrawerOpen by mutableStateOf(false)
     /** How far the app drawer is open, 0 … 1, live while the finger pulls; the wallpaper frosts in step. */
-    var drawerProgress by mutableStateOf(0f)
+    var drawerProgress by mutableFloatStateOf(0f)
     var pillMenu by mutableStateOf<PillMenu?>(null)
     var dashboardApp by mutableStateOf<MainActivity.App?>(null)
     /** How a collapsed drawer shows unread notifications: dash, dot, colour or off. */
@@ -146,7 +148,7 @@ class EigenState {
     /** Cards per row in drawers: 4 (roomy), 5 or 6 (compact). */
     var columns by mutableIntStateOf(4)
     /** How much the home wallpaper is blurred: 0 sharp, 0.5 soft, 1 frosted. */
-    var homeBlur by mutableStateOf(0f)
+    var homeBlur by mutableFloatStateOf(0f)
     /** Black and white over everything, set by the activity on its window. */
     var monochrome by mutableStateOf(false)
     /** Minutes in the foreground today, by package; empty without usage access. */

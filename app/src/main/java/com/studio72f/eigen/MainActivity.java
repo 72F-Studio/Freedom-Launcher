@@ -381,7 +381,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             if(legibility!=Legibility.OFF){if(!selected)t.setTextColor(MetroArt.alpha(fg,legibility==Legibility.STRONG?.78f:.62f));legible(t);}
             if(theme.liquid){t.setTextSize(Math.min(titleSize,36));t.setTypeface(Typeface.create(theme.typeface,600,false));t.setTextColor(selected?fg:MetroArt.alpha(fg,.38f));}
             t.setPadding(dp(26),dp(theme.liquid?12:0),dp(14),dp(theme.liquid?14:8));t.setSingleLine(true);t.setLetterSpacing(-.035f);
-            t.setContentDescription(str(R.string.x_category_y, c, (selected?str(R.string.selected):"")));t.setOnClickListener(v->selectCategory(c,true));
+            t.setContentDescription(str(R.string.x_category_y, c, (selected?str(R.string.selected_suffix):"")));t.setOnClickListener(v->selectCategory(c,true));
             titles.addView(t);
         }
         rebuilding = true;
@@ -1019,7 +1019,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 float lvl = p / 100f;
                 prefs.edit().putFloat("glass_level", lvl).apply();
                 FrostedCard.setGlassLevel(lvl);
-                shown.setText("Level: " + getGlassLabel(lvl) + " (" + String.format(Locale.ROOT, "%.2f", lvl) + ")");
+                shown.setText(str(R.string.glass_level_x, getGlassLabel(lvl), String.format(Locale.ROOT, "%.2f", lvl)));
                 pushApps();
                 updateBackdrop();
             }
