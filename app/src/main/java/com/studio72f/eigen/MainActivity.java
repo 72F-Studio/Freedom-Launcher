@@ -1240,7 +1240,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     /** Kesar and its warm siblings, or Greyscale: monochrome icons, a white accent and a desaturated in-launcher wallpaper. */
     private void colourSettings() {
-        menu("Colour", EigenPalette.ACCENT_NAMES, this::applyColour);
+        int current = -1; for (int i = 0; i < EigenPalette.ACCENTS.length; i++) if (EigenPalette.ACCENTS[i] == accent) current = i;
+        track(com.studio72f.eigen.ui.EigenSheets.menu(this, eigen, "Colour", EigenPalette.ACCENT_NAMES, this::applyColour, EigenPalette.ACCENTS, current));
     }
     private void applyColour(int n) {
         {

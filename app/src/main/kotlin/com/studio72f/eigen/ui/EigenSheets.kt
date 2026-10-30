@@ -56,13 +56,19 @@ object EigenSheets {
     /** A list of choices. "name · detail" options show the detail quieter, on the right. */
     @JvmStatic
     fun menu(activity: ComponentActivity, state: EigenState, title: String, options: Array<String>, pick: Pick): Dialog =
+        menu(activity, state, title, options, pick, null, -1)
+
+    /** A list of choices; with [swatches], each row leads with its colour and [selected] is ticked. */
+    @JvmStatic
+    fun menu(activity: ComponentActivity, state: EigenState, title: String, options: Array<String>, pick: Pick, swatches: IntArray?, selected: Int): Dialog =
         window(activity, state) { close ->
             Sheet(title) {
                 Column(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.6f).dp).verticalScroll(rememberScrollState())) {
                     KelvinGroup(gutter = 0.dp) {
                         options.forEachIndexed { i, o ->
                             val dot = o.indexOf(" · ")
-                            KelvinRow(
+                            if (swatches != null) SwatchRow(sentence(o), androidx.compose.ui.graphics.Color(swatches[i]), i == selected) { close(); pick.onPick(i) }
+                            else KelvinRow(
                                 sentence(if (dot > 0) o.substring(0, dot) else o),
                                 value = if (dot > 0) o.substring(dot + 3) else null,
                                 onClick = { close(); pick.onPick(i) },
@@ -95,6 +101,18 @@ object EigenSheets {
      */
     private fun Modifier.pane(blurred: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
         background(Kelvin.colors.glassTint.copy(alpha = if (blurred) maxOf(Kelvin.glass.tintAlpha, 0.5f) else 1f), shape)
+    }
+
+    @Composable
+    private fun SwatchRow(title: String, colour: androidx.compose.ui.graphics.Color, selected: Boolean, onClick: () -> Unit) {
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().heightIn(min = 60.dp).then(Modifier.eigenPress(onClick)).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(32.dp).background(colour, androidx.compose.foundation.shape.CircleShape))
+            KText(title, Modifier.weight(1f).padding(start = 14.dp), Kelvin.type.rowTitle, maxLines = 1)
+            if (selected) studio72f.kelvin.KIcon(studio72f.kelvin.KelvinIcons.Check, "Current", size = 22.dp, color = Kelvin.colors.accent)
+        }
     }
 
     @Composable

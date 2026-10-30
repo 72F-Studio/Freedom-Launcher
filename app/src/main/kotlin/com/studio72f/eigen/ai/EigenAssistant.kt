@@ -77,6 +77,7 @@ object EigenAssistant {
                     withContext(Dispatchers.Main) { onPartial(sofar) }
                 }
             } catch (e: Throwable) {
+                android.util.Log.w("EigenAssistant", "Gemini Nano generation failed", e)
                 if (sb.isEmpty()) {
                     engine.reset()
                     return@withContext Answer("Gemini Nano couldn't answer just now. Try again in a moment.", null, failed = true)
@@ -90,7 +91,9 @@ object EigenAssistant {
 
     private suspend fun ready(): Boolean = initLock.withLock {
         if (engine.isInitialized()) return true
-        val ok = engine.initialize { downloading -> _status.value = if (downloading) Status.Preparing else Status.Checking }.isSuccess
+        val result = engine.initialize { downloading -> _status.value = if (downloading) Status.Preparing else Status.Checking }
+        result.exceptionOrNull()?.let { android.util.Log.w("EigenAssistant", "Gemini Nano setup failed", it) }
+        val ok = result.isSuccess
         _status.value = if (ok) Status.Ready else Status.Unavailable
         ok
     }
