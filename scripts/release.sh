@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Builds the R8 release APK into dist/, signed and checksummed.
 # With keystore.properties (scripts/make-release-key.sh) Gradle signs with the production key;
-# otherwise the APK is signed with the development key that beta 1 through RC4 used.
+# otherwise the APK is signed with the debug key, with a warning.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export JAVA_HOME="${JAVA_HOME:-$HOME/.jdks/jbr-21.0.11}"
 SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"; BT="$SDK/build-tools/37.0.0"; [ -x "$BT/apksigner" ] || BT="$SDK/build-tools/35.0.0"
 VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-OUT="dist/72F-Launcher-$VERSION.apk"
+OUT="dist/Eigen-Launcher-$VERSION.apk"
 ./gradlew -q :app:assembleRelease
 if [ -f keystore.properties ]; then
   cp app/build/outputs/apk/release/app-release.apk "$OUT"; echo "Signed with the production key."

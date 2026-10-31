@@ -1,0 +1,43 @@
+PROPRIETARY LICENSE AGREEMENT
+
+Copyright (c) 2026 Parth K. / 72F Studio. All rights reserved.
+
+IMPORTANT: PLEASE READ THIS LICENSE AGREEMENT CAREFULLY. BY DOWNLOADING, INSTALLING, ACCESSING, OR USING THIS SOFTWARE ("SOFTWARE"), YOU AGREE TO BE BOUND BY THE TERMS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT DOWNLOAD, INSTALL, ACCESS, OR USE THE SOFTWARE.
+
+1. LICENSE GRANT
+Subject to the terms and conditions of this Agreement, 72F Studio ("Licensor") grants you a personal, non-exclusive, non-transferable, non-sublicensable, revocable license to install and use the Software, in the form in which Licensor makes it available to you, on devices you own or control, solely for your personal, non-commercial purposes.
+
+Access to the source code, where provided, does not grant any right to use, copy, modify, or distribute it. All rights not expressly granted in this Agreement are reserved by Licensor.
+
+2. RESTRICTIONS
+You shall not, and shall not permit any third party to:
+a) Copy, distribute, publish, rent, lease, lend, sublicense, sell, transfer, or otherwise make the Software or any part of it available to any third party.
+b) Modify, adapt, translate, create derivative works of, reverse engineer, decompile, disassemble, decrypt, or attempt to derive the source code or underlying algorithms of the Software, except to the extent such restriction is prohibited by applicable law.
+c) Remove, alter, or obscure any copyright, trademark, patent, or other proprietary rights notices contained in or on the Software.
+d) Use the Software for any commercial, enterprise, or service-bureau purposes.
+e) Circumvent, disable, or bypass any security or licensing mechanisms built into the Software.
+f) Use the Software, its source code, or its outputs to train, fine-tune, or evaluate any machine-learning model, or to build a competing product.
+
+3. INTELLECTUAL PROPERTY RIGHTS
+The Software, including its source code, compiled binaries, user interfaces, design assets, design systems, documentation, database structures, illustrations, and all intellectual property rights therein, are and shall remain the sole and exclusive property of Parth K. / 72F Studio. No ownership or title is transferred to you under this Agreement.
+
+4. THIRD-PARTY COMPONENTS
+The Software may include components licensed by third parties under their own terms (for example, open-source libraries, fonts, and icons). Those components are governed by their respective licenses, which are identified in the accompanying notice files (such as THIRD_PARTY_NOTICES, NOTICE, or a licenses directory). Nothing in this Agreement restricts any rights you have under those third-party licenses for those components.
+
+5. FEEDBACK AND USER SUBMISSIONS
+If you submit any feedback, suggestions, or other material to 72F Studio, you grant 72F Studio a non-exclusive, worldwide, perpetual, irrevocable, royalty-free, sublicensable license to use, display, modify, and distribute such submissions for the purpose of operating, improving, and publicizing the Software.
+
+6. DATA PRIVACY
+Any personal data processed by the Software is handled as described in the privacy policy that accompanies the Software, if any.
+
+7. DISCLAIMER OF WARRANTIES
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. TERMINATION
+This Agreement and the license granted hereunder shall automatically terminate if you fail to comply with any of its terms. Upon termination, you must immediately cease all use of the Software and delete all copies in your possession.
+
+9. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of India, without regard to its conflict of law principles. Any dispute arising out of or relating to this Agreement shall be subject to the exclusive jurisdiction of the courts in India.
+
+10. CONTACT
+For licensing inquiries, including commercial licenses, contact 72F Studio.

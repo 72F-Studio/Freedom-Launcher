@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the production signing key for 72F and an untracked keystore.properties.
+# Creates the production signing key for Eigen and an untracked keystore.properties.
 # Run it yourself: keytool asks for passwords in your terminal; nothing is echoed or stored elsewhere.
 # BACK UP the .jks and its passwords. Losing them means you can never ship an update to installs signed with it.
 set -euo pipefail
@@ -10,7 +10,7 @@ ALIAS=72f
 [ -e keystore.properties ] && { echo "keystore.properties already exists; not overwriting."; exit 1; }
 mkdir -p "$(dirname "$STORE")"
 "$KEYTOOL" -genkeypair -v -keystore "$STORE" -alias "$ALIAS" -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=72F Launcher"
+  -dname "CN=Eigen Launcher"
 read -r -s -p "Keystore password (again, for keystore.properties): " PASS; echo
 umask 077
 cat > keystore.properties <<PROPS

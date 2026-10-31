@@ -10,3 +10,7 @@ keystore.properties
 *.keystore
 keystore/
 screenshots/
+
+# Third-party reference builds for local teardown only; never committed.
+reference/
+eigen-smoke-failure.png
