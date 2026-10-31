@@ -307,7 +307,7 @@ fun KelvinDock(
     }
 }
 
-/** The accent orb beside the dock for the screen's one creation action. [backdrop] is unused: the orb is solid. */
+/** The accent orb beside the dock for the screen's one creation action: stained accent glass over [backdrop], a solid pebble without one. */
 @Composable
 fun KelvinActionOrb(
     icon: ImageVector,
@@ -318,14 +318,15 @@ fun KelvinActionOrb(
 ) {
     val c = Kelvin.colors
     val press = rememberGlassPress()
-    // The same solid accent pebble as the primary button, so the call to action and the button
-    // never differ in colour (stained glass is brightened and tinted by the page behind it).
+    // The same accent as the primary button, so the call to action and the button never differ.
     Box(
         modifier
             .size(64.dp)
             .kelvinClick(onClick, onClickLabel = contentDescription)
-            .pebbleMotion(press)
-            .pebble(CircleShape, c.accent, press),
+            .then(
+                if (backdrop != null) Modifier.glass(backdrop, CircleShape, GlassContent.Colored, tint = c.accent, motion = press.layerBlock, pebble = press).then(press.gestures)
+                else Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press),
+            ),
         contentAlignment = Alignment.Center,
     ) { KIcon(icon, contentDescription, size = 26.dp, color = c.onAccent) }
 }

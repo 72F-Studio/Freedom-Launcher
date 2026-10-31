@@ -9,11 +9,12 @@ thawed clear under a warm finger. People choose how much glass they see with one
 on one stepless slider from near-opaque ground glass to fully transparent Clear, with
 Frosted (0.3) as the accessible default.
 
-Kelvin's components, shapes, shaders and physics are 72F's own. Glass is rendered through
-[Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) (Kyant, Apache 2.0), a maintained
-liquid-glass engine: it records the backdrop with padding, keeps it aligned while glass moves
-or deforms, and chains effects. Kelvin plugs its own thermal shader, rim light and press
-physics into that pipeline. No Material components and no third-party UI kit.
+Kelvin's components, shapes and physics are 72F's own. Liquid glass on Android is rendered by
+[Vitro](https://github.com/itshedimisawi/vitro) (itshedimisawi, Apache 2.0), Liquid Glass
+calibrated side by side against iOS 26: rim refraction, highlights, blur, light and dark
+materials and touch response. Frost, the veil and glass in sheets and dialogs run on
+[Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) (Kyant, Apache 2.0), with Kelvin's own
+frost shader. No Material components and no third-party UI kit.
 
 ## What is here
 
@@ -24,37 +25,44 @@ physics into that pipeline. No Material components and no third-party UI kit.
 | [android/](android) | Gradle project: `:kelvin` (the Compose library) and `:catalog` (a demo app with every component) |
 | [web/](web) | `tokens.css`, `kelvin.css` and `kelvin.js` for the website and store pages |
 | [tools/kt-colors.js](tools/kt-colors.js) | Regenerates `KelvinColors.kt` from `tokens.json` |
-| [licenses/](licenses) | Onest (SIL OFL 1.1) and Tabler Icons (MIT) notices |
+| [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest (SIL OFL 1.1) and Tabler Icons (MIT) notices |
 
 ## The glass engine (Android)
 
-- `Modifier.kelvinBackdrop(backdrop)` marks the page content (Backdrop's `LayerBackdrop`).
-- `Modifier.glass(backdrop, shape, thaw, elevated, motion)` draws a pane with Backdrop's
-  `drawBackdrop` and Kelvin's optic shader (`OPTIC_AGSL` in `Glass.kt`). The pane is modelled
-  as real glass, and every light effect comes from that model:
-  - Snell's-law refraction at a curved rim (flat top, quarter-circle bevel), carried through
-    the pane's thickness, so the rim bends the backdrop and the middle stays true;
-  - dispersion: red, green and blue refract with slightly different indices;
-  - Schlick Fresnel: the rim reflects the scene beyond it at grazing angles;
-  - ground-glass frost (fixed random scatter), the thaw under a finger, the text contrast
-    floor, and light carried in through the bottom edge and scattered by the frost.
-  No highlights, rims or glows are painted on.
+- `Modifier.kelvinBackdrop(backdrop)` marks the page content: Backdrop's `LayerBackdrop`
+  always, and Vitro's `glassBackdrop` too while the texture is Liquid.
+- `Modifier.glass(backdrop, shape, content, elevated, motion, pebble)` draws a pane. Liquid
+  glass goes through Vitro's `glassEffect`: Kelvin picks the light or dark material from its
+  own theme, sets the rim's bend from the Glass setting (`refraction`) and the blur, veil and
+  coat from Transparency (the Glass level), stains coloured controls in their vivid colour and
+  keeps its shadows. Vitro approximates the shader before Android 13. Frost runs on Backdrop's
+  `drawBackdrop` with Kelvin's `FROST_AGSL`. Sheets, dialogs and menus open in a window of their
+  own, which Vitro cannot see out of, so there Liquid glass falls back to Backdrop: a deep blur
+  under the pane's coat. `thaw` no longer clears anything.
 - Pebbles (buttons): pass `pebble = press` (a `GlassPress`) to `glass`, or use
   `Modifier.pebble(shape, color, press)` for a solid one plus `Modifier.pebbleMotion(press)`.
-  Modelled on Kyant's AndroidLiquidGlass buttons: Backdrop's rim highlight (gentler in dark
-  mode), a soft own-colour glow beneath vivid fills (a neutral shadow under pale ones; none under
-  switch and slider knobs), vivid fills drawn like the stained orb, a 4dp swell and tanh pull on press, and a light bloom
-  under the finger. `KelvinButton` (all kinds but Text), `KelvinIconButton` and `KelvinActionOrb`
+  Liquid glass pebbles are interactive Vitro glass: they swell, glow and stretch under the
+  finger as iOS glass does. Given a backdrop, every filled button is glass: `KelvinButton`
+  (Primary, Tinted, Secondary, Danger), `KelvinIconButton` (Raised, Accent), `KelvinActionOrb`
+  and the chosen `kelvinPill`. Vivid fills are stained glass: what shows through is darkened and
+  the stain pushed past Vitro's 85% tint cap, so it lands on the fill over a light page and
+  deepens over dark content. Toward Clear the stain thins but is pushed harder, and what shows
+  through is saturated further, so a see-through CTA stays as rich as the fill. Soft and grey
+  fills are glass in their own tone. Without a backdrop
+  they stay solid pebbles. Solid and Frost pebbles keep Kelvin's own finish: a soft own-colour
+  glow beneath vivid fills (a neutral shadow under pale ones; none under switch and slider
+  knobs), a 4dp swell and tanh pull on press, and a light bloom under the finger. `KelvinButton` (all kinds but Text), `KelvinIconButton` and `KelvinActionOrb`
   are pebbles.
-- Other floating glass (the dock, search capsule, chips, pills, menus, sheets) carries the same rim
-  highlight as the buttons; edge-to-edge bars and the dock's lens do not.
-- `motion` takes a `GlassPress` layer block: the pane squashes and leans toward the finger
-  while Backdrop keeps the backdrop aligned behind it.
-- The Glass level (stepless, 0 near-opaque to 1 clear) resolves into coating, frost, thickness, bevel, index of refraction,
-  dispersion, contrast floor and a `deform` factor for controls. Clear (1.0) has no coating,
-  no frost, the thickest pane and no floor. High-contrast text forces an opaque pane, battery saver caps
-  at Frosted, reduced motion turns deformation off.
-- Android 12 gets blur and tint; Android 11 and below, and high-contrast text, get an opaque pane.
+- Other floating glass (the dock, search capsule, chips, pills, menus, sheets) carries Vitro's rim
+  highlight like the buttons; edge-to-edge bars and the dock's lens do not.
+- `motion` moves the pane (a menu growing from its opener).
+- Two settings: **Glass** (`KelvinTheme(refraction)`, `RefractionLevel`, 0 Subtle to 1 Strong)
+  is how hard Liquid glass's rim bends the page (an 8dp rim bending 16dp up to a 24dp rim bending
+  64dp; Vitro's own calibration sits a little under the 0.5 default). **Transparency**
+  (`KelvinTheme(glass)`, the Glass level, stepless 0 near-opaque to 1 clear) resolves into the
+  coat, blur, veil, contrast floor and a `deform` factor for controls; Frost has its own
+  transparency and no refraction. High-contrast text forces an opaque pane, battery saver caps
+  Transparency at Frosted, reduced motion turns deformation off.
 
 ## Navigation
 
@@ -68,7 +76,8 @@ finger on a stiff spring. `KelvinActionOrb` sits beside it for the screen's crea
 | Dependency | Licence | Use |
 | --- | --- | --- |
 | AndroidX Compose foundation, UI, activity, core | Apache 2.0 | Platform toolkit |
-| Backdrop (`io.github.kyant0:backdrop`) and its Shapes dependency | Apache 2.0 | Glass rendering pipeline |
+| Vitro (`io.github.itshedimisawi:vitro`) | Apache 2.0 | Liquid glass rendering |
+| Backdrop (`io.github.kyant0:backdrop`) and its Shapes dependency | Apache 2.0 | Frost, the veil and glass in overlay windows |
 | Onest font | SIL Open Font License 1.1 | Bundled typeface |
 | Tabler Icons paths | MIT | Icons (paths unmodified) |
 
@@ -83,7 +92,7 @@ cd android
 ./gradlew :kelvin:assembleRelease :catalog:assembleDebug
 ```
 
-Verified here: both modules compile against Backdrop 2.0.1 and the catalog APK builds (compileSdk 37, AGP 9.4.1,
+Verified here: both modules compile against Backdrop 2.0.1 and Vitro 0.1.0 and the catalog APK builds (compileSdk 37, AGP 9.4.1,
 Kotlin 2.4.20, Compose BOM 2026.09.00, matching HyperMind). The AGSL shader was compiled and
 rendered with Skia's SkSL compiler. Not yet verified: running on a device. The catalog is
 the place to tune the shader and springs on real hardware before apps adopt it.

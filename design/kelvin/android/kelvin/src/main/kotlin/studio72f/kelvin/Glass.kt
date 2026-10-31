@@ -42,7 +42,13 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.runtimeShaderEffect
 import com.kyant.backdrop.isRuntimeShaderSupported
 import com.kyant.backdrop.shadow.Shadow
-import com.kyant.backdrop.highlight.Highlight
+import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassAppearance
+import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.glassBackdrop
+import io.github.itshedimisawi.vitro.glassEffect
+import io.github.itshedimisawi.vitro.rememberGlassBackdrop
+import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -64,7 +70,7 @@ object GlassLevel {
 
 /**
  * The two premium materials a person can pick in Settings > Appearance > Glass. [Liquid] is
- * Kelvin's optic glass: a thick pane that refracts, disperses and thaws, on the Glass level from
+ * Liquid Glass as Vitro renders it, calibrated against iOS 26, on the Glass level from
  * near-opaque to Clear. [Frost] is deep ground glass, as on the HyperOS lock screen: no
  * refraction, the page behind melted into a wide, saturated blur under a smoky coat, on its own
  * stepless intensity from Opaque to Sheer. Both apply wherever glass does.
@@ -80,6 +86,16 @@ object FrostLevel {
     const val Opaque = 0f
     const val Default = 0.5f
     const val Sheer = 1f
+}
+
+/**
+ * Reference points on Liquid glass's refraction, a stepless 0 to 1 set apart from the Glass
+ * level: how hard the rim bends what is behind it, whether the pane is near-opaque or clear.
+ */
+object RefractionLevel {
+    const val Subtle = 0f
+    const val Default = 0.5f
+    const val Strong = 1f
 }
 
 /**
@@ -108,6 +124,8 @@ data class GlassParams(
     val solid: Boolean = false,
     /** How milky light glass stays over dark content: 1 toward the opaque end, 0 from Liquid. */
     val milk: Float = 0f,
+    /** How hard Liquid glass's rim bends the backdrop, 0 Subtle … 1 Strong; Frost does not refract. */
+    val refraction: Float = RefractionLevel.Default,
     /** Which material draws the pane. Frost keeps [level] on the Liquid scale (how clear it reads, never past Glass) for the veil and the controls' stretch. */
     val texture: GlassTexture = GlassTexture.Liquid,
 ) {
@@ -132,7 +150,11 @@ private fun curve(level: Float, vararg stops: Pair<Float, Float>): Float {
     return stops.last().second
 }
 
-fun Float.resolve(a11y: KelvinAccessibility, texture: GlassTexture = GlassTexture.Liquid): GlassParams {
+fun Float.resolve(
+    a11y: KelvinAccessibility,
+    texture: GlassTexture = GlassTexture.Liquid,
+    refraction: Float = RefractionLevel.Default,
+): GlassParams {
     if (texture == GlassTexture.Frost) return resolveFrost(a11y)
     var level = coerceIn(0f, 1f)
     if (a11y.powerSave) level = level.coerceAtMost(GlassLevel.Frosted)
@@ -159,6 +181,7 @@ fun Float.resolve(a11y: KelvinAccessibility, texture: GlassTexture = GlassTextur
         stainAlpha = curve(level, 0f to 0.99f, f to 0.97f, g to 0.94f, l to 0.9f, 1f to 0.84f),
         deform = if (a11y.reduceMotion) 0f else 0.15f + 0.85f * smoothstep(f, l, level),
         solid = a11y.highContrastText,
+        refraction = refraction.coerceIn(0f, 1f),
     )
 }
 
@@ -201,6 +224,10 @@ class KelvinBackdrop internal constructor(
     internal val layer: LayerBackdrop,
     internal val graphicsLayer: androidx.compose.ui.graphics.layer.GraphicsLayer,
     private val groundState: androidx.compose.runtime.State<Color>,
+    /** The same content as Vitro records it, for Liquid glass. */
+    internal val vitro: GlassBackdrop,
+    /** The window the content is in. Vitro sees only its own window. */
+    internal val view: android.view.View,
 ) {
     /** What lies beyond the recorded page: its own ground, so glass never sees empty black. */
     internal val ground: Color get() = groundState.value
@@ -216,11 +243,49 @@ fun rememberKelvinBackdrop(ground: Color = Kelvin.colors.canvas): KelvinBackdrop
         drawRect(groundState.value)
         drawContent()
     }
-    return remember(layer, graphics) { KelvinBackdrop(layer, graphics, groundState) }
+    val vitro = rememberGlassBackdrop()
+    val view = androidx.compose.ui.platform.LocalView.current
+    return remember(layer, graphics, vitro, view) { KelvinBackdrop(layer, graphics, groundState, vitro, view) }
 }
 
-/** Put this on the container that draws the page, not on the glass itself. */
-fun Modifier.kelvinBackdrop(backdrop: KelvinBackdrop): Modifier = layerBackdrop(backdrop.layer)
+/**
+ * Put this on the container that draws the page, not on the glass itself. Backdrop always records
+ * it (Frost and the veil read it); Vitro records it too while the texture is Liquid.
+ */
+fun Modifier.kelvinBackdrop(backdrop: KelvinBackdrop): Modifier = composed {
+    val liquid = !Kelvin.glass.isFrost && !Kelvin.glass.isSolid
+    layerBackdrop(backdrop.layer).then(
+        if (liquid) Modifier.glassBackdrop(backdrop.vitro) else Modifier,
+    )
+}
+
+/** How far stained glass darkens what shows through it before the stain goes on. */
+private const val StainVeil = -0.5f
+
+/**
+ * A stain for Vitro, which mixes at most 85% of a tint (times [density]) over what shows through. The colour is
+ * pushed past the fill so that over a light page, darkened by [veil], the glass lands on the
+ * fill itself; over darker content it deepens, as stained glass does.
+ */
+private fun Color.stain(veil: Float, density: Float): Color {
+    // A thinner stain lets more of the page in; pushing harder for it keeps the colour as rich
+    // as the fill instead of fading toward the page's grey.
+    val strength = 0.85f * density
+    val under = (1f + veil) * (1f - strength)
+    // Vitro's veil and rim light pale the mix further; deepening the colour by this power first
+    // was matched on the emulator against the solid fill (the accent lands within a few steps).
+    fun push(c: Float) = ((Math.pow(c.toDouble(), 1.3).toFloat() - under) / strength).coerceIn(0f, 1f)
+    return Color(push(red), push(green), push(blue))
+}
+
+/** Vitro draws only rounded rectangles: the nearest one to a Kelvin shape. */
+private fun Shape.cornerShape(): CornerBasedShape = when (this) {
+    is CornerBasedShape -> this
+    // A capsule's huge radius is clamped to half the height, as Vitro wants it.
+    is ContinuousShape -> if (flatBottom) RoundedCornerShape(radius, radius, 0.dp, 0.dp) else RoundedCornerShape(radius)
+    is NotchedShape -> RoundedCornerShape(radius)
+    else -> RoundedCornerShape(0.dp)
+}
 
 /**
  * What the glass carries. [Text] keeps the contrast floor. [Decorative] has none. [Colored] is
@@ -269,11 +334,11 @@ fun rememberThaw(): Thaw {
 }
 
 /**
- * Draws this element as Kelvin glass over [backdrop]: a pane that refracts what is behind it
- * through its rounded rim, reflects the scene at grazing angles, frosts it to the chosen level
- * and clears the frost under a [thaw]. No highlight is painted on; all light comes from the
- * shader. [motion] deforms the pane while the backdrop stays put behind it. Android 13+ runs the full shader; Android 12 gets blur and tint;
- * older versions and Solid get an opaque pane. Content is clipped to [shape].
+ * Draws this element as Kelvin glass over [backdrop]. Liquid glass is rendered by Vitro
+ * (itshedimisawi, Apache 2.0): rim refraction, highlights, blur and touch response tuned against
+ * iOS 26, with a close approximation before Android 13; [pebble] glass swells under the finger.
+ * Frost is Kelvin's own shader on Backdrop, and [thaw] clears nothing on either now. [motion]
+ * moves the pane. Solid gets an opaque pane. Content is clipped to [shape].
  */
 fun Modifier.glass(
     backdrop: KelvinBackdrop?,
@@ -291,7 +356,7 @@ fun Modifier.glass(
     // clearer than the Glass mark, however far the slider goes.
     val a11y = LocalKelvinAccessibility.current
     val params = Kelvin.glass.let { g ->
-        if (content == GlassContent.Pane && !g.isFrost && g.level > PaneGlassCap) remember(a11y) { PaneGlassCap.resolve(a11y) } else g
+        if (content == GlassContent.Pane && !g.isFrost && g.level > PaneGlassCap) remember(a11y, g.refraction) { PaneGlassCap.resolve(a11y, refraction = g.refraction) } else g
     }
     val colors = Kelvin.colors
     val dark = Kelvin.dark
@@ -308,19 +373,77 @@ fun Modifier.glass(
         pane -> maxOf(params.tintAlpha, if (params.isFrost) 0.55f else 0.86f)
         else -> params.tintAlpha
     }
-    val heat = colors.glassHeat
     val ground = backdrop?.ground ?: colors.canvas
     // Frost keeps the contrast floor on dialogs and sheets too: its coat goes sheerer than theirs.
     val text = content == GlassContent.Text || (params.isFrost && content == GlassContent.Pane)
     val shader = isRuntimeShaderSupported()
     val reduceMotion = Kelvin.reduceMotion
+    // Sheets, dialogs and menus open in a window of their own, which Vitro cannot see out of:
+    // there Backdrop melts the page under the coat instead, as it does for Frost.
+    val foreign = backdrop != null && androidx.compose.ui.platform.LocalView.current !== backdrop.view
     // A pebble with nothing to refract (no backdrop, high-contrast text, or no shader support)
     // is still a pebble: a solid domed stone in the glass's colour.
-    if (isPebble && (backdrop == null || params.isSolid || !shader)) {
+    if (isPebble && (backdrop == null || params.isSolid || ((params.isFrost || foreign) && !shader))) {
         return@composed Modifier
             .then(if (motion != null) Modifier.graphicsLayer(motion) else Modifier)
             .then(if (colored || elevated) Modifier.shadow(8.dp, shape, ambientColor = if (colored) baseTint else Color.Black, spotColor = if (colored) baseTint else Color.Black) else Modifier)
             .pebble(shape, if (colored) plainTint else tint ?: colors.raised, pebble)
+    }
+
+    // Liquid glass is Vitro's: refraction, highlights, blur and press response calibrated
+    // against iOS 26, with its own approximation below Android 13. Kelvin sets the coat and the
+    // veil from the Glass level and keeps its tints, stains and shadows.
+    if (!params.isFrost && !params.isSolid && backdrop != null && !foreign) {
+        val clarity = smoothstep(GlassLevel.Liquid, GlassLevel.Clear, params.level)
+        // A vivid fill (Primary, the orb, a chosen pill) is stained glass; a soft or grey one
+        // (Tinted, Secondary, Danger, Raised) is glass in its tone, which darkening would muddy.
+        val stained = colored && baseTint.chroma() > 0.1f
+        // The stain follows Transparency too: full up to Frosted, thinning toward Clear so the
+        // page shows through a CTA as it does through every other pane, yet it still reads as one.
+        val density = curve(params.level, GlassLevel.Frosted to 1f, GlassLevel.Liquid to 0.8f, 1f to 0.6f)
+        val vitro = Glass.Regular.copy(
+            // Ground glass toward the opaque end, Vitro's own blur from Liquid on.
+            blurRadius = maxOf(params.frostDp * 0.6f, 2.5f - 0.5f * clarity).dp,
+            // Coloured glass grows richer as it clears, so a see-through CTA glows rather than
+            // washes out; other glass eases toward Vitro's Clear.
+            saturation = if (colored) curve(params.level, GlassLevel.Frosted to 1.1f, GlassLevel.Liquid to 1.5f, 1f to 1.9f) else 1.1f - 0.1f * clarity,
+            // The rim's bend is its own setting, apart from how opaque the pane is. Vitro's
+            // calibrated rim (12dp bending 26dp) sits a little under Default.
+            refractionHeight = (8f + 16f * params.refraction).dp,
+            refractionAmount = (16f + 48f * params.refraction).dp,
+            // The veil that keeps text legible: Regular's up to Liquid, Clear's at the end.
+            // Stained glass darkens what shows through it instead, so its colour holds.
+            brightness = when {
+                stained -> StainVeil * density
+                text || pane || colored -> curve(params.level, 0f to 0.8f, GlassLevel.Frosted to 0.65f, GlassLevel.Liquid to 0.5f, 1f to 0.1f)
+                else -> 0.1f
+            },
+            appearance = if (dark) GlassAppearance.Dark else GlassAppearance.Light,
+            // Coloured controls are stained; plain glass carries Kelvin's coat only toward the
+            // opaque end and is bare Vitro glass from Liquid on.
+            tint = if (stained) baseTint.stain(StainVeil * density, density).copy(alpha = density) else baseTint.copy(alpha = if (colored || pane || tintAlpha != null) alpha else alpha * params.milk),
+            // Edge-to-edge bars and the dock's clear lens get no rim light: there it would rule a line.
+            highlightIntensity = if (shape == androidx.compose.ui.graphics.RectangleShape || content == GlassContent.Decorative) 0f else 1f,
+            // Vitro's shadow (30dp spread, 8dp drop, 16%) is calibrated on toolbar-sized glass and
+            // swamps a button: pebbles keep Kelvin's small, close shadow and floating panes its
+            // elevated one. Vitro thins both on the dark material itself.
+            shadowRadius = if (isPebble) 12.dp else 24.dp,
+            shadowOffset = if (isPebble) 3.dp else 4.dp,
+            shadowOpacity = when {
+                isPebble -> 0.07f
+                colored || elevated -> 0.1f
+                else -> 0f
+            },
+            // Buttons swell, glow and stretch under the finger the way iOS glass does.
+            isInteractive = pebble != null && params.deform > 0f,
+        )
+        // Vitro's press response replaces the pebble's own; other motion (a menu growing from
+        // its opener) still moves the pane.
+        val layer = motion.takeIf { pebble == null }
+        return@composed Modifier
+            .then(if (layer != null) Modifier.graphicsLayer(layer) else Modifier)
+            .glassEffect(backdrop.vitro, vitro, shape.cornerShape())
+            .clip(shape)
     }
 
     drawBackdrop(
@@ -328,12 +451,12 @@ fun Modifier.glass(
         shape = { shape },
         effects = {
             if (params.isSolid || backdrop == null) return@drawBackdrop
-            val frost = params.frostDp.dp.toPx()
+            val frost = (if (foreign) maxOf(params.frostDp, 16f) else params.frostDp).dp.toPx()
             if (!shader) {
                 blur(maxOf(if (params.isFrost) frost else frost * 0.6f, 1f))
                 return@drawBackdrop
             }
-            if (params.isFrost) {
+            if (params.isFrost || foreign) {
                 // Deep frost: the whole depth is one wide blur; the shader only coats, saturates
                 // and grains it. Pad for the blur's full reach.
                 padding = maxOf(padding, frost * 1.8f + 4.dp.toPx())
@@ -356,60 +479,9 @@ fun Modifier.glass(
                 }
                 return@drawBackdrop
             }
-            // A pane's rim and thickness scale with the pane: a chip is a thin sliver of glass
-            // with a narrow rounded edge and a true, flat middle; only large panes get the full
-            // rim. Otherwise small controls would be all bevel and bend everything behind them.
-            // A pebble is a drop: a deeper body and a wider rounded rim than a flat pane.
-            val thickness = if (pane) maxOf(params.thicknessDp, 16f).dp.toPx() else if (isPebble) maxOf(minOf(params.thicknessDp.dp.toPx(), size.minDimension * 0.3f), size.minDimension * 0.22f)
-                else minOf(params.thicknessDp.dp.toPx(), size.minDimension * 0.3f)
-            val bevel = if (isPebble) size.minDimension * 0.3f else minOf(params.bevelDp.dp.toPx(), size.minDimension * 0.24f)
-                .let { if (pane) maxOf(it, 22.dp.toPx()) else it }
-            // Most of the frost is a smooth pre-blur; the ground-glass scatter on top is kept
-            // small so its grain reads as texture, not noise.
-            val pre = if (pane) frost * 1.2f else minOf(frost * 1.25f, 30.dp.toPx())
-            // Cover the blur's full reach (about 1.8x its radius) and the rim's reflection, so
-            // the pane never samples outside what was recorded.
-            padding = maxOf(padding, pre * 1.8f + bevel + thickness * 1.6f + 4.dp.toPx())
-            if (pre > 0.5f) blur(pre)
-            val radii = shape.paneRadii(size, layoutDirection, this)
-            val t = thaw?.takeIf { it.position.isSpecified }
-            runtimeShaderEffect("kelvin-optic", OPTIC_AGSL, "content") {
-                setFloatUniform("size", size.width, size.height)
-                setFloatUniform("offset", -padding, -padding)
-                setFloatUniform("cornerRadii", radii)
-                setFloatUniform("thickness", thickness)
-                setFloatUniform("bevel", bevel)
-                setFloatUniform("ior", params.ior)
-                // A dialog's thick rim splits light a little, as liquid glass does.
-                setFloatUniform("dispersion", if (pane) maxOf(params.dispersion, 0.015f) else params.dispersion)
-                setFloatUniform("frost", frost * 0.15f)
-                setFloatUniform("tint", baseTint.red, baseTint.green, baseTint.blue, alpha)
-                // Light glass over dark content stays milky white (sRGB ~0.9) toward the opaque
-                // end, easing to the 4.5:1 floor (0.5 linear) by Liquid; dark glass mirrors it.
-                setFloatUniform("floorMin", if (text && !dark) (0.5f + 0.28f * params.milk) * params.floor else 0f)
-                setFloatUniform("floorMax", if (text && dark) 1f - (0.93f + 0.04f * params.milk) * params.floor else 1f)
-                setFloatUniform("heat", heat.red, heat.green, heat.blue)
-                setFloatUniform("horizon", params.horizon)
-                setFloatUniform("thaw", t?.position?.x ?: -1e4f, t?.position?.y ?: -1e4f)
-                setFloatUniform("thawRadius", t?.radius?.toPx() ?: 1f)
-                setFloatUniform("thawAmount", t?.amount?.value ?: 0f)
-                setFloatUniform("saturation", params.saturation)
-                setFloatUniform("body", if (colored) 1f else 0f)
-                setFloatUniform("ground", ground.red, ground.green, ground.blue)
-                // A pebble's rim meets the page almost vertically (tucked in, like a drop).
-                setFloatUniform("steep", if (isPebble) 1f else 0f)
-                setFloatUniform("px", density)
-                setFloatUniform("finish", if (dark) 0.55f else 1f)
-            }
         },
-        // Backdrop's highlight is the liquid-glass rim light, brightest on two opposite corners.
-        // Every floating pane carries the same one as the buttons, so the dock, the search
-        // capsule, pills, menus and badges read as one material. Edge-to-edge bars (a rectangle
-        // spanning the screen) and the dock's clear lens do not: there it would rule a line.
         // Frost is matte: no rim light, its edge comes from the coat and the shadow.
-        highlight = if (!params.isSolid && !params.isFrost && shape != androidx.compose.ui.graphics.RectangleShape && content != GlassContent.Decorative) {
-            { Highlight(width = if (dark) 0.6.dp else 0.35.dp, alpha = if (dark) 0.6f else 0.8f) }
-        } else null,
+        highlight = null,
         shadow = when {
             // Light through stained glass lands on the page in the glass's colour: a soft
             // coloured shadow under coloured controls, deepest where the pane is thickest.
@@ -429,8 +501,8 @@ fun Modifier.glass(
         },
         onDrawFront = {
             val front = this; pebble?.run { front.drawPressLight(shape.createOutline(front.size, front.layoutDirection, front)) }
-            // Without refraction there is nothing to show the pane's edge, so draw it.
-            if (!colored && (params.isSolid || (!params.isFrost && (!shader || backdrop == null)))) {
+            // Without glass there is nothing to show the pane's edge, so draw it.
+            if (!colored && (params.isSolid || backdrop == null)) {
                 drawOutline(shape.createOutline(size, layoutDirection, this), colors.glassEdge, style = Stroke(0.5.dp.toPx()))
             }
         },
@@ -450,13 +522,13 @@ fun Modifier.litGlass(backdrop: KelvinBackdrop?, shape: Shape, motion: (Graphics
 /**
  * A filter pill's surface. Resting pills look like the buttons around them: [litGlass] over
  * content, a [lift] pill on the page, and inside a [KelvinGroup] card (light mode) a well of the
- * page's `canvas` tone, since a white pill would vanish on a white card. The chosen one is a solid accent pebble, the same fill as a
+ * page's `canvas` tone, since a white pill would vanish on a white card. The chosen one is accent glass over content (a solid accent pebble elsewhere), the same as a
  * primary button, so a filter and a call to action never disagree on the colour. Put
  * [kelvinPillInk] on top.
  */
 fun Modifier.kelvinPill(selected: Boolean, backdrop: KelvinBackdrop?, shape: Shape = CapsuleShape): Modifier = composed {
     when {
-        selected -> pebble(shape, Kelvin.colors.accent)
+        selected -> if (backdrop != null) glass(backdrop, shape, GlassContent.Colored, tint = Kelvin.colors.accent, isPebble = true) else pebble(shape, Kelvin.colors.accent)
         backdrop != null -> litGlass(backdrop, shape)
         // On a white card a white lift pill vanishes: there it is a well of the page's own tone.
         LocalInKelvinGroup.current && !Kelvin.dark -> clip(shape).background(Kelvin.colors.canvas, shape)
@@ -516,145 +588,6 @@ float2 normalAt(float2 p, float2 halfSize, float r) {
     if (q.x >= 0.0 || q.y >= 0.0) return sign(p) * normalize(max(q, float2(0.0001)));
     float onX = step(q.y, q.x);
     return sign(p) * float2(onX, 1.0 - onX);
-}
-"""
-
-/**
- * Kelvin optic glass. Everything light does here comes from the geometry: the view ray is
- * refracted by Snell's law at the pane's curved surface (flat top, quarter-circle bevel) and
- * carried through its thickness, red, green and blue with slightly different indices
- * (dispersion), and the rim reflects the scene beyond it by Schlick's Fresnel term. Ground-glass
- * frost scatters samples to fixed random points; the thaw clears it; the contrast floor keeps
- * text readable up to Liquid; light carried in through the bottom edge is scattered out by the
- * frost. Runs on Backdrop's padded layer, so refracted samples beyond the pane are real backdrop.
- */
-private const val OPTIC_AGSL = """
-uniform shader content;
-uniform float2 size;
-uniform float2 offset;
-uniform float4 cornerRadii;
-uniform float thickness;
-uniform float bevel;
-uniform float ior;
-uniform float dispersion;
-uniform float frost;
-uniform float4 tint;
-uniform float floorMin;
-uniform float floorMax;
-uniform float3 heat;
-uniform float horizon;
-uniform float2 thaw;
-uniform float thawRadius;
-uniform float thawAmount;
-uniform float saturation;
-uniform float body;
-uniform float3 ground;
-uniform float steep;
-uniform float px;
-uniform float finish;
-
-$PaneSdf
-$PebbleLight
-
-float luminance(float3 c) {
-    float3 l = pow(max(c, float3(0.0)), float3(2.2));
-    return dot(l, float3(0.2126, 0.7152, 0.0722));
-}
-
-float hash(float2 p) {
-    p = fract(p * float2(443.897, 441.423));
-    p += dot(p, p.yx + 19.19);
-    return fract((p.x + p.y) * p.x);
-}
-
-// The page as seen at p. Beyond what was recorded (off screen, or where blur pulled in empty
-// pixels) lies the page's own ground, never black.
-float3 see(float2 p) {
-    half4 s = content.eval(p);
-    return float3(s.rgb) + (1.0 - float(s.a)) * ground;
-}
-
-// Where a vertical view ray lands on the backdrop after passing through the pane: refracted at
-// the curved top surface by Snell's law, then carried down through the glass's thickness.
-float2 refractOffset(float3 n, float eta, float depthHere) {
-    float3 r = refract(float3(0.0, 0.0, -1.0), n, eta);
-    return r.xy / max(-r.z, 0.05) * depthHere;
-}
-
-half4 main(float2 coord) {
-    float2 halfSize = size * 0.5;
-    float2 p = coord + offset - halfSize;
-    float r = min(radiusAt(p, cornerRadii), min(halfSize.x, halfSize.y));
-    float sd = min(sdPane(p, halfSize, r), 0.0);
-
-    // Surface: flat on top, rounding down to the rim over the bevel as a quarter circle.
-    float b = max(bevel, 0.001);
-    float x = clamp(1.0 + sd / b, 0.0, 1.0);
-    // A drop's edge stands near vertical where it meets the page, so it bends the page behind it
-    // hard and reflects its surroundings (Fresnel): the depth at the edge, from optics alone.
-    float slope = x / sqrt(max(1.0 - x * x, mix(0.02, 0.002, steep)));
-    float2 g = normalAt(p, halfSize, min(r * 1.5, min(halfSize.x, halfSize.y)));
-    float3 n = normalize(float3(g * slope, 1.0));
-    float h = thickness * sqrt(max(1.0 - x * x, 0.0));
-
-    // Thaw: warmth from a finger clears the frost around it.
-    float t = thawAmount * (1.0 - smoothstep(thawRadius * 0.35, thawRadius, length(p + halfSize - thaw)));
-    float scatter = frost * (1.0 - t);
-
-    // Dispersion: red bends least, blue most.
-    float2 oR = refractOffset(n, 1.0 / (ior - dispersion), h + thickness * 0.15);
-    float2 oG = refractOffset(n, 1.0 / ior, h + thickness * 0.15);
-    float2 oB = refractOffset(n, 1.0 / (ior + dispersion), h + thickness * 0.15);
-
-    float3 acc = float3(0.0);
-    for (int i = 0; i < 6; i++) {
-        float fi = float(i);
-        float a = hash(p + fi * 17.0) * 6.2831853;
-        float rr = sqrt(hash(p.yx + fi * 31.0)) * scatter;
-        float2 o = float2(cos(a), sin(a)) * rr;
-        acc.r += see(coord + oR + o).r;
-        acc.g += see(coord + oG + o).g;
-        acc.b += see(coord + oB + o).b;
-    }
-    float3 c = acc / 6.0;
-
-    // Fresnel (Schlick): the steeper the surface, the more of the surroundings it reflects.
-    // The reflection is the backdrop itself, seen in the tilted surface.
-    float cosI = clamp(n.z, 0.0, 1.0);
-    float f0 = pow((ior - 1.0) / (ior + 1.0), 2.0);
-    float fresnel = f0 + (1.0 - f0) * pow(1.0 - cosI, 5.0);
-    // What the tilted rim reflects is the scene just beyond the pane, softly, since the
-    // reflection comes off a curved surface.
-    float2 mirror = coord + g * (b + thickness);
-    float3 reflected = (see(mirror) + see(mirror + g.yx * b * 0.5) + see(mirror - g.yx * b * 0.5)) / 3.0;
-    // Pebbles carry no reflection on their face: only what they bend from behind them.
-    c = mix(c, reflected, min(fresnel, 0.55) * (1.0 - steep));
-
-    float grey = dot(c, float3(0.2126, 0.7152, 0.0722));
-    c = clamp(mix(float3(grey), c, saturation), 0.0, 1.0);
-    // Coat (body = 0) or stained body (body = 1): Beer-Lambert opacity over the path through
-    // the pane, full in the thick middle and thinning toward the rim.
-    float a = tint.a;
-    if (body > 0.5) {
-        // A stained rim still carries some colour: the path never drops below a third.
-        float path = 0.35 + 0.65 * (h + thickness * 0.15) / max(thickness * 1.15, 0.001);
-        a = 1.0 - pow(1.0 - min(a, 0.999), max(path, 0.0));
-    }
-    c = mix(c, tint.rgb, a * (1.0 - 0.55 * t));
-
-    float lum = luminance(c);
-    float tl = luminance(tint.rgb);
-    if (lum < floorMin && tl > lum) c = mix(c, tint.rgb, clamp((floorMin - lum) / (tl - lum), 0.0, 1.0));
-    if (lum > floorMax && tl < lum) c = mix(c, tint.rgb, clamp((lum - floorMax) / (lum - tl), 0.0, 1.0));
-
-    // Light entering through the bottom edge travels up the pane and is scattered out by the
-    // frost: strongest near the bottom and where the glass is ground.
-    float fromBottom = clamp((halfSize.y - p.y) / (size.y * 0.9), 0.0, 1.0);
-    float3 carried = heat * horizon * 0.12 * (1.0 - fromBottom) * (1.0 - fromBottom) * clamp(frost / 8.0, 0.0, 1.0);
-    c = 1.0 - (1.0 - c) * (1.0 - carried);
-
-    if (steep > 0.5) c = pebbleFinish(c, -sd, g, (p.y + halfSize.y) / size.y, min(size.x, size.y), px, finish, 0.0);
-    return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
 }
 """
 

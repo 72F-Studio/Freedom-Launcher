@@ -95,13 +95,14 @@ fun KelvinButton(
     }
     val thaw = rememberThaw()
     val press = rememberGlassPress(thaw)
-    // Over a backdrop, Primary is stained accent glass with the same press physics as Glass.
-    val stained = kind == ButtonKind.Primary && backdrop != null
+    // Over a backdrop, every filled button is glass stained in its fill, with the same press
+    // physics as Glass.
+    val stained = kind != ButtonKind.Glass && kind != ButtonKind.Text && backdrop != null
     // Every button but Text is a pebble: glass ones domed glass, the rest solid domed stones.
     val surface = if (kind == ButtonKind.Glass) {
         Modifier.glass(backdrop, CapsuleShape, thaw = thaw, motion = press.layerBlock, pebble = press).then(press.gestures)
     } else if (stained) {
-        Modifier.glass(backdrop, CapsuleShape, GlassContent.Colored, tint = c.accent, motion = press.layerBlock, pebble = press).then(press.gestures)
+        Modifier.glass(backdrop, CapsuleShape, GlassContent.Colored, tint = bg, motion = press.layerBlock, pebble = press).then(press.gestures)
     } else if (kind == ButtonKind.Text) {
         Modifier.clip(CapsuleShape)
     } else {
@@ -149,10 +150,12 @@ fun KelvinIconButton(
         contentAlignment = Alignment.Center,
     ) {
         val disc = when (kind) {
-            IconButtonKind.Raised -> Modifier.pebbleMotion(press).pebble(CircleShape, c.raised, press)
+            IconButtonKind.Raised -> if (backdrop != null) Modifier.glass(backdrop, CircleShape, GlassContent.Colored, tint = c.raised, motion = press.layerBlock, pebble = press).then(press.gestures)
+                else Modifier.pebbleMotion(press).pebble(CircleShape, c.raised, press)
             IconButtonKind.Glass -> Modifier.glass(backdrop, CircleShape, thaw = thaw, motion = press.layerBlock, pebble = press).then(press.gestures)
             IconButtonKind.Plain -> Modifier
-            IconButtonKind.Accent -> Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press)
+            IconButtonKind.Accent -> if (backdrop != null) Modifier.glass(backdrop, CircleShape, GlassContent.Colored, tint = c.accent, motion = press.layerBlock, pebble = press).then(press.gestures)
+                else Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press)
         }
         Box(Modifier.size(40.dp).then(disc), contentAlignment = Alignment.Center) {
             KIcon(icon, contentDescription, size = if (kind == IconButtonKind.Plain) 22.dp else 24.dp, color = if (kind == IconButtonKind.Accent) c.onAccent else c.ink)

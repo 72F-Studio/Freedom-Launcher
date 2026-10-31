@@ -23,4 +23,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("io.github.kyant0:backdrop:2.0.1")
+    implementation("io.github.itshedimisawi:vitro:0.1.0")
 }

@@ -1575,6 +1575,12 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         
     }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}eigen.setSettings(settingsModel());eigen.setSettingsOpen(true);}
+    /** Opens Eigen's Play listing, or the web page when no store app can handle it. */
+    private void rateApp(){
+        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("market://details?id="+getPackageName())));}
+        catch(Exception e){safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("https://play.google.com/store/apps/details?id="+getPackageName())));}
+    }
+    private void sendFeedback(){safeStart(new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:parth.k.design@gmail.com")).putExtra(Intent.EXTRA_SUBJECT,"Eigen "+version()+" feedback"));}
     private com.studio72f.eigen.ui.SettingsRow row(String title,String summary,String value,String icon,String tile,Boolean toggle,Runnable action){return new com.studio72f.eigen.ui.SettingsRow(title,summary,value,icon,tile,toggle,action);}
     /**
      * The Kelvin settings page's rows. Rows that still lead to an older editor (contexts, drawer order, support)
@@ -1611,6 +1617,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Eigen Plus",eigen.getPlus()?"Thank you for backing Eigen":"Contexts, clocks, widgets and more",eigen.getPlus()?"On":eigen.getPlusPrice(),"sparkles","orange",null,()->eigen.setPlusSheet("")),
             row("Support Eigen",null,null,"heart","red",null,()->sheet.open(this::supportPage)),
             row("Replay the tour",null,null,"refresh","grey",null,()->{eigen.setSettingsOpen(false);startTour(0);}),
+            row("Rate Eigen",null,null,"heart","red",null,this::rateApp),
+            row("Send feedback","Report a bug or suggest something",null,"message","green",null,this::sendFeedback),
+            row("Privacy policy",null,null,"info","grey",null,()->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("https://72fstudio.in/eigen/privacy/")))),
+            row("Terms of use",null,null,"info","grey",null,()->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("https://72fstudio.in/eigen/terms/")))),
             row("About Eigen",version(),null,"info","grey",null,this::aboutSettings))));
         return out;
     }
