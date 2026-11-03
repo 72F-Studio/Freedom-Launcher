@@ -6,7 +6,10 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +24,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -30,6 +35,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -76,11 +83,23 @@ fun KelvinMenu(
     LaunchedEffect(visible) { shown.animateTo(if (visible) 1f else 0f, if (visible) spatial else snappy) }
     if (!visible && shown.value <= 0.001f) return
     if (visible) BackHandler { dismiss() }
-    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { dismiss() } })
+    // Only a tap outside the panel dismisses, and it consumes nothing: consuming the release
+    // here cancelled the click on the menu item under the finger.
+    var panel by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    Box(
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                val up = waitForUpOrCancellation()
+                if (up != null && !panel.contains(up.position)) dismiss()
+            }
+        }
+    )
     val deform = Kelvin.glass.deform
     Column(
         modifier
             .width(width)
+            .onGloballyPositioned { panel = it.boundsInParent() }
             .semantics { paneTitle = title }
             // A menu carries reading text, so like sheets and dialogs it never clears past the Glass mark.
             .glass(
