@@ -21,7 +21,7 @@ dependencies {
     api("androidx.compose.foundation:foundation")
     api("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("io.github.kyant0:backdrop:2.0.1")
     implementation("io.github.itshedimisawi:vitro:0.1.0")
 }
