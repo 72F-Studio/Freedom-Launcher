@@ -65,6 +65,8 @@ interface EigenHost {
     fun hasDot(app: MainActivity.App): Boolean
     fun buyPlus()
     fun restorePlus()
+    /** Starts the Play flow for a tip (consumed, unlocks nothing). */
+    fun tip(productId: String)
 }
 
 /**
@@ -79,6 +81,8 @@ class EigenState {
     var plus by mutableStateOf(false)
     /** Play's price for Plus once known, in the local currency. */
     var plusPrice by mutableStateOf("₹349")
+    /** Localized tip prices by Play product id; empty until Play answers. */
+    var tipPrices by mutableStateOf<Map<String, String>>(emptyMap())
     /** null: closed; "": opened from Settings; otherwise what was tapped ("Binary"), named at the top. */
     var plusSheet by mutableStateOf<String?>(null)
 

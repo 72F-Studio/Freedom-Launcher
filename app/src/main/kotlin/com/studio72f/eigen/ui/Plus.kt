@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.studio72f.eigen.EigenBilling
 import studio72f.kelvin.ButtonKind
 import studio72f.kelvin.KIcon
 import studio72f.kelvin.KText
@@ -75,13 +77,6 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
             },
             Modifier.fillMaxWidth(), Kelvin.type.summary, c.ink2, align = TextAlign.Center,
         )
-        KelvinGroup(gutter = 0.dp) {
-            KelvinRow("Every context", summary = "Morning, work, night, headphones: as many as you like", icon = Layers, tile = KelvinTiles.Green)
-            KelvinRow("Every clock and texture", summary = "Outline, Kesar split and Binary; all the textures", icon = Clock, tile = KelvinTiles.Violet)
-            KelvinRow("Card styles", summary = "Stained and Lit cards, and wide cards", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Orange)
-            KelvinRow("More widgets", summary = "Screen time, Focus timer, World clocks, Calculator, Notes", icon = Widgets, tile = KelvinTiles.Blue)
-            KelvinRow("Conversations", summary = "Every chat app in one timeline, beside home", icon = Message, tile = KelvinTiles.Teal)
-        }
         if (state.plus) {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 KIcon(KelvinIcons.Check, null, size = 18.dp, color = c.accent)
@@ -93,7 +88,26 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                 KelvinButton("Restore purchase", host::restorePlus, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
             }
         }
-        KText("One payment, no subscription. It stays with your Play account. Tips under Support Eigen don't unlock anything.",
+        KelvinGroup(gutter = 0.dp) {
+            KelvinRow("Every context", summary = "Morning, work, night, headphones: as many as you like", icon = Layers, tile = KelvinTiles.Green)
+            KelvinRow("Every clock and texture", summary = "Outline, Kesar split and Binary; all the textures", icon = Clock, tile = KelvinTiles.Violet)
+            KelvinRow("Card styles", summary = "Stained and Lit cards, and wide cards", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Orange)
+            KelvinRow("More widgets", summary = "Screen time, Focus timer, World clocks, Calculator, Notes", icon = Widgets, tile = KelvinTiles.Blue)
+            KelvinRow("Conversations", summary = "Every chat app in one timeline, beside home", icon = Message, tile = KelvinTiles.Teal)
+        }
+        KText("One payment, no subscription. It stays with your Play account. Tips below don't unlock anything.",
             Modifier.fillMaxWidth(), Kelvin.type.caption, c.ink2, align = TextAlign.Center)
+        // Tips sit last. They unlock nothing, so they come after everything Plus does.
+        KText("Tips", Modifier.fillMaxWidth().padding(top = 8.dp), Kelvin.type.label, c.ink2)
+        EigenBilling.TIERS.forEach { tier ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    KText(tier.title, style = Kelvin.type.rowTitle)
+                    KText(tier.description, style = Kelvin.type.caption, color = c.ink2)
+                }
+                // Accent-filled: this is the one thing on the sheet we want tapped.
+                KelvinButton(state.tipPrices[tier.id] ?: tier.fallbackPrice, { host.tip(tier.id) }, Modifier.widthIn(min = 96.dp))
+            }
+        }
     }
 }

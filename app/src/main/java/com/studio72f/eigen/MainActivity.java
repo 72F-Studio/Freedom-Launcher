@@ -208,6 +208,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public boolean hasDot(App app) { return prefs.getBoolean("dots", true) && MediaAccessService.hasDot(app.component.getPackageName(), app.user); }
         @Override public void buyPlus() { EigenBilling.getInstance(MainActivity.this).launchPlus(MainActivity.this); }
         @Override public void restorePlus() { EigenBilling.getInstance(MainActivity.this).restorePurchases(); toast("Checking Google Play…"); }
+        @Override public void tip(String productId) { EigenBilling.getInstance(MainActivity.this).launchDonation(MainActivity.this, productId); }
     };
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
@@ -447,6 +448,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void pushPlus(){
         eigen.setPlus(EigenBilling.hasPlus(this));
         eigen.setPlusPrice(EigenBilling.getInstance(this).getFormattedPrice(EigenBilling.PLUS,EigenBilling.PLUS_FALLBACK_PRICE));
+        HashMap<String,String> tipPrices=new HashMap<>();
+        for(EigenBilling.DonationTier tier:EigenBilling.TIERS)tipPrices.put(tier.id,EigenBilling.getInstance(this).getFormattedPrice(tier.id,tier.fallbackPrice));
+        eigen.setTipPrices(tipPrices);
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
     /** Per-app card styles, wide cards, the dock, the unread mark and which apps feed Conversations. */
@@ -1589,6 +1593,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private List<com.studio72f.eigen.ui.SettingsSection> settingsModel(){
         ArrayList<com.studio72f.eigen.ui.SettingsSection> out=new ArrayList<>();
         String mode=prefs.getString("wallpaperMode","solid"),icons=prefs.getString("icons",theme.iconStyle);
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Eigen Plus",Arrays.asList(
+            row("Eigen Plus",eigen.getPlus()?"Thank you for backing Eigen":"Contexts, clocks, widgets and more",eigen.getPlus()?"On":eigen.getPlusPrice(),"sparkles","orange",null,()->eigen.setPlusSheet("")))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Look",Arrays.asList(
             row("Colour",null,colourName(),"palette","orange",null,this::colourSettings),
             row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
@@ -1614,8 +1620,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Default home app",null,isDefaultHome()?"Eigen":null,"home","blue",null,this::defaultHome))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and about",Arrays.asList(
             row("Backup and restore","Drawers, contexts, look and wallpaper",null,"archive","grey",null,this::backupSettings),
-            row("Eigen Plus",eigen.getPlus()?"Thank you for backing Eigen":"Contexts, clocks, widgets and more",eigen.getPlus()?"On":eigen.getPlusPrice(),"sparkles","orange",null,()->eigen.setPlusSheet("")),
-            row("Support Eigen",null,null,"heart","red",null,()->sheet.open(this::supportPage)),
             row("Replay the tour",null,null,"refresh","grey",null,()->{eigen.setSettingsOpen(false);startTour(0);}),
             row("Rate Eigen",null,null,"heart","red",null,this::rateApp),
             row("Send feedback","Report a bug or suggest something",null,"message","green",null,this::sendFeedback),
