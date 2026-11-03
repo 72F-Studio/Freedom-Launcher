@@ -97,16 +97,20 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         }
         KText("One payment, no subscription. It stays with your Play account. Tips below don't unlock anything.",
             Modifier.fillMaxWidth(), Kelvin.type.caption, c.ink2, align = TextAlign.Center)
-        // Tips sit last. They unlock nothing, so they come after everything Plus does.
-        KText("Tips", Modifier.fillMaxWidth().padding(top = 8.dp), Kelvin.type.label, c.ink2)
-        EigenBilling.TIERS.forEach { tier ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) {
-                    KText(tier.title, style = Kelvin.type.rowTitle)
-                    KText(tier.description, style = Kelvin.type.caption, color = c.ink2)
+        // Tips sit last, together in their own card. They unlock nothing, so they come after everything Plus does.
+        KelvinGroup(gutter = 0.dp) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                KText("Tips", style = Kelvin.type.rowTitle)
+                EigenBilling.TIERS.forEach { tier ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            KText(tier.title, style = Kelvin.type.rowTitle)
+                            KText(tier.description, style = Kelvin.type.caption, color = c.ink2)
+                        }
+                        // Accent-filled: this is the one thing on the sheet we want tapped.
+                        KelvinButton(state.tipPrices[tier.id] ?: tier.fallbackPrice, { host.tip(tier.id) }, Modifier.widthIn(min = 96.dp))
+                    }
                 }
-                // Accent-filled: this is the one thing on the sheet we want tapped.
-                KelvinButton(state.tipPrices[tier.id] ?: tier.fallbackPrice, { host.tip(tier.id) }, Modifier.widthIn(min = 96.dp))
             }
         }
     }
