@@ -47,10 +47,10 @@ object Plus {
     @JvmStatic fun widget(id: String) = !id.startsWith("widget:") && id !in FREE_WIDGETS
 }
 
-/** A small mark beside something that comes with Plus. Hidden once Plus is on. */
+/** A small mark beside something that comes with Plus: Kelvin's plan mark, the sparkle alone. Hidden once Plus is on. */
 @Composable
 fun PlusMark(state: EigenState, modifier: Modifier = Modifier, color: androidx.compose.ui.graphics.Color = Kelvin.colors.accent) {
-    if (!state.plus) KIcon(KelvinIcons.Sparkles, "Plus", modifier, size = 14.dp, color = color)
+    if (!state.plus) studio72f.kelvin.KelvinPlanMark("Plus", modifier, compact = true, color = color)
 }
 
 private val Layers by lazy { tablerIcon("stack-2", "M12 4l-8 4l8 4l8 -4l-8 -4", "M4 12l8 4l8 -4", "M4 16l8 4l8 -4") }
@@ -67,51 +67,48 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     // Keep the reason through the closing animation.
     var reason by remember { mutableStateOf("") }
     state.plusSheet?.let { reason = it }
-    val c = Kelvin.colors
-    KelvinSheet(state.plusSheet != null, { state.plusSheet = null }, "Eigen Plus", "Close", backdrop) {
-        KText(
-            when {
-                state.plus -> "Plus is on. Thank you for backing Eigen."
-                reason.isNotEmpty() -> "$reason is part of Plus. Eigen is free; Plus lets it change with your day."
-                else -> "Eigen is free. Plus lets it change with your day."
-            },
-            Modifier.fillMaxWidth(), Kelvin.type.summary, c.ink2, align = TextAlign.Center,
-        )
-        if (state.plus) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                KIcon(KelvinIcons.Check, null, size = 18.dp, color = c.accent)
-                KText("Plus is on", Modifier.padding(start = 6.dp), Kelvin.type.label)
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                KelvinButton("Get Plus · ${state.plusPrice}", host::buyPlus, Modifier.fillMaxWidth(), icon = KelvinIcons.Sparkles)
-                KelvinButton("Restore purchase", host::restorePlus, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
-            }
-        }
-        KelvinGroup(gutter = 0.dp) {
-            KelvinRow("Every context", summary = "Morning, work, night, headphones: as many as you like", icon = Layers, tile = KelvinTiles.Green)
-            KelvinRow("Every clock and texture", summary = "Outline, Kesar split and Binary; all the textures", icon = Clock, tile = KelvinTiles.Violet)
-            KelvinRow("Card styles", summary = "Stained and Lit cards, and wide cards", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Orange)
-            KelvinRow("More widgets", summary = "Screen time, Focus timer, World clocks, Calculator, Notes", icon = Widgets, tile = KelvinTiles.Blue)
-            KelvinRow("Conversations", summary = "Every chat app in one timeline, beside home", icon = Message, tile = KelvinTiles.Teal)
-        }
-        KText("One payment, no subscription. It stays with your Play account. Tips below don't unlock anything.",
-            Modifier.fillMaxWidth(), Kelvin.type.caption, c.ink2, align = TextAlign.Center)
+    val glyphs = listOf(
+        KelvinIcons.Coffee to KelvinTiles.Orange, KelvinIcons.Gift to KelvinTiles.Green,
+        KelvinIcons.Heart to KelvinTiles.Red, KelvinIcons.Star to KelvinTiles.Violet,
+    )
+    // Kelvin's plan sheet: why it opened, one price and Restore, what Plus adds, then tips.
+    studio72f.kelvin.KelvinPlanSheet(
+        visible = state.plusSheet != null,
+        onDismiss = { state.plusSheet = null },
+        closeLabel = "Close",
+        backdrop = backdrop,
+        plan = "Eigen Plus",
+        title = if (state.plus) "Thank you" else "Let it change with your day",
+        plans = listOf(studio72f.kelvin.PlanOption("plus", "Plus", price = state.plusPrice, period = "once")),
+        selected = "plus",
+        onSelect = {},
+        buyText = "Get Plus · ${state.plusPrice}",
+        onBuy = host::buyPlus,
+        restoreText = "Restore purchase",
+        onRestore = host::restorePlus,
+        benefits = listOf(
+            studio72f.kelvin.PlanBenefit(Layers, "Every context", "Morning, work, night, headphones: as many as you like", KelvinTiles.Green),
+            studio72f.kelvin.PlanBenefit(Clock, "Every clock and texture", "Outline, Kesar split and Binary; all the textures", KelvinTiles.Violet),
+            studio72f.kelvin.PlanBenefit(KelvinIcons.Sparkles, "Card styles", "Stained and Lit cards, and wide cards", KelvinTiles.Orange),
+            studio72f.kelvin.PlanBenefit(Widgets, "More widgets", "Screen time, Focus timer, World clocks, Calculator, Notes", KelvinTiles.Blue),
+            studio72f.kelvin.PlanBenefit(Message, "Conversations", "Every chat app in one timeline, beside home", KelvinTiles.Teal),
+        ),
+        reason = if (reason.isNotEmpty() && !state.plus) "$reason is part of Plus. Eigen is free; Plus lets it change with your day."
+            else if (!state.plus) "Eigen is free. Plus lets it change with your day." else null,
+        note = "One payment, no subscription",
+        owned = state.plus,
+        ownedMessage = "Plus is on. Thank you for backing Eigen.",
+        terms = "It stays with your Play account. Tips below don't unlock anything.",
+    ) {
         // Tips sit last, together in their own card. They unlock nothing, so they come after everything Plus does.
         KelvinGroup(gutter = 0.dp) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                KText("Tips", style = Kelvin.type.rowTitle)
-                EigenBilling.TIERS.forEach { tier ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            KText(tier.title, style = Kelvin.type.rowTitle)
-                            KText(tier.description, style = Kelvin.type.caption, color = c.ink2)
-                        }
-                        // Accent-filled: this is the one thing on the sheet we want tapped.
-                        KelvinButton(state.tipPrices[tier.id] ?: tier.fallbackPrice, { host.tip(tier.id) }, Modifier.widthIn(min = 96.dp))
-                    }
-                }
-            }
+            studio72f.kelvin.KelvinTipJar(
+                tiers = EigenBilling.TIERS.mapIndexed { i, tier ->
+                    studio72f.kelvin.TipTier(tier.id, tier.title, tier.description, state.tipPrices[tier.id], tier.fallbackPrice, glyphs[i % 4].first, glyphs[i % 4].second)
+                },
+                onTip = host::tip,
+                note = "Tips unlock nothing. They keep Eigen independent.",
+            )
         }
     }
 }
