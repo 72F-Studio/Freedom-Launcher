@@ -1,7 +1,0 @@
-Open Doodles by Pablo Stanley (https://www.opendoodles.com/)
-Dedicated to the public domain under CC0 1.0 Universal
-https://creativecommons.org/publicdomain/zero/1.0/
-
-Kelvin draws seven scenes (loving, reading, unboxing, clumsy, sitting-reading, chilling,
-meditating), converted to path lists in android/kelvin/src/main/res/raw/kelvin_doodle_*.txt by
-tools/doodles.py and recoloured with the theme's ink and accent at run time.

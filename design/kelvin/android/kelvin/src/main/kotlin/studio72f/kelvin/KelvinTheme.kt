@@ -86,6 +86,7 @@ object Kelvin {
  * documented variation of the palette (for example a darker group colour for AMOLED screens).
  * [fonts] picks Kelvin's own faces or the phone's (offer it in Appearance as "System font").
  * [icons] draws glyphs filled (the default) or as Tabler's 1.5 outline.
+ * [doodles] picks the set of empty-state scenes: casual, semi-professional or corporate.
  */
 @Composable
 fun KelvinTheme(
@@ -97,6 +98,7 @@ fun KelvinTheme(
     reduceMotion: Boolean = false,
     fonts: KelvinFonts = KelvinFonts.Kelvin,
     icons: IconStyle = IconStyle.Filled,
+    doodles: DoodleSet = DoodleSet.Casual,
     adjust: (KelvinColors) -> KelvinColors = { it },
     content: @Composable () -> Unit,
 ) {
@@ -118,6 +120,7 @@ fun KelvinTheme(
         LocalGlass provides glassParams,
         LocalKelvinType provides KelvinType.of(fonts),
         LocalIconStyle provides icons,
+        LocalDoodleSet provides doodles,
         LocalTextSelectionColors provides selection,
         content = content,
     )

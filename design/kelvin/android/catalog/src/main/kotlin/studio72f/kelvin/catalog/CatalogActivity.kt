@@ -142,7 +142,8 @@ private fun Catalog() {
     var accent by remember { mutableStateOf<Accent>(Accent.Ember) }
     var reduceMotion by remember { mutableStateOf(false) }
     var systemFont by remember { mutableStateOf(false) }
-    KelvinTheme(dark = dark, accent = accent, glass = if (texture == GlassTexture.Frost) frost else glass, texture = texture, refraction = refraction, reduceMotion = reduceMotion, fonts = if (systemFont) studio72f.kelvin.KelvinFonts.System else studio72f.kelvin.KelvinFonts.Kelvin) {
+    var doodles by remember { mutableStateOf(DoodleSet.Casual) }
+    KelvinTheme(dark = dark, accent = accent, glass = if (texture == GlassTexture.Frost) frost else glass, texture = texture, refraction = refraction, reduceMotion = reduceMotion, fonts = if (systemFont) studio72f.kelvin.KelvinFonts.System else studio72f.kelvin.KelvinFonts.Kelvin, doodles = doodles) {
         val page = rememberKelvinBackdrop()
         val scroll = rememberScrollState()
         var tab by remember { mutableIntStateOf(0) }
@@ -466,6 +467,23 @@ private fun Catalog() {
                 KelvinSectionHeader("Empty")
                 KelvinEmptyState(KelvinIcons.Book, "Nothing saved yet", "Books you save show up here, ready when you are.",
                     actionText = "Browse books", onAction = {}, doodle = KelvinDoodle.SittingReading)
+
+                KelvinSectionHeader("Doodles")
+                KelvinGroup {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KText("Every empty, waiting and error scene, in the set an app picks in KelvinTheme.", style = Kelvin.type.summary, color = c.ink2)
+                        KelvinSegmented(listOf("Casual", "Semi-pro", "Corporate"), doodles.ordinal, { doodles = DoodleSet.entries[it] })
+                    }
+                }
+                KelvinGroup(contentPadding = 12.dp) {
+                    for (pair in KelvinDoodle.entries.chunked(2)) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        for (d in pair) Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            KelvinDoodle(d, Modifier.fillMaxWidth())
+                            KText(d.name, style = Kelvin.type.summary, color = c.ink2)
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
 
                 KelvinSectionHeader("Sleep timer")
                 KelvinGroup(contentPadding = 8.dp) {

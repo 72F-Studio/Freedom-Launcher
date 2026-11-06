@@ -26,7 +26,7 @@ frost shader. No Material components and no third-party UI kit.
 | [android/](android) | Gradle project: `:kelvin` (the Compose library) and `:catalog` (a demo app with every component) |
 | [web/](web) | `tokens.css`, `kelvin.css` and `kelvin.js` for the website and store pages |
 | [tools/kt-colors.js](tools/kt-colors.js) | Regenerates `KelvinColors.kt` from `tokens.json` |
-| [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest and Montserrat (SIL OFL 1.1), Tabler Icons (MIT) and Open Doodles (CC0) notices |
+| [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest and Montserrat (SIL OFL 1.1), and Tabler Icons (MIT) notices |
 
 ## Thermal
 
@@ -55,7 +55,7 @@ page dots) and `MailAndMedia.kt` (recipient field, attachment chip, episode row,
 scrubber, wheel picker), `Calendar.kt` (month calendar), `Input.kt` (code field, formatting bar),
 `Interaction.kt` (pull to refresh, reorderable lists), `Player.kt` (transport, full player, ring
 meter, quick tiles, action lists), `Page.kt` (`KelvinOnPage`, controls on a page of its own colour), `Plans.kt` (plans, purchase, owned state, upsell cards and tips, one way in every app)
-and `Doodles.kt` (Open Doodles scenes for empty states, CC0) cover the next apps, an email client
+and `Doodles.kt` (Kelvin's own empty-state scenes in three sets, casual, semi-professional and corporate, drawn by `tools/doodles-own`) cover the next apps, an email client
 and a podcast player, and what the shipping apps needed (a reader's transport, music skips, voice
 notes).
 `Transitions.kt` is navigation motion: `KelvinStack` (a back stack with push, pop and premium
@@ -123,7 +123,6 @@ filter pills, a white segmented thumb).
 | Backdrop (`io.github.kyant0:backdrop`) and its Shapes dependency | Apache 2.0 | Frost, the veil and glass in overlay windows |
 | Onest and Montserrat fonts | SIL Open Font License 1.1 | Bundled typefaces (display and text) |
 | Tabler Icons paths | MIT | Icons (paths unmodified) |
-| Open Doodles (Pablo Stanley) | CC0 1.0 | Empty-state scenes (`KelvinDoodle`) |
 
 All are free for commercial use. Ship `licenses/` in each app's open-source notices screen.
 

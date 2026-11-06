@@ -357,23 +357,35 @@ fun KelvinDock(
     // every tab named from 420dp, only the current one from 360dp, icons alone below that. The
     // names stay for TalkBack either way.
     val width = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val dockMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val dockDensity = LocalDensity.current
+    // Room alone is not enough to name every tab: the names must fit their tabs too. Each tab
+    // gets 64dp, less if the dock has to shrink to fit beside the orb; a name wider than its tab
+    // (long words, a long translation) would be cut off, so the dock names only the current tab.
+    val restStyle = Kelvin.type.micro
+    val namesFit = remember(items, restStyle, dockDensity, width, action != null) {
+        val room = width.dp - 32.dp - (if (action != null) OrbReach else 0.dp) - DockSidePad * 2
+        val slot = minOf(DockSlot, room / items.size.coerceAtLeast(1))
+        items.all { item ->
+            with(dockDensity) { dockMeasurer.measure(item.label, restStyle, maxLines = 1).size.width.toDp() } <= slot - DockNameInset * 2
+        }
+    }
     val mode = when (labels) {
         DockLabels.Auto -> when {
             largeText() || width < DockLabelsActiveWidth -> DockLabels.Never
-            width < DockLabelsAllWidth -> DockLabels.Active
+            width < DockLabelsAllWidth || !namesFit -> DockLabels.Active
             else -> DockLabels.Always
         }
         else -> labels
     }
     val showLabels = mode == DockLabels.Always
-    // Each tab's width when it is current in Active mode: its name and a margin either side.
-    val dockMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val dockDensity = LocalDensity.current
+    // Each tab's width when it is current in Active mode: its name and a margin either side, then
+    // 1.2 times that, so the droplet has air around the name rather than hugging it.
     val labelStyle = Kelvin.type.micro.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
     val labelSlots = remember(items, labelStyle, dockDensity) {
         items.map { item ->
             val w = with(dockDensity) { dockMeasurer.measure(item.label, labelStyle, maxLines = 1).size.width.toDp() }
-            maxOf(w + 24.dp, DockNarrow + 10.dp)
+            maxOf((w + 24.dp) * DockLabelAir, DockNarrow + 10.dp)
         }
     }
     // The resting grey, already as light as KIcon draws a neutral filled glyph, so blending it
@@ -849,8 +861,8 @@ val KelvinColors.selectionDroplet: Color get() = ink.copy(alpha = 0.13f)
 /** Whether [KelvinDock] names its tabs under their icons. */
 enum class DockLabels {
     /**
-     * By room: every tab named from 420dp wide, only the current tab from 360dp, icons alone below
-     * 360dp or with text above 130%.
+     * By room: every tab named from 420dp wide when every name fits its tab, otherwise only the
+     * current tab from 360dp, icons alone below 360dp or with text above 130%.
      */
     Auto,
     Always,
@@ -863,7 +875,13 @@ enum class DockLabels {
 private val DockNarrow = 46.dp
 
 /** The widest the current tab grows in [DockLabels.Active], whatever its name. */
-private val DockLabelMax = 104.dp
+private val DockLabelMax = 124.dp
+
+/** The least room either side of a name in [DockLabels.Always]; a name needing more falls back to Active. */
+private val DockNameInset = 4.dp
+
+/** How much wider than its name (and margins) the current tab is in [DockLabels.Active]. */
+private const val DockLabelAir = 1.2f
 
 /** The narrowest screens, in dp, on which the current tab's name, and every tab's, fit. */
 private const val DockLabelsActiveWidth = 360
