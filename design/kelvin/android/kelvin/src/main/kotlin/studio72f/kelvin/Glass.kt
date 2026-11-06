@@ -351,6 +351,8 @@ fun Modifier.glass(
     motion: (GraphicsLayerScope.() -> Unit)? = null,
     pebble: GlassPress? = null,
     isPebble: Boolean = pebble != null,
+    /** Liquid glass only: a lens with no frost, so what it magnifies (the dock's icon) stays sharp. */
+    lens: Boolean = false,
 ): Modifier = composed {
     // Dialogs and sheets carry reading text over whatever is behind them, so they never get
     // clearer than the Glass mark, however far the slider goes.
@@ -403,7 +405,7 @@ fun Modifier.glass(
         val density = curve(params.level, GlassLevel.Frosted to 1f, GlassLevel.Liquid to 0.8f, 1f to 0.6f)
         val vitro = Glass.Regular.copy(
             // Ground glass toward the opaque end, Vitro's own blur from Liquid on.
-            blurRadius = maxOf(params.frostDp * 0.6f, 2.5f - 0.5f * clarity).dp,
+            blurRadius = if (lens) 0.dp else maxOf(params.frostDp * 0.6f, 2.5f - 0.5f * clarity).dp,
             // Coloured glass grows richer as it clears, so a see-through CTA glows rather than
             // washes out; other glass eases toward Vitro's Clear.
             saturation = if (colored) curve(params.level, GlassLevel.Frosted to 1.1f, GlassLevel.Liquid to 1.5f, 1f to 1.9f) else 1.1f - 0.1f * clarity,

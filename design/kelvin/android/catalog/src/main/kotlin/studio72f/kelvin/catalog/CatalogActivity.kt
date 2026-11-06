@@ -31,6 +31,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,6 +121,12 @@ private val Photos = listOf(
     listOf(Color(0xFFF4A6B8), Color(0xFFB04C7A), Color(0xFF3B1838)),
 )
 
+/** Keeps the chosen accent through rotation and other recreations, as the other settings are kept. */
+private val AccentSaver = Saver<Accent, String>(
+    save = { when (it) { Accent.Ember -> "ember"; Accent.Graphite -> "graphite"; is Accent.Preset -> it.preset.name } },
+    restore = { when (it) { "ember" -> Accent.Ember; "graphite" -> Accent.Graphite; else -> Accent.Preset(AccentPreset.valueOf(it)) } },
+)
+
 @Composable
 private fun Photo(i: Int, modifier: Modifier = Modifier) {
     Canvas(modifier) {
@@ -131,38 +139,38 @@ private fun Photo(i: Int, modifier: Modifier = Modifier) {
 @Composable
 private fun Catalog() {
     // Theme lives in Appearance, as in every 72F app: System, Light or Dark.
-    var theme by remember { mutableIntStateOf(0) }
+    var theme by rememberSaveable { mutableIntStateOf(0) }
     val dark = when (theme) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
     // One intensity per texture, so switching back restores where each was left.
     // Frost and Kelvin's pebbles by default; Liquid glass is the option.
-    var texture by remember { mutableStateOf(GlassTexture.Frost) }
-    var glass by remember { mutableFloatStateOf(GlassLevel.Frosted) }
-    var frost by remember { mutableFloatStateOf(FrostLevel.Default) }
-    var refraction by remember { mutableFloatStateOf(RefractionLevel.Default) }
-    var accent by remember { mutableStateOf<Accent>(Accent.Ember) }
-    var reduceMotion by remember { mutableStateOf(false) }
-    var systemFont by remember { mutableStateOf(false) }
-    var doodles by remember { mutableStateOf(DoodleSet.Casual) }
+    var texture by rememberSaveable { mutableStateOf(GlassTexture.Frost) }
+    var glass by rememberSaveable { mutableFloatStateOf(GlassLevel.Frosted) }
+    var frost by rememberSaveable { mutableFloatStateOf(FrostLevel.Default) }
+    var refraction by rememberSaveable { mutableFloatStateOf(RefractionLevel.Default) }
+    var accent by rememberSaveable(stateSaver = AccentSaver) { mutableStateOf<Accent>(Accent.Ember) }
+    var reduceMotion by rememberSaveable { mutableStateOf(false) }
+    var systemFont by rememberSaveable { mutableStateOf(false) }
+    var doodles by rememberSaveable { mutableStateOf(DoodleSet.Casual) }
     KelvinTheme(dark = dark, accent = accent, glass = if (texture == GlassTexture.Frost) frost else glass, texture = texture, refraction = refraction, reduceMotion = reduceMotion, fonts = if (systemFont) studio72f.kelvin.KelvinFonts.System else studio72f.kelvin.KelvinFonts.Kelvin, doodles = doodles) {
         val page = rememberKelvinBackdrop()
         val scroll = rememberScrollState()
-        var tab by remember { mutableIntStateOf(0) }
-        var filter by remember { mutableIntStateOf(0) }
-        var view by remember { mutableIntStateOf(0) }
-        var query by remember { mutableStateOf("") }
-        var exposure by remember { mutableFloatStateOf(0.62f) }
-        var cache by remember { mutableFloatStateOf(0.4f) }
-        var lock by remember { mutableStateOf(true) }
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        var filter by rememberSaveable { mutableIntStateOf(0) }
+        var view by rememberSaveable { mutableIntStateOf(0) }
+        var query by rememberSaveable { mutableStateOf("") }
+        var exposure by rememberSaveable { mutableFloatStateOf(0.62f) }
+        var cache by rememberSaveable { mutableFloatStateOf(0.4f) }
+        var lock by rememberSaveable { mutableStateOf(true) }
         var sheet by remember { mutableStateOf(false) }
         var dialog by remember { mutableStateOf(false) }
         var toast by remember { mutableStateOf(false) }
         // Deleting is immediate and undoable for a few seconds, never a dead end.
         var deleted by remember { mutableStateOf(false) }
         LaunchedEffect(deleted) { if (deleted) { kotlinx.coroutines.delay(5000); deleted = false } }
-        var key by remember { mutableStateOf("gsk_12") }
+        var key by rememberSaveable { mutableStateOf("gsk_12") }
         var playing by remember { mutableStateOf(false) }
-        var day by remember { mutableIntStateOf(3) }
-        var pane by remember { mutableIntStateOf(0) }
+        var day by rememberSaveable { mutableIntStateOf(3) }
+        var pane by rememberSaveable { mutableIntStateOf(0) }
         var elapsed by remember { mutableLongStateOf(52_420L) }
         // The recorder's clock runs while playing, so its digits roll.
         LaunchedEffect(playing) {
@@ -173,7 +181,7 @@ private fun Catalog() {
         val reach = rememberKelvinReach()
         // The catalog is one stack: Smart search opens a detail screen, so predictive back and the
         // push can be tried for real.
-        var stack by remember { mutableStateOf(listOf("home")) }
+        var stack by rememberSaveable { mutableStateOf(listOf("home")) }
         KelvinStack(stack, { stack = stack.dropLast(1) }) { route ->
         if (route == "detail") SearchDetail(onBack = { stack = stack.dropLast(1) })
         else Box(Modifier.fillMaxSize().background(c.canvas)) {
@@ -227,7 +235,7 @@ private fun Catalog() {
                         KText("Glass", style = Kelvin.type.rowTitle)
                         KText("Frost and Kelvin's pebbles, or Liquid glass that bends the page at its rim.", style = Kelvin.type.summary, color = c.ink2)
                         Spacer(Modifier.height(8.dp))
-                        KelvinSegmented(listOf("Frost", "Liquid glass"), if (texture == GlassTexture.Frost) 0 else 1, { texture = if (it == 0) GlassTexture.Frost else GlassTexture.Liquid })
+                        KelvinTexturePicker(texture, { texture = it })
                         // Frost does not refract: it has only its transparency.
                         if (texture == GlassTexture.Liquid) {
                             Spacer(Modifier.height(8.dp))

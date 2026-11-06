@@ -528,16 +528,18 @@ fun KelvinDock(
                     // It is Kelvin's mark: where iOS greys the current tab, Kelvin fills it. It is
                     // the same pebble as the action orb (same fill, finish and white content), so
                     // the current tab and the screen's action read as one colour.
-                    val lifted = if (lens) l else 0f
-                    Box(droplet.graphicsLayer { alpha = 1f - lifted }.pebble(CapsuleShape, c.accent, glow = false))
-                    Row(Modifier.fillMaxSize().kelvinBackdrop(icons)) {
+                    // The lifted lens sees only what is recorded here, and Vitro shows anything
+                    // unrecorded as black: the droplet is recorded with the icons and stays put
+                    // under the lens, so lifting magnifies the accent rather than going dark.
+                    Box(Modifier.fillMaxSize().kelvinBackdrop(icons)) {
+                    Box(droplet.pebble(CapsuleShape, c.accent, glow = false))
+                    Row(Modifier.fillMaxSize()) {
                         items.forEachIndexed { i, item ->
                             val near = 1f - abs(p - i).coerceAtMost(1f)
                             // On the droplet the tab is white, like the orb's icon (every accent fill
-                            // is deep enough for white to clear 3:1); under the lifted lens, where the
-                            // fill has gone, it is the accent itself.
-                            val iconOn = androidx.compose.ui.graphics.lerp(c.accent.iconInk(), c.accent, lifted)
-                            val labelOn = androidx.compose.ui.graphics.lerp(c.onAccent, c.accent, lifted)
+                            // is deep enough for white to clear 3:1), lifted or not.
+                            val iconOn = c.accent.iconInk()
+                            val labelOn = c.onAccent
                             val tint = androidx.compose.ui.graphics.lerp(restInk, iconOn, near)
                             val labelTint = androidx.compose.ui.graphics.lerp(restInk, labelOn, near)
                             val itemModifier = if (activeWidths != null) Modifier.width(activeWidths[i]) else Modifier.weight(1f)
@@ -585,11 +587,12 @@ fun KelvinDock(
                             }
                         }
                     }
-                    // Lifted droplet: a clear pane of glass over the icons.
+                    }
+                    // Lifted droplet: a clear pane of glass over the accent droplet and its icons.
                     if (lens && l > 0.01f) {
                         Box(
                             droplet.graphicsLayer { alpha = l }
-                                .glass(icons, CapsuleShape, GlassContent.Decorative, tint = c.glassTint, tintAlpha = 0.12f),
+                                .glass(icons, CapsuleShape, GlassContent.Decorative, tint = c.glassTint, tintAlpha = 0.12f, lens = true),
                         )
                     }
                 }

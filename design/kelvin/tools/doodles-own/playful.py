@@ -859,3 +859,106 @@ def nothing_playing(style="casual"):
 
 SCENES = SCENES + [drafts_empty, spam_empty, archive_empty, attachments_empty, snoozed_empty, scheduled_empty, contacts_empty,
                    podcasts_empty, queue_empty, nothing_playing]
+
+
+# the states a password manager needs ---------------------------------------------------------
+
+def _safe(s, cx, by, w=250, h=230, open_=False, badge=None):
+    """A wall safe on short feet. open_ swings the door out to the right; badge puts an accent mark on the door."""
+    x0, x1, top = cx - w / 2, cx + w / 2, by - h
+    for t in (-1, 1):
+        s.blob([(cx + t * w * 0.34 - 16, by - 4), (cx + t * w * 0.34 + 16, by - 4), (cx + t * w * 0.34 + 14, by + 16),
+                (cx + t * w * 0.34 - 14, by + 16)], INK, line=False, sharp=True)
+    s.blob([(x0, top), (x1, top), (x1, by), (x0, by)], PAPER, sharp=True)
+    if open_:
+        s.blob([(x0 + 22, top + 22), (x1 - 22, top + 22), (x1 - 22, by - 22), (x0 + 22, by - 22)], WASH, sharp=True)
+        s.brush([(x0 + 34, by - 90), (x1 - 34, by - 90)], 6, lo=0.8)
+        s.blob([(x1, top + 14), (x1 + w * 0.42, top - 18), (x1 + w * 0.42, by + 10), (x1, by - 14)], PAPER, sharp=True)
+        s.blob(s.oval(x1 + w * 0.22, top + h * 0.48, 24, 30, n=10), ACCENT)
+        return
+    s.brush([(x0 + 22, top + 22), (x1 - 22, top + 22), (x1 - 22, by - 22), (x0 + 22, by - 22), (x0 + 22, top + 18)], 5, lo=0.8)
+    dx, dy = cx - w * 0.08, top + h * 0.5
+    s.blob(s.oval(dx, dy, 44, 44, n=14), ACCENT)
+    s.blob(s.oval(dx, dy, 13, 13, n=8), PAPER, w=5)
+    for a in range(0, 360, 45):
+        p = [(dx + 44 * math.cos(math.radians(a)), dy + 44 * math.sin(math.radians(a))),
+             (dx + 56 * math.cos(math.radians(a)), dy + 56 * math.sin(math.radians(a)))]
+        s.brush(p, 5, lo=0.6)
+    s.brush([(x1 - 50, dy - 40), (x1 - 50, dy + 40)], 12, lo=0.9)
+    if badge == "x":
+        bx, by_ = x1 - 6, top + 6
+        s.blob(s.oval(bx, by_, 34, 34, n=12), ACCENT)
+        s.brush([(bx - 12, by_ - 12), (bx + 12, by_ + 12)], 7, PAPER, lo=0.8)
+        s.brush([(bx + 12, by_ - 12), (bx - 12, by_ + 12)], 7, PAPER, lo=0.8)
+
+
+def database_none(style="casual"):
+    """No database open: a cat looking into an open, empty safe."""
+    s = Pen("database_none", style)
+    s.ground(512, 662, 330)
+    _safe(s, 600, 646, open_=True)
+    s.cat_sit(330, 650, 0.82, eyes="open", look=0.7, front="down", tail=-1)
+    s.question(470, 250, 0.8)
+    return s
+
+
+def unlock(style="casual"):
+    """Unlock the vault: the dog has brought the key to the safe."""
+    s = Pen("unlock", style)
+    s.ground(512, 662, 340)
+    _safe(s, 680, 646, 230, 220)
+    hx, hy = s.dog_sit(380, 650, 0.84, tongue=False, look=0.6)
+    s.key(hx + 40, hy + 46, 0.8, deg=-6)
+    return s
+
+
+def wrong_password(style="casual"):
+    """Wrong master password: the safe stays shut, and the cat is not impressed."""
+    s = Pen("wrong_password", style)
+    s.ground(512, 662, 340)
+    _safe(s, 660, 646, 240, 230, badge="x")
+    s.cat_sit(370, 650, 0.84, eyes="meh", mouth="flat", look=0.6, front="down", tail=-1)
+    return s
+
+
+def all_secure(style="casual"):
+    """No weak or reused passwords: a cat sitting proudly beside a big shield."""
+    s = Pen("all_secure", style)
+    s.ground(512, 660, 320)
+    s.cat_sit(380, 650, 0.86, eyes="happy", front="down", tail=-1)
+    cx, cy = 660, 470
+    s.blob([(cx, cy - 150), (cx + 120, cy - 110), (cx + 116, cy + 10), (cx + 80, cy + 90), (cx, cy + 150), (cx - 80, cy + 90),
+            (cx - 116, cy + 10), (cx - 120, cy - 110)], ACCENT)
+    s.brush([(cx - 50, cy + 4), (cx - 12, cy + 44), (cx + 56, cy - 40)], 16, PAPER, lo=0.8)
+    s.spark(800, 300, 14); s.spark(530, 230, 10)
+    return s
+
+
+def expiring_none(style="casual"):
+    """Nothing expiring soon: a bird asleep on top of an hourglass."""
+    s = Pen("expiring_none", style)
+    s.ground(512, 668, 200)
+    s.hourglass(512, 500, 300)
+    s.bird(512, 236, 0.56, eyes="closed")
+    s.zzz(620, 140, 0.6)
+    return s
+
+
+def fingerprint(style="casual"):
+    """Unlock with a fingerprint: a cat on its tummy pressing a paw to the pad."""
+    s = Pen("fingerprint", style)
+    s.ground(512, 650, 330)
+    s.cat_loaf(430, 626, eyes="open", look=0.6, paws=False)
+    cx, cy = 690, 520
+    s.blob(s.oval(cx, cy, 104, 104, n=18))
+    for r in (24, 44, 64, 84):
+        a0, a1 = 200, 520 - (r // 20) * 14
+        arc = [(cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(a0, a1, 12)]
+        s.brush(arc, 7, ACCENT, lo=0.5)
+    s.ribbon([(540, 600), (600, 572), (640, 548)], 34, 32)
+    s.paw(648, 544, 1.1, -30)
+    s.paw(548, 612, 1, -10)
+    return s
+
+
+SCENES = SCENES + [database_none, unlock, wrong_password, all_secure, expiring_none, fingerprint]

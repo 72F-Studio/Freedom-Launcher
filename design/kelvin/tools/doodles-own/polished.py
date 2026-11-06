@@ -557,3 +557,92 @@ SCENES = [loving, reading, unboxing, clumsy, sitting_reading, chilling, meditati
           sent, storage_full, inbox_empty, update,
           drafts_empty, spam_empty, archive_empty, attachments_empty, snoozed_empty, scheduled_empty, contacts_empty,
           podcasts_empty, queue_empty, nothing_playing]
+
+
+# password manager ----------------------------------------------------------------------------
+
+def _safe(s, cx, cy, w=260, h=240, open_=False):
+    x0, x1, top, bot = cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2
+    for t in (-1, 1):
+        s.fill(rrect(cx + t * w * 0.32, bot + 12, 34, 22, 6), INK)
+    s.out(rrect(cx, cy, w, h, 22))
+    if open_:
+        s.out(rrect(cx, cy, w - 44, h - 44, 12), WASH)
+        s.out(pl([(x1, top + 14), (x1 + w * 0.4, top - 16), (x1 + w * 0.4, bot + 12), (x1, bot - 14)], True))
+        s.fill(ellipse(x1 + w * 0.2, cy, 18, 24), ACCENT)
+        return
+    s.stroke(rrect(cx, cy, w - 44, h - 44, 12), INK, 4)
+    s.out(ellipse(cx - 20, cy, 46), ACCENT)
+    s.fill(ellipse(cx - 20, cy, 12), PAPER)
+    s.ln([(x1 - 46, cy - 36), (x1 - 46, cy + 36)], 12)
+
+
+def database_none():
+    """No database open: a safe standing open and empty."""
+    s = Clean("database_none")
+    _safe(s, 470, 400, open_=True)
+    s.decor(("spark", 720, 250), ("dot", 320, 240), ("plus", 330, 570))
+    return s
+
+
+def unlock():
+    """Unlock the vault: a closed safe with its key."""
+    s = Clean("unlock")
+    _safe(s, 490, 400)
+    s.out(ellipse(650, 270, 34), ACCENT)
+    s.fill(ellipse(650, 270, 12), PAPER)
+    s.stroke(pl([(676, 294), (740, 358)]), ACCENT, 18)
+    s.stroke(pl([(716, 334), (700, 350)]), ACCENT, 14)
+    s.decor(("dot", 320, 240), ("plus", 330, 570))
+    return s
+
+
+def wrong_password():
+    """Wrong master password: a password field with a cross."""
+    s = Clean("wrong_password")
+    s.card(500, 400, 340, 150, 26)
+    for i in range(6):
+        s.fill(ellipse(390 + i * 36, 400, 11), INK)
+    s.badge(660, 320, 46, "x")
+    s.decor(("spark", 330, 260), ("dot", 700, 520), ("ring", 330, 540))
+    return s
+
+
+def all_secure():
+    """No weak or reused passwords: a list of checks under a shield."""
+    s = Clean("all_secure")
+    s.card(490, 420, 300, 250, 24)
+    for y in (350, 420, 490):
+        s.out(ellipse(392, y, 18), ACCENT)
+        s.stroke(pl([(384, y), (390, y + 6), (400, y - 6)]), PAPER, 5)
+        s.bars(424, y, [140], w=10)
+    s.out("M662,220 L726,244 L726,300 C726,344 698,372 662,388 C626,372 598,344 598,300 L598,244 Z", ACCENT)
+    s.stroke(pl([(638, 300), (656, 318), (688, 284)]), PAPER, 9)
+    s.decor(("dot", 320, 250), ("plus", 330, 580))
+    return s
+
+
+def expiring_none():
+    """Nothing expiring soon: an hourglass with a check."""
+    s = Clean("expiring_none")
+    s.out(rrect(500, 226, 220, 30, 12), INK)
+    s.out(rrect(500, 542, 220, 30, 12), INK)
+    s.out("M418,240 L582,240 C582,320 528,360 516,384 C528,408 582,448 582,528 L418,528 C418,448 472,408 484,384 "
+          "C472,360 418,320 418,240 Z")
+    s.fill("M442,520 C458,470 488,470 500,454 C512,470 542,470 558,520 Z", ACCENT)
+    s.badge(650, 300, 46, "check")
+    s.decor(("dot", 330, 260), ("plus", 340, 560))
+    return s
+
+
+def fingerprint():
+    """Unlock with a fingerprint: a fingerprint on its pad."""
+    s = Clean("fingerprint")
+    s.out(rrect(512, 390, 260, 260, 64))
+    for r, a0, a1 in ((26, 190, 470), (50, 200, 500), (74, 210, 470), (98, 220, 430)):
+        s.stroke(smooth(arc(512, 400, r, a0, a1)), ACCENT, 10)
+    s.decor(("spark", 720, 240), ("dot", 310, 250), ("ring", 320, 570))
+    return s
+
+
+SCENES = SCENES + [database_none, unlock, wrong_password, all_secure, expiring_none, fingerprint]

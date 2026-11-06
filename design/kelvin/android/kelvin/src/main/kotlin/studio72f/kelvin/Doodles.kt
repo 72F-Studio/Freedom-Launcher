@@ -110,6 +110,18 @@ enum class KelvinDoodle(@RawRes private val casual: Int, @RawRes private val sem
     QueueEmpty(R.raw.kelvin_doodle_casual_queue_empty, R.raw.kelvin_doodle_semi_queue_empty, R.raw.kelvin_doodle_corporate_queue_empty),
     /** Podcasts: the player with nothing loaded. */
     NothingPlaying(R.raw.kelvin_doodle_casual_nothing_playing, R.raw.kelvin_doodle_semi_nothing_playing, R.raw.kelvin_doodle_corporate_nothing_playing),
+    /** Passwords: no database open yet. */
+    DatabaseNone(R.raw.kelvin_doodle_casual_database_none, R.raw.kelvin_doodle_semi_database_none, R.raw.kelvin_doodle_corporate_database_none),
+    /** Passwords: the vault is locked; unlock it. */
+    Unlock(R.raw.kelvin_doodle_casual_unlock, R.raw.kelvin_doodle_semi_unlock, R.raw.kelvin_doodle_corporate_unlock),
+    /** Passwords: the master password was wrong. */
+    WrongPassword(R.raw.kelvin_doodle_casual_wrong_password, R.raw.kelvin_doodle_semi_wrong_password, R.raw.kelvin_doodle_corporate_wrong_password),
+    /** Passwords: nothing weak or reused. */
+    AllSecure(R.raw.kelvin_doodle_casual_all_secure, R.raw.kelvin_doodle_semi_all_secure, R.raw.kelvin_doodle_corporate_all_secure),
+    /** Passwords: nothing expiring soon. */
+    ExpiringNone(R.raw.kelvin_doodle_casual_expiring_none, R.raw.kelvin_doodle_semi_expiring_none, R.raw.kelvin_doodle_corporate_expiring_none),
+    /** Passwords: unlock with a fingerprint. */
+    Fingerprint(R.raw.kelvin_doodle_casual_fingerprint, R.raw.kelvin_doodle_semi_fingerprint, R.raw.kelvin_doodle_corporate_fingerprint),
     ;
 
     @RawRes internal fun res(set: DoodleSet): Int = when (set) {
