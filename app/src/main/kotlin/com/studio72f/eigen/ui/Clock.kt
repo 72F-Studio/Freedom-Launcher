@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import studio72f.kelvin.Kelvin
 import studio72f.kelvin.KText
-import studio72f.kelvin.Onest
+import studio72f.kelvin.KelvinDisplay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -107,7 +107,7 @@ private fun Rolling(text: String, style: TextStyle) {
 }
 
 private fun face(size: Int, weight: FontWeight) = TextStyle(
-    fontFamily = Onest, fontWeight = weight, fontSize = size.sp, lineHeight = (size * 1.02).sp,
+    fontFamily = KelvinDisplay, fontWeight = weight, fontSize = size.sp, lineHeight = (size * 1.02).sp,
     letterSpacing = if (weight == FontWeight.Light) (-0.02).em else (-0.05).em, textAlign = TextAlign.Center,
 )
 

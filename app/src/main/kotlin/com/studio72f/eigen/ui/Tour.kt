@@ -54,7 +54,7 @@ import studio72f.kelvin.KelvinGroup
 import studio72f.kelvin.KelvinIcons
 import studio72f.kelvin.KelvinRow
 import studio72f.kelvin.KelvinTiles
-import studio72f.kelvin.Onest
+import studio72f.kelvin.KelvinDisplay
 import studio72f.kelvin.kelvinPill
 import studio72f.kelvin.kelvinPillInk
 import studio72f.kelvin.tablerIcon
@@ -138,7 +138,7 @@ private fun Welcome() {
     val c = Kelvin.colors
     androidx.compose.foundation.text.BasicText(
         buildAnnotatedString { append("Eigen"); withStyle(SpanStyle(color = c.accent)) { append(".") } },
-        style = androidx.compose.ui.text.TextStyle(fontFamily = Onest, fontWeight = FontWeight.Bold, fontSize = 76.sp, letterSpacing = (-0.05).em, color = c.ink),
+        style = androidx.compose.ui.text.TextStyle(fontFamily = KelvinDisplay, fontWeight = FontWeight.Bold, fontSize = 76.sp, letterSpacing = (-0.05).em, color = c.ink),
     )
     KText(
         "A calm home screen. Your apps in drawers, your messages on the left, your widgets on the right, and an assistant that runs on this phone.",

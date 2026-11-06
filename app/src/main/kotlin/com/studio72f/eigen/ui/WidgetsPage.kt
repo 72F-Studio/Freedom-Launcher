@@ -289,18 +289,16 @@ private fun DayProgress() {
         Row(verticalAlignment = Alignment.Bottom) {
             Label("Day")
             Spacer(Modifier.weight(1f))
-            KText("${(fraction * 100).toInt()}%", style = Kelvin.type.numeral.copy(fontSize = 22.sp), maxLines = 1)
+            studio72f.kelvin.KelvinFigure("${(fraction * 100).toInt()}%", style = Kelvin.type.numeral.copy(fontSize = 22.sp))
         }
         Bar(fraction)
     }
 }
 
 @Composable
-private fun Bar(fraction: Float, colour: androidx.compose.ui.graphics.Color = Kelvin.colors.accent) {
-    Box(Modifier.fillMaxWidth().height(8.dp).clip(CapsuleShape).background(Kelvin.colors.ink.copy(alpha = 0.10f))) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(8.dp).clip(CapsuleShape).background(colour))
-    }
-}
+private fun Bar(fraction: Float, colour: androidx.compose.ui.graphics.Color = Kelvin.colors.accent) =
+    // Kelvin's progress bar at the card's 8dp, washed over the wallpaper frost.
+    studio72f.kelvin.KelvinProgressBar(fraction, height = 8.dp, color = colour, track = Kelvin.colors.ink.copy(alpha = 0.10f))
 
 private fun dayFraction(): Float {
     val now = Calendar.getInstance()
@@ -330,7 +328,7 @@ private fun Battery() {
             Label(if (charging) "Battery · charging" else "Battery")
             Spacer(Modifier.weight(1f))
             if (charging) KIcon(Bolt, null, size = 20.dp, color = c.accent)
-            KText(if (level < 0) "—" else "${(level * 100).toInt()}%", Modifier.padding(start = 4.dp), Kelvin.type.numeral.copy(fontSize = 22.sp), maxLines = 1)
+            studio72f.kelvin.KelvinFigure(if (level < 0) "—" else "${(level * 100).toInt()}%", Modifier.padding(start = 4.dp), Kelvin.type.numeral.copy(fontSize = 22.sp))
         }
         Bar(level.coerceAtLeast(0f), if (level in 0f..0.15f && !charging) c.critical else c.accent)
     }

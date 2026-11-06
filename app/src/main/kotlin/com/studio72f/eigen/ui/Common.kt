@@ -1,5 +1,6 @@
 package com.studio72f.eigen.ui
 
+import studio72f.kelvin.kelvinCarousel
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -128,8 +129,9 @@ fun MainActivity.App.title(): String = (name ?: label ?: "").toString()
  */
 @Composable
 fun CarouselRow(bleed: Dp, modifier: Modifier = Modifier, spacing: Dp = 8.dp, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    // Kelvin's carousel: runs to the edge past the container's padding, with room for a chosen pill's glow.
     androidx.compose.foundation.layout.Row(
-        modifier.bleed(bleed).horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = bleed),
+        modifier.kelvinCarousel(androidx.compose.foundation.rememberScrollState(), inset = bleed, bleed = bleed),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         content = content,
