@@ -155,7 +155,10 @@ private fun BrightnessRow(state: EigenState, host: EigenHost) {
 private fun GlassRow(state: EigenState, host: EigenHost) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         studio72f.kelvin.KText("Glass", style = Kelvin.type.rowTitle)
-        studio72f.kelvin.KelvinSegmented(listOf("Frost", "Liquid glass"), if (state.frost) 0 else 1, { i -> state.frost = i == 0; host.setFrost(i == 0) })
+        studio72f.kelvin.KelvinTexturePicker(
+            if (state.frost) studio72f.kelvin.GlassTexture.Frost else studio72f.kelvin.GlassTexture.Liquid,
+            { t -> val frost = t == studio72f.kelvin.GlassTexture.Frost; state.frost = frost; host.setFrost(frost) },
+        )
         if (state.frost) {
             var level by remember { mutableFloatStateOf(state.frostLevel) }
             KelvinGlassControl(level, { level = it; state.frostLevel = it }, GlassRangeLabels("Opaque", "Sheer", ""), "Frost",

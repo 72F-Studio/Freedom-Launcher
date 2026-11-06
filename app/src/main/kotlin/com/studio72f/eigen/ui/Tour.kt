@@ -59,7 +59,7 @@ import studio72f.kelvin.kelvinPill
 import studio72f.kelvin.kelvinPillInk
 import studio72f.kelvin.tablerIcon
 
-private const val PAGES = 5
+private const val PAGES = 6
 private val Message by lazy { tablerIcon("message", "M8 9h8", "M8 13h6", "M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12") }
 private val Hand by lazy { tablerIcon("hand-finger", "M8 13v-8.5a1.5 1.5 0 0 1 3 0v7.5", "M11 11.5v-2a1.5 1.5 0 1 1 3 0v2.5", "M14 10.5a1.5 1.5 0 0 1 3 0v1.5", "M17 11.5a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7a69.74 69.74 0 0 1 -.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47") }
 private val Apps by lazy { tablerIcon("apps", "M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M14 7l6 0", "M17 4l0 6") }
@@ -77,13 +77,7 @@ fun TourOverlay(state: EigenState, host: EigenHost) {
         val gentle = Kelvin.motion.gentle<Float>()
         Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (i in 0 until PAGES) {
-                        val w by animateDpAsState(if (i == page) 28.dp else 10.dp, Kelvin.motion.spatial(), label = "dash")
-                        val ink by animateColorAsState(if (i <= page) c.accent else c.ink.copy(alpha = 0.22f), Kelvin.motion.gentle(), label = "dash ink")
-                        Box(Modifier.width(w).height(6.dp).clip(CapsuleShape).background(ink))
-                    }
-                }
+                Box(Modifier.weight(1f)) { studio72f.kelvin.KelvinPageIndicator(PAGES, page.toFloat()) }
                 // Skip keeps its height on the last page so the dashes stay put.
                 Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) { if (page < PAGES - 1) KelvinButton("Skip", host::finishTour, kind = ButtonKind.Text) }
             }
@@ -103,8 +97,9 @@ fun TourOverlay(state: EigenState, host: EigenHost) {
                     when (p) {
                         0 -> Welcome()
                         1 -> ColourPage(state, host)
-                        2 -> ClockPage(state, host)
-                        3 -> GesturesPage()
+                        2 -> GlassPage(state, host)
+                        3 -> ClockPage(state, host)
+                        4 -> GesturesPage()
                         else -> FinishPage(state, host)
                     }
                 }
@@ -143,6 +138,16 @@ private fun Welcome() {
     KText(
         "A calm home screen. Your apps in drawers, your messages on the left, your widgets on the right, and an assistant that runs on this phone.",
         Modifier.padding(top = 16.dp), Kelvin.type.body.copy(fontSize = 17.sp, lineHeight = 25.sp), c.ink2, align = TextAlign.Center,
+    )
+}
+
+/** Liquid glass or Frost, chosen up front: Eigen wears Frost until the person picks. */
+@Composable
+private fun GlassPage(state: EigenState, host: EigenHost) {
+    Title("Pick your glass", "Liquid glass bends the page at its edges and catches the light; Frost is calm and easiest to read through. You can switch any time in Settings.")
+    studio72f.kelvin.KelvinTexturePicker(
+        if (state.frost) studio72f.kelvin.GlassTexture.Frost else studio72f.kelvin.GlassTexture.Liquid,
+        { t -> val frost = t == studio72f.kelvin.GlassTexture.Frost; state.frost = frost; host.setFrost(frost) },
     )
 }
 
