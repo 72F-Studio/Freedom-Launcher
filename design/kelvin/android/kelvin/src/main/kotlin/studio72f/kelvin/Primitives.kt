@@ -1,5 +1,6 @@
 package studio72f.kelvin
 
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -74,12 +76,23 @@ fun KIcon(
     modifier: Modifier = Modifier,
     size: Dp = 22.dp,
     color: Color = Kelvin.colors.ink,
+    /** Overrides the theme's icon style for this glyph (an empty star stays an outline). */
+    style: IconStyle? = null,
 ) {
+    // Kelvin draws icons filled (solid glyphs sit with the glass tiles' coloured shapes); the
+    // theme can switch to outline. Glyphs Tabler has no filled form of stay lines either way.
+    val filled = (style ?: LocalIconStyle.current) == IconStyle.Filled
+    val shown = if (filled) KelvinIcons.filled(icon) else icon
+    // A filled glyph carries far more ink than a stroke, so one set in plain ink (or the glass's
+    // secondary ink, as on the dock) is drawn well toward the page, as light as it can go and still hold 3:1
+    // on the group grey. Coloured and white icons keep their colour.
+    val c = Kelvin.colors
+    val tint = if (filled && (color == c.ink || color == c.glassInk2)) androidx.compose.ui.graphics.lerp(color, c.canvas, 0.6f).legibleOn(c.group, 3f) else color
     Image(
-        painter = rememberVectorPainter(icon),
+        painter = rememberVectorPainter(shown),
         contentDescription = contentDescription,
         modifier = modifier.size(size),
-        colorFilter = ColorFilter.tint(color),
+        colorFilter = ColorFilter.tint(tint),
     )
 }
 
@@ -130,6 +143,9 @@ object KelvinIcons {
     val Sparkles by lazy { icon("sparkles", "M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6") }
     val Heart by lazy { icon("heart", "M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572") }
     val Play by lazy { icon("player-play", "M7 4v16l13 -8l-13 -8") }
+    val Pause by lazy { icon("player-pause", "M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z", "M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z") }
+    val SkipBack by lazy { icon("player-skip-back", "M20 5v14l-12 -7z", "M4 5l0 14") }
+    val SkipForward by lazy { icon("player-skip-forward", "M4 5v14l12 -7z", "M20 5l0 14") }
     val Lock by lazy { icon("lock", "M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6", "M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0", "M8 11v-4a4 4 0 1 1 8 0v4") }
     val Sun by lazy { icon("sun", "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0", "M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7") }
     val Dots by lazy { icon("dots-vertical", "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", "M11 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", "M11 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0") }
@@ -139,6 +155,88 @@ object KelvinIcons {
     val Book by lazy { icon("book", "M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0", "M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0", "M3 6l0 13", "M12 6l0 13", "M21 6l0 13") }
     val Chart by lazy { icon("chart-bar", "M3 12m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M9 8m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M15 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M4 20l14 0") }
     val Trophy by lazy { icon("trophy", "M8 21l8 0", "M12 17l0 4", "M7 4l10 0", "M17 4v8a5 5 0 0 1 -10 0v-8", "M5 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", "M19 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0") }
+
+    private fun set(name: String): ImageVector = tablerIcon(name, *KelvinIconPaths.outline.getValue(name).toTypedArray())
+    val Star by lazy { set("star") }
+    val Flag by lazy { set("flag") }
+    /** A rosette with a tick: a verified sender. */
+    val Verified by lazy { set("rosette-discount-check") }
+    val Paperclip by lazy { set("paperclip") }
+    val Minus by lazy { set("minus") }
+    val ChevronDown by lazy { set("chevron-down") }
+    val ChevronUp by lazy { set("chevron-up") }
+    val ChevronLeft by lazy { set("chevron-left") }
+    val CircleCheck by lazy { set("circle-check") }
+    val CircleX by lazy { set("circle-x") }
+    val CircleDot by lazy { set("circle-dot") }
+    val Circle by lazy { set("circle") }
+    val Square by lazy { set("square") }
+    val SquareCheck by lazy { set("square-check") }
+    val User by lazy { set("user") }
+    val UserCircle by lazy { set("user-circle") }
+    val Mail by lazy { set("mail") }
+    val Bell by lazy { set("bell") }
+    val Bookmark by lazy { set("bookmark") }
+    val Share by lazy { set("share") }
+    val Copy by lazy { set("copy") }
+    val Download by lazy { set("download") }
+    val Upload by lazy { set("upload") }
+    val Edit by lazy { set("edit") }
+    val Pencil by lazy { set("pencil") }
+    val Eye by lazy { set("eye") }
+    val EyeOff by lazy { set("eye-off") }
+    val Filter by lazy { set("filter") }
+    val Music by lazy { set("music") }
+    val Microphone by lazy { set("microphone") }
+    val Camera by lazy { set("camera") }
+    val Video by lazy { set("video") }
+    val MapPin by lazy { set("map-pin") }
+    val Clock by lazy { set("clock") }
+    val Moon by lazy { set("moon") }
+    val Wifi by lazy { set("wifi") }
+    val Bluetooth by lazy { set("bluetooth") }
+    val Battery by lazy { set("battery") }
+    val Volume by lazy { set("volume") }
+    val VolumeOff by lazy { set("volume-off") }
+    val Phone by lazy { set("phone") }
+    val Message by lazy { set("message") }
+    val Send by lazy { set("send") }
+    val Link by lazy { set("link") }
+    val Archive by lazy { set("archive") }
+    val Tag by lazy { set("tag") }
+    val CalendarEvent by lazy { set("calendar-event") }
+    val Shield by lazy { set("shield") }
+    val ThumbUp by lazy { set("thumb-up") }
+    val Grid by lazy { set("layout-grid") }
+    val List by lazy { set("list") }
+    val Bold by lazy { set("bold") }
+    val Italic by lazy { set("italic") }
+    val Underline by lazy { set("underline") }
+    val ListNumbers by lazy { set("list-numbers") }
+    val Quote by lazy { set("blockquote") }
+    val Back15 by lazy { set("rewind-backward-15") }
+    val Forward30 by lazy { set("rewind-forward-30") }
+    /** Back and forward by a step smaller than a chapter: a sentence, a few seconds. */
+    val TrackPrevious by lazy { set("player-track-prev") }
+    val TrackNext by lazy { set("player-track-next") }
+    val Sleep by lazy { set("zzz") }
+    val Speed by lazy { set("gauge") }
+    val Queue by lazy { set("playlist") }
+    val Grip by lazy { set("grip-vertical") }
+    val ArrowDown by lazy { set("arrow-down") }
+    val Rotate by lazy { set("rotate-clockwise") }
+
+    private val filledCache = java.util.concurrent.ConcurrentHashMap<String, ImageVector>()
+
+    /**
+     * The filled form of [icon] where Tabler draws one (Albums takes the filled library, Chart the
+     * filled pie). Arrows, chevrons, minus, plus, x and other line glyphs have none and stay lines,
+     * as they do in every filled set.
+     */
+    fun filled(icon: ImageVector): ImageVector {
+        val paths = KelvinIconPaths.filled[icon.name] ?: return icon
+        return filledCache.getOrPut(icon.name) { tablerIcon(icon.name, *paths.toTypedArray(), filled = true) }
+    }
 }
 
 /**
@@ -160,16 +258,19 @@ fun Modifier.kelvinPress(
     val reduce = Kelvin.reduceMotion
     val snappy = Kelvin.motion.snappy<Float>()
     val wobble = Kelvin.motion.wobble<Float>()
-    var pressedAt by remember { mutableStateOf<Offset?>(null) }
+    val embers = rememberEmbers()
     LaunchedEffect(source) {
         source.interactions.collect { i ->
             when (i) {
-                is PressInteraction.Press -> { pressedAt = i.pressPosition; touch?.invoke(i.pressPosition); launch { press.animateTo(1f, snappy) } }
-                is PressInteraction.Release, is PressInteraction.Cancel -> { pressedAt = null; touch?.invoke(null); launch { press.animateTo(0f, wobble) } }
+                is PressInteraction.Press -> { if (!reduce) embers.press(i.pressPosition); touch?.invoke(i.pressPosition); launch { press.animateTo(1f, snappy) } }
+                is PressInteraction.Release, is PressInteraction.Cancel -> { embers.release(); touch?.invoke(null); launch { press.animateTo(0f, wobble) } }
             }
         }
     }
     val ink = Kelvin.colors.ink
+    val accent = Kelvin.colors.accent
+    val glassHeat = Kelvin.colors.glassHeat
+    val dark = Kelvin.dark
     this
         .graphicsLayer {
             val p = press.value
@@ -188,42 +289,144 @@ fun Modifier.kelvinPress(
         )
         .drawWithContent {
             drawContent()
-            val p = press.value
-            if (p <= 0f) return@drawWithContent
             val outline = shape.createOutline(size, layoutDirection, this)
             if (reduce) {
-                drawOutline(outline, ink.copy(alpha = KelvinMotion.PRESS_OVERLAY * p))
+                val p = press.value
+                if (p > 0f) drawOutline(outline, ink.copy(alpha = KelvinMotion.PRESS_OVERLAY * p))
             } else {
-                // A sheen that blooms from the finger, stronger as glass gets clearer.
-                val at = pressedAt ?: center
-                drawOutline(
-                    outline,
-                    Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = (0.10f + 0.14f * deform) * p), Color.White.copy(alpha = 0f)),
-                        center = at, radius = size.minDimension * 1.2f,
-                    ),
-                )
+                // Thermal: the finger leaves heat that cools along the black-body curve.
+                with(embers) { drawEmbers(outline, accent, glassHeat, dark) }
             }
         }
 }
 
 /**
- * The Kelvin Horizon: a radial wash of the accent behind a top-level title, from the top-left
- * corner. It is an ellipse that has faded out completely by the bottom edge and 90% of the way
- * across, so it never ends in a visible line however wide or short the header is.
+ * The Kelvin aurora (the Horizon): colour temperature made visible behind a title. The accent
+ * rises from the top-start corner, its temperature partner (cool daylight for a warm accent,
+ * candlelight for a cool one) from the top-end, and `glass-heat` pools low in the middle, the
+ * way ColorOS 17 and HyperOS 4 let soft light bleed into a page. It is one bicubic mesh gradient
+ * whose bottom edge is fully transparent, so it never ends in a line and is safe over a veil.
+ * [strength] scales it: 1 behind top-level titles, less behind sheets and empty states. With
+ * [circadian] the top-end light is the colour temperature of the hour ([circadianKelvin]): the
+ * aurora is candlelit at night, gold at sunrise and sunset and sky-blue at midday.
  */
-fun Modifier.horizon(): Modifier = composed {
-    val glow = Kelvin.colors.horizon
-    drawBehind {
-        val ry = size.height
-        val rx = size.width * 0.9f
-        if (ry <= 0f || rx <= 0f) return@drawBehind
-        scale(rx / ry, 1f, pivot = Offset.Zero) {
+fun Modifier.horizon(strength: Float = 1f, circadian: Boolean = true, animate: Boolean = false): Modifier = composed {
+    // Motion: the blobs drift, breathe and turn on unrelated cycles (9 to 19 seconds), so it never
+    // visibly loops. The clock runs only while [animate], and never with reduced motion or
+    // battery saver; a frame of drift only redraws, it never recomposes.
+    val time = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val still = Kelvin.reduceMotion || LocalKelvinAccessibility.current.powerSave
+    androidx.compose.runtime.LaunchedEffect(animate, still) {
+        if (!animate || still) return@LaunchedEffect
+        val start = androidx.compose.runtime.withFrameMillis { it } - (time.floatValue * 1000f).toLong()
+        while (true) androidx.compose.runtime.withFrameMillis { time.floatValue = (it - start) / 1000f }
+    }
+    val c = Kelvin.colors
+    val accent = c.horizon.copy(alpha = 1f)
+    val a = (c.horizon.alpha * 1.9f).coerceAtMost(0.32f) * strength
+    // Thermal: the partner light is the colour temperature of this hour, candlelight at night
+    // and blue sky at noon, pushed to full colour and softened a touch toward white.
+    val sky by rememberCircadianKelvin()
+    val partner = remember(accent, sky, circadian) {
+        if (!circadian || accent.chroma() < 0.04f) accent.temperaturePartner()
+        else lerp(blackbody(sky).vivid(lift = 0f), Color.White, 0.2f)
+    }
+    val heat = c.glassHeat
+    // The aurora is a handful of soft blobs (radial gradients, some stretched into ovals), each
+    // its own size and colour: the accent, its temperature partner, heat and blends of them.
+    // Each drifts on its own slow orbit, breathes and turns, so they overlap and part and mix
+    // into new colours where they meet. A blob is a gradient, never a shape: it cannot fold or
+    // show an edge, whatever the motion does. The whole field feathers out toward the bottom.
+    val blobs = remember(accent, partner, heat) {
+        // Colours that differ enough to make new ones where they overlap: the accent's cool
+        // counterpart (blue against Ember, candlelight against Glacier) and two neighbours on the
+        // hue wheel either side of the accent, besides the hour's light and heat.
+        val cool = accent.temperaturePartner()
+        val rose = accent.hueShifted(-38f)
+        val amber = accent.hueShifted(26f)
+        listOf(
+            //         colour   x      y      radius aspect weight dx     dy     period phase
+            AuroraBlob(accent, 0.10f, 0.06f, 0.74f, 1.35f, 1.00f, 0.16f, 0.10f, 17f, 0.0f),
+            AuroraBlob(partner, 0.90f, 0.04f, 0.62f, 1.20f, 0.80f, 0.14f, 0.12f, 19f, 2.1f),
+            AuroraBlob(cool, 0.78f, 0.34f, 0.46f, 0.85f, 0.55f, 0.24f, 0.16f, 14f, 4.4f),
+            AuroraBlob(rose, 0.30f, 0.36f, 0.40f, 1.50f, 0.65f, 0.26f, 0.15f, 12f, 1.3f),
+            AuroraBlob(heat, 0.52f, 0.46f, 0.36f, 1.70f, 0.60f, 0.28f, 0.12f, 10f, 5.2f),
+            AuroraBlob(amber, 0.55f, 0.08f, 0.30f, 0.75f, 0.55f, 0.30f, 0.10f, 9f, 3.3f),
+        )
+    }
+    this
+        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+        .drawBehind {
+            if (size.width <= 0f || size.height <= 0f || a <= 0f) return@drawBehind
+            val t = time.floatValue
+            val w = size.width
+            val h = size.height
+            for (b in blobs) {
+                val ph = t * (2f * kotlin.math.PI.toFloat() / b.period) + b.phase
+                // Lissajous drift on unrelated cycles, so it never visibly loops.
+                val cx = (b.x + b.dx * kotlin.math.sin(ph)) * w
+                val cy = (b.y + b.dy * kotlin.math.sin(ph * 0.73f + 1.1f)) * h
+                val breathe = 1f + 0.12f * kotlin.math.sin(ph * 1.31f + 0.4f)
+                val r = b.radius * w * breathe
+                val angle = 25f * kotlin.math.sin(ph * 0.57f + b.phase)
+                val alpha = (a * b.weight).coerceIn(0f, 1f)
+                val brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                    0f to b.color.copy(alpha = alpha),
+                    0.35f to b.color.copy(alpha = alpha * 0.72f),
+                    0.7f to b.color.copy(alpha = alpha * 0.22f),
+                    1f to b.color.copy(alpha = 0f),
+                    center = Offset(cx, cy),
+                    radius = r,
+                )
+                withTransform({
+                    rotate(angle, Offset(cx, cy))
+                    scale(b.aspect, 1f / b.aspect, Offset(cx, cy))
+                }) {
+                    drawCircle(brush, radius = r, center = Offset(cx, cy))
+                }
+            }
+            // Feather the field to nothing toward the bottom: no edge where the aurora ends.
             drawRect(
-                Brush.radialGradient(colors = listOf(glow, glow.copy(alpha = 0f)), center = Offset.Zero, radius = ry),
-                size = androidx.compose.ui.geometry.Size(size.width * ry / rx, size.height),
+                androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Black, 0.4f to Color.Black, 1f to Color.Transparent),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
             )
         }
+}
+
+/** This colour turned [degrees] around the hue wheel, keeping its saturation and brightness. */
+internal fun Color.hueShifted(degrees: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(android.graphics.Color.argb(alpha, red, green, blue), hsv)
+    if (hsv[1] < 0.05f) return this
+    hsv[0] = ((hsv[0] + degrees) % 360f + 360f) % 360f
+    return Color(android.graphics.Color.HSVToColor(hsv))
+}
+
+/** One light in the aurora: where it rests, how big and how stretched, how far and fast it drifts. */
+private class AuroraBlob(
+    val color: Color,
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val aspect: Float,
+    val weight: Float,
+    val dx: Float,
+    val dy: Float,
+    val period: Float,
+    val phase: Float,
+)
+
+/**
+ * The other end of the colour-temperature scale from this accent: cool daylight for warm hues,
+ * candlelight for cool ones, a soft violet between. Greys (Graphite) stay themselves.
+ */
+internal fun Color.temperaturePartner(): Color {
+    if (chroma() < 0.04f) return this
+    val warmth = red - blue
+    return when {
+        warmth > 0.08f -> Color(0xFF8FB3FF)
+        warmth < -0.08f -> Color(0xFFFFB98A)
+        else -> Color(0xFFC6A8FF)
     }
 }
 
@@ -286,9 +489,14 @@ class GlassPress internal constructor(private val scope: kotlinx.coroutines.Coro
             scope.launch { press.animateTo(1f, spring(0.5f, 300f)) }
             scope.launch { pull.snapTo(Offset.Zero) }
             while (true) {
-                val event = awaitPointerEvent()
+                // Read after everything else has seen the touch: once a scroll (or any other
+                // gesture) claims it, or the finger heads up or down, the pebble lets go and
+                // springs home instead of warping along while the page moves.
+                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!change.pressed) break
+                if (!change.pressed || change.isConsumed) break
+                val moved = change.position - start
+                if (kotlin.math.abs(moved.y) > viewConfiguration.touchSlop && kotlin.math.abs(moved.y) > kotlin.math.abs(moved.x)) break
                 touchAt = change.position
                 thaw?.touch(change.position)
                 scope.launch { pull.animateTo(change.position - start, spring(0.9f, 1500f)) }
@@ -312,3 +520,8 @@ fun rememberGlassPress(thaw: Thaw? = null): GlassPress {
 fun Modifier.kelvinClick(onClick: () -> Unit, enabled: Boolean = true, onClickLabel: String? = null): Modifier =
     clickable(interactionSource = null, indication = null, enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
         .graphicsLayer { alpha = if (enabled) 1f else KelvinMotion.DISABLED_ALPHA }
+
+/** How [KIcon] draws glyphs: [Filled] (Kelvin's default) or [Outline], Tabler's 1.5 stroke. */
+enum class IconStyle { Filled, Outline }
+
+val LocalIconStyle = androidx.compose.runtime.staticCompositionLocalOf { IconStyle.Filled }

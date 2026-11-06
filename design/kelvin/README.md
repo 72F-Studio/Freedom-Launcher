@@ -1,9 +1,10 @@
 # Kelvin
 
 The design system for 72F apps (72F Gallery, HyperMind AI and what comes next). It sits in
-the HyperOS / ColorOS / OriginOS school (grey canvas, white rounded groups, big titles,
-full-colour settings tiles, everything rising from the bottom) and adds shader-driven glass
-and soft controls. The glass is Kelvin's own material: ground glass with a fine grain, lit
+the HyperOS / ColorOS / OriginOS school (paper-white page, grey rounded wells, calm titles,
+full-colour settings tiles, everything rising from the bottom), iOS-inspired but never iOS-looking:
+Frost and heat-lit pebbles by default, a colour-temperature aurora, light tabular figures and a
+One UI-style one-handed opening. It adds shader-driven glass and soft controls. The glass is Kelvin's own material: ground glass with a fine grain, lit
 from its bottom edge at the accent's colour temperature, bevelled outward at the edge, and
 thawed clear under a warm finger. People choose how much glass they see with one setting,
 on one stepless slider from near-opaque ground glass to fully transparent Clear, with
@@ -25,7 +26,43 @@ frost shader. No Material components and no third-party UI kit.
 | [android/](android) | Gradle project: `:kelvin` (the Compose library) and `:catalog` (a demo app with every component) |
 | [web/](web) | `tokens.css`, `kelvin.css` and `kelvin.js` for the website and store pages |
 | [tools/kt-colors.js](tools/kt-colors.js) | Regenerates `KelvinColors.kt` from `tokens.json` |
-| [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest (SIL OFL 1.1) and Tabler Icons (MIT) notices |
+| [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest and Montserrat (SIL OFL 1.1), Tabler Icons (MIT) and Open Doodles (CC0) notices |
+
+## Thermal
+
+Kelvin takes its name literally (`Thermal.kt`): touch leaves heat that cools along a real
+black-body curve anchored on the app's accent, the aurora's light follows the colour temperature
+of the hour, sliders are filaments with a white-hot tip, figures roll (`KelvinRollingText`) and
+selections tick (`rememberKelvinHaptics`). Heat animates only while something is hot; reduced
+motion keeps everything still. The aurora is six soft radial blobs that drift and mix; a frame of drift
+only redraws a few gradients, so it moves on every Android version. The masthead is Onest Black and slims on the variable weight axis
+as it folds. `Signatures.kt` adds layered glass tiles, a thermal bar chart and slide to confirm.
+See GUIDELINES.md, Thermal and Signatures.
+
+## Hierarchy
+
+Onest names and counts, Montserrat explains (`KelvinDisplay`, `KelvinText`). `Hierarchy.kt` holds
+the figure grammar (`KelvinFigure`: light numbers, accent `/` and `:`, small units on the
+baseline, after OriginOS), title tabs (`KelvinTitleTabs`), eyebrows (`KelvinEyebrow`) and the
+time lockup (`KelvinTimeLockup`); stat cards take a `tone` for coloured category cards. Every
+component that shows a figure or a name uses them. See GUIDELINES.md, Typography.
+
+## Components
+
+Beyond the core set, `Selection.kt` (checkbox, radio, stepper, chips, count badges), `Progress.kt`
+(bar, ring, download button, skeleton), `Rows.kt` (swipe rows, expandable rows, avatar stacks,
+page dots) and `MailAndMedia.kt` (recipient field, attachment chip, episode row, mini player,
+scrubber, wheel picker), `Calendar.kt` (month calendar), `Input.kt` (code field, formatting bar),
+`Interaction.kt` (pull to refresh, reorderable lists), `Player.kt` (transport, full player, ring
+meter, quick tiles, action lists), `Page.kt` (`KelvinOnPage`, controls on a page of its own colour)
+and `Doodles.kt` (Open Doodles scenes for empty states, CC0) cover the next apps, an email client
+and a podcast player, and what the shipping apps needed (a reader's transport, music skips, voice
+notes).
+`Transitions.kt` is navigation motion: `KelvinStack` (a back stack with push, pop and premium
+predictive back built in) and `KelvinTransitions` / `KelvinDestination` for Navigation Compose,
+after Rediom's predictive back. Icons are
+filled by default (Tabler's filled set, `KelvinIconPaths.kt`). GUIDELINES.md, Components, maps
+needs to components.
 
 ## The glass engine (Android)
 
@@ -39,12 +76,16 @@ frost shader. No Material components and no third-party UI kit.
   `drawBackdrop` with Kelvin's `FROST_AGSL`. Sheets, dialogs and menus open in a window of their
   own, which Vitro cannot see out of, so there Liquid glass falls back to Backdrop: a deep blur
   under the pane's coat. `thaw` no longer clears anything.
+- On Android 17 QPR2 (API 37.2) and later, Frost in the page's own window is drawn by the platform:
+  a `RenderNode` with `setBackdropRenderEffect` runs the blur and Kelvin's frost shader on what is
+  already drawn behind the pane (`NativeBackdrop.kt`). Nothing is recorded, so it is cheaper and
+  always aligned. Older devices, overlay windows and the veil keep Backdrop.
 - Pebbles (buttons): pass `pebble = press` (a `GlassPress`) to `glass`, or use
   `Modifier.pebble(shape, color, press)` for a solid one plus `Modifier.pebbleMotion(press)`.
   Liquid glass pebbles are interactive Vitro glass: they swell, glow and stretch under the
   finger as iOS glass does. Given a backdrop, every filled button is glass: `KelvinButton`
   (Primary, Tinted, Secondary, Danger), `KelvinIconButton` (Raised, Accent), `KelvinActionOrb`
-  and the chosen `kelvinPill`. Vivid fills are stained glass: what shows through is darkened and
+  and the chosen `kelvinPill` (the orb and chosen pills are soft, not vivid). Vivid fills are stained glass: what shows through is darkened and
   the stain pushed past Vitro's 85% tint cap, so it lands on the fill over a light page and
   deepens over dark content. Toward Clear the stain thins but is pushed harder, and what shows
   through is saturated further, so a see-through CTA stays as rich as the fill. Soft and grey
@@ -68,7 +109,9 @@ frost shader. No Material components and no third-party UI kit.
 
 `KelvinDock` is a floating glass capsule with a droplet selection that slides between tabs and
 stretches with speed; dragging lifts it into a clear glass pane over the icons, following the
-finger on a stiff spring. `KelvinActionOrb` sits beside it for the screen's creation action.
+finger on a stiff spring. `KelvinActionOrb` buds out beside it (a neck of glass stretching and snapping) for the screen's
+creation action. The dock's current tab sits on a solid accent droplet; other selection is quiet (`accent-soft`
+filter pills, a white segmented thumb).
 (A thermometer nav bar was explored and parked; see the history.)
 
 ## Libraries and licences
@@ -78,8 +121,9 @@ finger on a stiff spring. `KelvinActionOrb` sits beside it for the screen's crea
 | AndroidX Compose foundation, UI, activity, core | Apache 2.0 | Platform toolkit |
 | Vitro (`io.github.itshedimisawi:vitro`) | Apache 2.0 | Liquid glass rendering |
 | Backdrop (`io.github.kyant0:backdrop`) and its Shapes dependency | Apache 2.0 | Frost, the veil and glass in overlay windows |
-| Onest font | SIL Open Font License 1.1 | Bundled typeface |
+| Onest and Montserrat fonts | SIL Open Font License 1.1 | Bundled typefaces (display and text) |
 | Tabler Icons paths | MIT | Icons (paths unmodified) |
+| Open Doodles (Pablo Stanley) | CC0 1.0 | Empty-state scenes (`KelvinDoodle`) |
 
 All are free for commercial use. Ship `licenses/` in each app's open-source notices screen.
 
@@ -92,10 +136,11 @@ cd android
 ./gradlew :kelvin:assembleRelease :catalog:assembleDebug
 ```
 
-Verified here: both modules compile against Backdrop 2.0.1 and Vitro 0.1.0 and the catalog APK builds (compileSdk 37, AGP 9.4.1,
-Kotlin 2.4.20, Compose BOM 2026.09.00, matching HyperMind). The AGSL shader was compiled and
-rendered with Skia's SkSL compiler. Not yet verified: running on a device. The catalog is
-the place to tune the shader and springs on real hardware before apps adopt it.
+Verified here: the library and catalog build (release and debug) with no Kotlin warnings, and
+run on an Android 17 QPR2 emulator and a OnePlus 12R (Android 16): light and dark, 200% text,
+TalkBack labels (checked in the accessibility tree, not with TalkBack running), the gestures (drags, swipes, reordering, pull to refresh, slide to confirm, month swipes), and
+frame times (about 3% janky frames scrolling the whole catalog; nothing drawn while idle with
+motion reduced).
 
 ## Where the ideas came from
 

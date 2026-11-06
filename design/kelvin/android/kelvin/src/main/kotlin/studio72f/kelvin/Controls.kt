@@ -68,7 +68,8 @@ enum class ButtonKind { Primary, Tinted, Secondary, Text, Danger, Glass }
 
 /**
  * Capsule button. One [ButtonKind.Primary] per screen; pair Cancel ([ButtonKind.Secondary]) with
- * the exact action in dialogs; destructive actions are [ButtonKind.Danger]. [ButtonKind.Glass]
+ * the exact action in dialogs; destructive actions are [ButtonKind.Danger], a solid red pill
+ * with white text. [ButtonKind.Glass]
  * floats over media or busy content and needs the [backdrop] it sits on; given a [backdrop],
  * [ButtonKind.Primary] becomes stained accent glass.
  */
@@ -89,8 +90,10 @@ fun KelvinButton(
         ButtonKind.Tinted -> c.accentSoft to c.onAccentSoft
         // White on a soft shadow in light mode, like the glass buttons; a grey step in dark.
         ButtonKind.Secondary -> (if (Kelvin.dark) c.sunken else c.lift) to c.ink
-        ButtonKind.Text -> Color.Transparent to c.accent
-        ButtonKind.Danger -> c.criticalSoft to c.critical
+        ButtonKind.Text -> Color.Transparent to c.accent.legibleOn(c.group)
+        // Destructive: solid true red with white text, never a soft wash. It is a warning and
+        // must read as one at a glance, apart from the accent.
+        ButtonKind.Danger -> c.critical to Color.White
         ButtonKind.Glass -> Color.Transparent to c.ink
     }
     val thaw = rememberThaw()
@@ -111,14 +114,14 @@ fun KelvinButton(
     Row(
         modifier
             .height(if (large) 56.dp else 48.dp)
-            .then(if (kind != ButtonKind.Text) Modifier.kelvinClick(onClick, enabled) else Modifier.kelvinPress(onClick, enabled, shape = CapsuleShape))
+            .then(if (kind != ButtonKind.Text) Modifier.kelvinClick(onClick, enabled) else Modifier.kelvinPull(onClick, enabled, shape = CapsuleShape))
             .then(surface)
             .padding(horizontal = if (kind == ButtonKind.Text) 12.dp else 24.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) KIcon(icon, null, size = 18.dp, color = fg)
-        KText(text, style = if (large) Kelvin.type.label.copy(fontSize = Kelvin.type.rowTitle.fontSize) else Kelvin.type.label, color = fg, maxLines = 1)
+        KText(text, style = if (large) Kelvin.type.action.copy(fontSize = Kelvin.type.rowTitle.fontSize) else Kelvin.type.action, color = fg, maxLines = 1)
     }
 }
 
@@ -145,7 +148,8 @@ fun KelvinIconButton(
     Box(
         modifier.size(48.dp).then(
             if (kind != IconButtonKind.Plain) Modifier.kelvinClick(onClick, enabled, contentDescription)
-            else Modifier.kelvinPress(onClick, enabled, onClickLabel = contentDescription, shape = CircleShape),
+            // Plain buttons (a control capsule's play and skip) move like the pebbles do.
+            else Modifier.kelvinPull(onClick, enabled, onClickLabel = contentDescription, shape = CircleShape),
         ),
         contentAlignment = Alignment.Center,
     ) {
@@ -158,7 +162,7 @@ fun KelvinIconButton(
                 else Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press)
         }
         Box(Modifier.size(40.dp).then(disc), contentAlignment = Alignment.Center) {
-            KIcon(icon, contentDescription, size = if (kind == IconButtonKind.Plain) 22.dp else 24.dp, color = if (kind == IconButtonKind.Accent) c.onAccent else c.ink)
+            KIcon(icon, contentDescription, size = if (kind == IconButtonKind.Plain) 22.dp else 24.dp, color = if (kind == IconButtonKind.Accent) c.accent.iconInk() else c.ink)
         }
     }
 }
@@ -173,7 +177,9 @@ fun KelvinSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentDescription: String? = null,
 ) {
+    val label = contentDescription ?: LocalControlLabel.current
     val c = Kelvin.colors
     val g = Kelvin.glass
     val deform = g.deform
@@ -183,7 +189,9 @@ fun KelvinSwitch(
     val lift = remember { Animatable(0f) }
     var dragging by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(checked)
-    val change by rememberUpdatedState(onCheckedChange)
+    val haptics = rememberKelvinHaptics()
+    val commit by rememberUpdatedState(onCheckedChange)
+    val change: (Boolean) -> Unit = { on -> haptics.toggle(on); commit(on) }
     val scope = rememberCoroutineScope()
     val source = remember { MutableInteractionSource() }
     val travelPx = with(LocalDensity.current) { 20.dp.toPx() }
@@ -235,6 +243,7 @@ fun KelvinSwitch(
                     },
                 )
             }
+            .then(if (label != null) Modifier.semantics { this.contentDescription = label } else Modifier)
             .toggleable(checked, source, indication = null, enabled = enabled, role = Role.Switch) { change(it) },
         contentAlignment = Alignment.Center,
     ) {
@@ -271,6 +280,7 @@ fun KelvinSlider(
     onValueChangeFinished: (() -> Unit)? = null,
 ) {
     val c = Kelvin.colors
+    val ember = remember(c.accent, c.glassHeat) { thermalColor(0.12f, c.accent, c.glassHeat) }
     val g = Kelvin.glass
     val deform = g.deform
     val wobble = Kelvin.motion.wobble<Float>()
@@ -278,6 +288,9 @@ fun KelvinSlider(
     val scope = rememberCoroutineScope()
     val lift = remember { Animatable(0f) }
     val stretch = remember { Animatable(0f) }
+    // Which way the knob is being slid: -1 left, 1 right, 0 at rest or on a tap. It bends the
+    // grip into chevrons and stretches the knob into a pill trailing behind the drag.
+    val slide = remember { Animatable(0f) }
     val knob = remember { Animatable(value) }
     val update by rememberUpdatedState(onValueChange)
     val finished by rememberUpdatedState(onValueChangeFinished)
@@ -308,12 +321,16 @@ fun KelvinSlider(
             return s
         }
         val input = Modifier.pointerInput(Unit) {
-            detectTapGestures(onPress = { o ->
+            // The value is set on a tap, not on touch-down, so a scroll that starts on the slider
+            // does not change it.
+            detectTapGestures(onTap = { o -> drag(fractionAt(o.x)) }, onPress = { o ->
                 scope.launch { lift.animateTo(1f, snappy) }
-                drag(fractionAt(o.x))
-                tryAwaitRelease()
-                scope.launch { lift.animateTo(0f, wobble) }
-                finished?.invoke()
+                val released = tryAwaitRelease()
+                // A press that became a drag is cancelled here; the drag owns the lift from then on.
+                if (released || !dragging) {
+                    scope.launch { lift.animateTo(0f, wobble) }
+                    if (released) finished?.invoke()
+                }
             })
         }.pointerInput(Unit) {
             var raw = 0f
@@ -326,10 +343,17 @@ fun KelvinSlider(
                     val v = tracker.calculateVelocity()
                     scope.launch { lift.animateTo(0f, wobble) }
                     scope.launch { stretch.animateTo(0f, wobble, initialVelocity = v) }
+                    scope.launch { slide.animateTo(0f, wobble) }
                     finished?.invoke()
                 },
-                onDragCancel = { dragging = false; scope.launch { lift.animateTo(0f, wobble) }; scope.launch { stretch.animateTo(0f, wobble) } },
-                onHorizontalDrag = { ch, dx -> ch.consume(); raw += dx / widthPx; tracker.addDataPoint(ch.uptimeMillis, drag(raw)) },
+                onDragCancel = { dragging = false; scope.launch { lift.animateTo(0f, wobble) }; scope.launch { stretch.animateTo(0f, wobble) }; scope.launch { slide.animateTo(0f, wobble) } },
+                onHorizontalDrag = { ch, dx ->
+                    ch.consume(); raw += dx / widthPx; tracker.addDataPoint(ch.uptimeMillis, drag(raw))
+                    if (abs(dx) > 0.5f) {
+                        val way = if (dx > 0f) 1f else -1f
+                        if (slide.targetValue != way) scope.launch { slide.animateTo(way, snappy) }
+                    }
+                },
             )
         }
         val s = stretch.value
@@ -341,28 +365,54 @@ fun KelvinSlider(
         val f = knob.value
         if (thick) {
             Box(Modifier.fillMaxWidth().height(52.dp).then(elastic).then(input).clip(KelvinShapes.md).background(c.sunken)) {
-                Box(Modifier.fillMaxHeight().width(full * f).background(c.accent))
-                if (icon != null) KIcon(icon, null, Modifier.align(Alignment.CenterStart).padding(start = 16.dp), 24.dp, if (f > 0.12f) c.onAccent else c.ink2)
-                if (valueText != null) KText(valueText, Modifier.align(Alignment.CenterEnd).padding(end = 16.dp), Kelvin.type.label, if (f > 0.88f) c.onAccent else c.ink2)
+                // Thermal: a filament, an ember at the start heating to the accent at the edge.
+                Box(Modifier.fillMaxHeight().width(full * f).background(Brush.horizontalGradient(listOf(ember, c.accent))))
+                // The icon and the value change ink as the fill's edge actually passes over them,
+                // by how much of each it covers, never at a fixed threshold.
+                val edge = full * f
+                val iconCover = ((edge - 16.dp) / 24.dp).coerceIn(0f, 1f)
+                val valueCover = ((edge - (full - 60.dp)) / 44.dp).coerceIn(0f, 1f)
+                val valueInk = lerp(c.ink2, c.onAccent, valueCover)
+                val valueMark = lerp(c.figureAccent, c.onAccent, valueCover)
+                if (icon != null) KIcon(icon, null, Modifier.align(Alignment.CenterStart).padding(start = 16.dp), 24.dp, lerp(c.ink2, c.accent.iconInk(), iconCover))
+                if (valueText != null) KelvinFigure(valueText, Modifier.align(Alignment.CenterEnd).padding(end = 16.dp), Kelvin.type.figure, valueInk, mark = valueMark, unit = valueMark, unitWord = valueInk)
             }
         } else {
             Box(Modifier.fillMaxWidth().height(44.dp).then(elastic).then(input), contentAlignment = Alignment.CenterStart) {
                 Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.CenterStart) {
                     Box(Modifier.fillMaxWidth().height(6.dp).background(c.sunken, CapsuleShape))
-                    Box(Modifier.width(full * f).height(6.dp).background(c.accent, CapsuleShape))
+                    // Thermal: a filament from an ember through the accent to a white-hot tip at the
+                    // knob, which glows brighter while it is held.
+                    Box(
+                        Modifier.width(full * f).height(6.dp).drawBehind {
+                            if (size.width <= 0f) return@drawBehind
+                            val tip = androidx.compose.ui.geometry.Offset(size.width, size.height / 2f)
+                            val glowR = 14.dp.toPx()
+                            drawCircle(
+                                Brush.radialGradient(listOf(c.glassHeat.copy(alpha = 0.25f + 0.35f * lift.value), c.glassHeat.copy(alpha = 0f)), center = tip, radius = glowR),
+                                radius = glowR, center = tip,
+                            )
+                            drawRoundRect(
+                                Brush.horizontalGradient(0f to ember, 0.55f to c.accent, 1f to c.glassHeat, endX = size.width),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
+                            )
+                        },
+                    )
                 }
                 val l = lift.value
-                val speed = (abs(knob.velocity) / 6f).coerceAtMost(0.4f) * deform
+                // A circle at rest and on a tap; while sliding it widens into a pill. Its leading
+                // edge stays on the value and the extra width trails away from the drag.
+                val way = slide.value
+                val extra = 18.dp * abs(way).coerceAtMost(1.2f)
+                val trail = if (way > 0f) extra else 0.dp
                 MoltenKnob(
                     Modifier
-                        .offset(x = (full - 28.dp) * f)
-                        .size(28.dp)
-                        .graphicsLayer {
-                            scaleX = 1f + speed
-                            scaleY = 1f - speed * 0.4f
-                        },
+                        .offset(x = (full - 28.dp) * f - trail)
+                        .size(28.dp + extra, 28.dp),
                     heat = l * (0.3f + 0.7f * deform),
                     pop = 1f + 0.3f * l * (0.3f + 0.7f * deform),
+                    grip = c.onAccentSoft.legibleOn(Color.White, 3f),
+                    morph = way,
                 )
             }
         }
@@ -402,7 +452,7 @@ fun KelvinGlassControl(
             KText(labels.clear, style = Kelvin.type.caption, color = Kelvin.colors.ink2)
         }
         if (labels.clearWarning != null && level >= GlassLevel.Liquid + 0.08f) {
-            KText(labels.clearWarning, Modifier.padding(top = 4.dp), Kelvin.type.summary, Kelvin.colors.caution)
+            KelvinNote(labels.clearWarning, Tone.Caution, Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -413,7 +463,7 @@ fun KelvinGlassControl(
  * which haloed it in dark mode.
  */
 @Composable
-private fun MoltenKnob(modifier: Modifier, heat: Float, pop: Float) {
+private fun MoltenKnob(modifier: Modifier, heat: Float, pop: Float, grip: Color? = null, morph: Float = 0f) {
     Box(
         modifier
             .graphicsLayer { scaleX *= pop; scaleY *= pop }
@@ -428,7 +478,25 @@ private fun MoltenKnob(modifier: Modifier, heat: Float, pop: Float) {
                 val r = size.height / 2f
                 drawContext.canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, r, r, paint)
             }
-            .pebble(CapsuleShape, Color.White, glow = false),
+            .pebble(CapsuleShape, Color.White, glow = false)
+            .drawWithContent {
+                drawContent()
+                if (grip == null) return@drawWithContent
+                // A grip in the accent: two vertical bars at rest ("this moves"), bending into two
+                // chevrons pointing the way the knob is being slid as [morph] goes to 1 (right)
+                // or -1 (left). Each stroke bends at its middle and stays centred on its place.
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val h = 4.2.dp.toPx()
+                val bend = 2.8.dp.toPx() * morph.coerceIn(-1f, 1f)
+                val gap = 2.6.dp.toPx()
+                val stroke = androidx.compose.ui.graphics.drawscope.Stroke(1.8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+                for (x0 in floatArrayOf(cx - gap, cx + gap)) {
+                    val x = x0 - bend / 2f
+                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(x, cy - h); lineTo(x + bend, cy); lineTo(x, cy + h) }
+                    drawPath(path, grip, style = stroke)
+                }
+            },
     )
 }
 
@@ -464,8 +532,7 @@ fun KelvinAccentDial(
         state = state,
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .carouselFade(state),
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = contentPadding),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         userScrollEnabled = enabled,
@@ -478,12 +545,65 @@ fun KelvinAccentDial(
                     .then(if (on) Modifier.border(2.dp, s.color, CircleShape).padding(4.dp) else Modifier)
                     .clip(CircleShape).background(s.color)
                     .semantics { this.selected = on; role = Role.RadioButton }
-                    .kelvinPress({ onSelect(i) }, enabled, role = Role.RadioButton, onClickLabel = s.label, shape = CircleShape),
+                    .kelvinPull({ onSelect(i) }, enabled, role = Role.RadioButton, onClickLabel = s.label, shape = CircleShape, wash = false),
                 contentAlignment = Alignment.Center,
             ) {
                 // A tick that reads on the swatch, whether it is pale (Graphite in dark mode) or not.
                 if (on) KIcon(KelvinIcons.Check, s.label, size = 18.dp, color = if (s.color.luminance() > 0.5f) Color.Black else Color.White)
             }
         }
+    }
+}
+
+/**
+ * Related controls in one pebble capsule (skip back, play, skip forward), as HyperOS 4 groups a
+ * recorder's transport, so a cluster reads as one object instead of a row of loose circles. Put
+ * [KelvinIconButton]s of kind Plain inside, and flank it with raised circles in a
+ * [KelvinControlBar]. Over content pass the [backdrop] and it is glass in the same tone.
+ */
+@Composable
+fun KelvinControlCapsule(
+    modifier: Modifier = Modifier,
+    backdrop: KelvinBackdrop? = null,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    val c = Kelvin.colors
+    // The whole capsule is one pebble: pressed or dragged anywhere, on a button or between them,
+    // it swells, is pulled toward the finger and stretches along the drag, then wobbles back.
+    // Its buttons still take their taps.
+    val press = rememberGlassPress()
+    androidx.compose.runtime.CompositionLocalProvider(LocalInControlCapsule provides true) {
+        androidx.compose.foundation.layout.Row(
+            modifier
+                .height(56.dp)
+                .then(
+                    if (backdrop != null) Modifier.glass(backdrop, CapsuleShape, GlassContent.Colored, tint = c.raised, isPebble = true, motion = press.layerBlock, pebble = press).then(press.gestures)
+                    else Modifier.pebbleMotion(press).pebble(CapsuleShape, c.raised, press),
+                )
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+            content = content,
+        )
+    }
+}
+
+/**
+ * The one-handed control bar at the foot of a screen: a [center] cluster (a [KelvinControlCapsule]
+ * or the one primary action) between a [leading] and a [trailing] circle, all within the thumb's
+ * reach. Place it at the foot of the screen with `navigationBarsPadding()`; screens with a dock
+ * use the dock instead.
+ */
+@Composable
+fun KelvinControlBar(
+    modifier: Modifier = Modifier,
+    leading: @Composable () -> Unit = {},
+    trailing: @Composable () -> Unit = {},
+    center: @Composable () -> Unit,
+) {
+    Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Box(Modifier.align(Alignment.CenterStart)) { leading() }
+        Box(Modifier.align(Alignment.Center)) { center() }
+        Box(Modifier.align(Alignment.CenterEnd)) { trailing() }
     }
 }

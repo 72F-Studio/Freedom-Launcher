@@ -3,8 +3,13 @@
 plugins { id("com.android.library"); kotlin("plugin.compose") }
 android {
     namespace = "studio72f.kelvin"
-    compileSdk = 37
-    defaultConfig { minSdk = 28 }
+    compileSdk { version = release(37) { minorApiLevel = 2 } }
+    defaultConfig {
+        minSdk = 28
+        // Kelvin compiles against API 37.2 for the platform backdrop but only calls it after a
+        // runtime check, so the app can keep compiling against plain API 37.
+        aarMetadata { minCompileSdk { version = release(37) } }
+    }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     buildFeatures { compose = true }
     sourceSets {

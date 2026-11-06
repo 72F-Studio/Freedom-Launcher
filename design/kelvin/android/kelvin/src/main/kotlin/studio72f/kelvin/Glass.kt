@@ -446,6 +446,42 @@ fun Modifier.glass(
             .clip(shape)
     }
 
+    // Kelvin's frost shader takes the same uniforms whichever renderer runs it.
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val frostUniforms: (Size, FloatArray, Float, (String, FloatArray) -> Unit) -> Unit = { size, radii, offset, set ->
+        set("size", floatArrayOf(size.width, size.height))
+        set("offset", floatArrayOf(offset, offset))
+        set("cornerRadii", radii)
+        set("tint", floatArrayOf(baseTint.red, baseTint.green, baseTint.blue, alpha))
+        set("floorMin", floatArrayOf(if (text && !dark) (0.5f + 0.28f * params.milk) * params.floor else 0f))
+        set("floorMax", floatArrayOf(if (text && dark) 1f - (0.93f + 0.04f * params.milk) * params.floor else 1f))
+        set("saturation", floatArrayOf(params.saturation))
+        set("body", floatArrayOf(if (colored) 1f else 0f))
+        set("ground", floatArrayOf(ground.red, ground.green, ground.blue))
+        set("steep", floatArrayOf(if (isPebble) 1f else 0f))
+        set("px", floatArrayOf(density))
+        set("finish", floatArrayOf(if (dark) 0.55f else 1f))
+        set("grain", floatArrayOf(if (dark) 0.014f else 0.018f))
+        set("heat", floatArrayOf(colors.glassHeat.red, colors.glassHeat.green, colors.glassHeat.blue))
+        set("heatAmt", floatArrayOf(if (dark) 0.28f else 0.12f))
+    }
+    val shadowSpec = when {
+        // Light through stained glass lands on the page in the glass's colour: a soft
+        // coloured shadow under coloured controls, deepest where the pane is thickest.
+        colored -> PaneShadow(baseTint, if (dark) 0.35f else 0.25f, 16.dp, 4.dp)
+        // Pebbles float on a whisper of shadow, straight down.
+        isPebble -> PaneShadow(Color.Black, if (dark) 0.3f else 0.055f, 10.dp, 3.dp)
+        elevated -> PaneShadow(Color.Black, if (dark) 0.5f else 0.1f, 24.dp, 4.dp)
+        else -> null
+    }
+
+    // Android 17 QPR2 (API 37.2) can blur and shade what is already drawn behind a node, so on
+    // those devices Frost in the page's own window needs no recorded copy of the page: the
+    // platform hands the pane exactly what is under it, wherever the pane has moved.
+    if (NativeBackdrop.available && shader && params.isFrost && !foreign && backdrop != null && !params.isSolid) {
+        return@composed Modifier.nativeFrost(shape, params.frostDp.dp, frostUniforms, shadowSpec, motion, pebble)
+    }
+
     drawBackdrop(
         backdrop = backdrop?.layer ?: emptyBackdrop(),
         shape = { shape },
@@ -463,34 +499,21 @@ fun Modifier.glass(
                 blur(frost)
                 val radii = shape.paneRadii(size, layoutDirection, this)
                 runtimeShaderEffect("kelvin-frost", FROST_AGSL, "content") {
-                    setFloatUniform("size", size.width, size.height)
-                    setFloatUniform("offset", -padding, -padding)
-                    setFloatUniform("cornerRadii", radii)
-                    setFloatUniform("tint", baseTint.red, baseTint.green, baseTint.blue, alpha)
-                    setFloatUniform("floorMin", if (text && !dark) (0.5f + 0.28f * params.milk) * params.floor else 0f)
-                    setFloatUniform("floorMax", if (text && dark) 1f - (0.93f + 0.04f * params.milk) * params.floor else 1f)
-                    setFloatUniform("saturation", params.saturation)
-                    setFloatUniform("body", if (colored) 1f else 0f)
-                    setFloatUniform("ground", ground.red, ground.green, ground.blue)
-                    setFloatUniform("steep", if (isPebble) 1f else 0f)
-                    setFloatUniform("px", density)
-                    setFloatUniform("finish", if (dark) 0.55f else 1f)
-                    setFloatUniform("grain", if (dark) 0.014f else 0.018f)
+                    frostUniforms(size, radii, -padding) { name, v ->
+                        when (v.size) {
+                            1 -> setFloatUniform(name, v[0])
+                            2 -> setFloatUniform(name, v[0], v[1])
+                            3 -> setFloatUniform(name, v[0], v[1], v[2])
+                            else -> setFloatUniform(name, v)
+                        }
+                    }
                 }
                 return@drawBackdrop
             }
         },
         // Frost is matte: no rim light, its edge comes from the coat and the shadow.
         highlight = null,
-        shadow = when {
-            // Light through stained glass lands on the page in the glass's colour: a soft
-            // coloured shadow under coloured controls, deepest where the pane is thickest.
-            colored -> { { Shadow(radius = 22.dp, offset = DpOffset(if (isPebble) 4.dp else 0.dp, 8.dp), color = baseTint, alpha = if (dark) 0.6f else 0.5f) } }
-            // Pebbles float on a soft glow beneath them.
-            isPebble -> { { Shadow(radius = 12.dp, offset = DpOffset(2.dp, 3.dp), color = Color.Black, alpha = if (dark) 0.4f else 0.07f) } }
-            elevated -> { { Shadow(radius = 24.dp, offset = DpOffset(0.dp, 4.dp), color = Color.Black, alpha = if (dark) 0.5f else 0.1f) } }
-            else -> null
-        },
+        shadow = shadowSpec?.let { sh -> { Shadow(radius = sh.radius, offset = DpOffset(0.dp, sh.drop), color = sh.color, alpha = sh.alpha) } },
         layerBlock = motion,
         onDrawSurface = {
             when {
@@ -522,13 +545,13 @@ fun Modifier.litGlass(backdrop: KelvinBackdrop?, shape: Shape, motion: (Graphics
 /**
  * A filter pill's surface. Resting pills look like the buttons around them: [litGlass] over
  * content, a [lift] pill on the page, and inside a [KelvinGroup] card (light mode) a well of the
- * page's `canvas` tone, since a white pill would vanish on a white card. The chosen one is accent glass over content (a solid accent pebble elsewhere), the same as a
- * primary button, so a filter and a call to action never disagree on the colour. Put
- * [kelvinPillInk] on top.
+ * page's `canvas` tone. The chosen one is quiet, as HyperOS 4 and ColorOS 17 mark a selection: an
+ * `accent-soft` wash (glass in that tone over content) with `on-accent-soft` text, never a solid
+ * accent fill, which is kept for the one call to action. Put [kelvinPillInk] on top.
  */
 fun Modifier.kelvinPill(selected: Boolean, backdrop: KelvinBackdrop?, shape: Shape = CapsuleShape): Modifier = composed {
     when {
-        selected -> if (backdrop != null) glass(backdrop, shape, GlassContent.Colored, tint = Kelvin.colors.accent, isPebble = true) else pebble(shape, Kelvin.colors.accent)
+        selected -> if (backdrop != null) glass(backdrop, shape, GlassContent.Colored, tint = Kelvin.colors.accentSoft, isPebble = true) else clip(shape).background(Kelvin.colors.accentSoft, shape)
         backdrop != null -> litGlass(backdrop, shape)
         // On a white card a white lift pill vanishes: there it is a well of the page's own tone.
         LocalInKelvinGroup.current && !Kelvin.dark -> clip(shape).background(Kelvin.colors.canvas, shape)
@@ -539,7 +562,7 @@ fun Modifier.kelvinPill(selected: Boolean, backdrop: KelvinBackdrop?, shape: Sha
 /** Text and icon colour on a [kelvinPill]. */
 @Composable
 @ReadOnlyComposable
-fun kelvinPillInk(selected: Boolean): Color = if (selected) Kelvin.colors.onAccent else Kelvin.colors.ink
+fun kelvinPillInk(selected: Boolean): Color = if (selected) Kelvin.colors.onAccentSoft else Kelvin.colors.ink
 
 /**
  * The selection inside a container that is not glass (a segmented thumb, a tab in a group): a
@@ -597,7 +620,7 @@ float2 normalAt(float2 p, float2 halfSize, float r) {
  * pebble's rim), held to the contrast floor, and given a fine grain fixed to the pane, so it
  * reads as ground glass, not fog. No refraction, no reflection, no rim light.
  */
-private const val FROST_AGSL = """
+internal const val FROST_AGSL = """
 uniform shader content;
 uniform float2 size;
 uniform float2 offset;
@@ -612,6 +635,8 @@ uniform float steep;
 uniform float px;
 uniform float finish;
 uniform float grain;
+uniform float3 heat;
+uniform float heatAmt;
 
 $PaneSdf
 $PebbleLight
@@ -656,7 +681,7 @@ half4 main(float2 coord) {
 
     if (steep > 0.5) {
         float2 g = normalAt(p, halfSize, min(r * 1.5, min(halfSize.x, halfSize.y)));
-        c = pebbleFinish(c, -sd, g, (p.y + halfSize.y) / size.y, min(size.x, size.y), px, finish, 0.0);
+        c = pebbleFinish(c, -sd, g, (p.y + halfSize.y) / size.y, min(size.x, size.y), px, finish, 0.0, heat, heatAmt, p);
     }
     return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
 }

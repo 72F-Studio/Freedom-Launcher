@@ -121,6 +121,7 @@ val LocalVeilInset = compositionLocalOf { 0.dp }
 
 /**
  * Top chrome over a scrolling page: [content] sits on a [veil] that fades out over [fade], mostly inside the chrome.
+ * [veilAlpha] fades the veil alone (read at draw time), for chrome that arrives on scroll.
  * Measure the chrome with [onHeight] to pad the page. Text set directly on the veil should use
  * [LocalVeilInk], which turns light over dark content and back, so the title stays readable at
  * every Glass level.
@@ -131,6 +132,7 @@ fun KelvinVeiledHeader(
     modifier: Modifier = Modifier,
     fade: Dp = 32.dp,
     onHeight: (Int) -> Unit = {},
+    veilAlpha: () -> Float = { 1f },
     content: @Composable BoxScope.() -> Unit,
 ) {
     var height by remember { mutableIntStateOf(0) }
@@ -143,6 +145,7 @@ fun KelvinVeiledHeader(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(with(density) { height.toDp() } + fade * VeilSpill)
+                .graphicsLayer { alpha = veilAlpha() }
                 .veil(backdrop, fade),
         )
         CompositionLocalProvider(LocalVeilInk provides ink) {

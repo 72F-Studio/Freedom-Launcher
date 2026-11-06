@@ -57,7 +57,8 @@ private fun KelvinColors.withAccent(accent: Accent, dark: Boolean): KelvinColors
 val LocalKelvinColors = staticCompositionLocalOf { KelvinLight }
 val LocalKelvinDark = staticCompositionLocalOf { false }
 val LocalKelvinAccessibility = staticCompositionLocalOf { KelvinAccessibility() }
-val LocalGlass = staticCompositionLocalOf { GlassLevel.Frosted.resolve(KelvinAccessibility()) }
+val LocalKelvinType = staticCompositionLocalOf { KelvinType.Default }
+val LocalGlass = staticCompositionLocalOf { FrostLevel.Default.resolve(KelvinAccessibility(), GlassTexture.Frost) }
 
 /** Entry point for reading tokens inside a [KelvinTheme]. */
 object Kelvin {
@@ -67,12 +68,14 @@ object Kelvin {
     val reduceMotion: Boolean @Composable @ReadOnlyComposable get() = LocalKelvinAccessibility.current.reduceMotion
     val space = KelvinSpace
     val shape = KelvinShapes
-    val type = KelvinType
+    val type: KelvinType @Composable @ReadOnlyComposable get() = LocalKelvinType.current
     val motion = KelvinMotion
 }
 
 /**
- * Kelvin theme. [texture] is the glass material the person picked and [glass] its intensity:
+ * Kelvin theme. [texture] is the glass material the person picked and [glass] its intensity.
+ * Frost is the default: deep frost for panes and Kelvin's glazed, heat-lit pebbles for controls.
+ * Liquid glass (iOS 26-style refraction, rendered by Vitro) is an option a person turns on.
  * for [GlassTexture.Liquid] the Glass level (0 near-opaque … 1 Clear), for [GlassTexture.Frost]
  * the frost (0 Opaque … 1 Sheer). Keep one intensity per texture so switching back restores it.
  * [refraction] is how hard Liquid glass bends what is behind it (0 Subtle … 1 Strong), apart
@@ -81,21 +84,31 @@ object Kelvin {
  * when the system asks for high-contrast text or battery saving. [reduceMotion] is the app's own
  * setting; the system animator scale is honoured on top of it. [adjust] lets an app make a
  * documented variation of the palette (for example a darker group colour for AMOLED screens).
+ * [fonts] picks Kelvin's own faces or the phone's (offer it in Appearance as "System font").
+ * [icons] draws glyphs filled (the default) or as Tabler's 1.5 outline.
  */
 @Composable
 fun KelvinTheme(
     dark: Boolean = isSystemInDarkTheme(),
     accent: Accent = Accent.Ember,
-    glass: Float = GlassLevel.Frosted,
-    texture: GlassTexture = GlassTexture.Liquid,
+    glass: Float = FrostLevel.Default,
+    texture: GlassTexture = GlassTexture.Frost,
     refraction: Float = RefractionLevel.Default,
     reduceMotion: Boolean = false,
+    fonts: KelvinFonts = KelvinFonts.Kelvin,
+    icons: IconStyle = IconStyle.Filled,
     adjust: (KelvinColors) -> KelvinColors = { it },
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val a11y = remember(context, reduceMotion) { context.readAccessibility(reduceMotion) }
-    val colors = remember(dark, accent, adjust) { adjust((if (dark) KelvinDark else KelvinLight).withAccent(accent, dark)) }
+    val colors = remember(dark, accent, adjust) {
+        adjust((if (dark) KelvinDark else KelvinLight).withAccent(accent, dark)).let {
+            // `on-accent-soft` is only ever text and icons: keep it at 4.5:1 on its soft fill and
+            // on the group grey, whatever the accent.
+            it.copy(onAccentSoft = it.onAccentSoft.legibleOn(it.accentSoft).legibleOn(it.group))
+        }
+    }
     val glassParams = remember(glass, texture, refraction, a11y) { glass.resolve(a11y, texture, refraction) }
     val selection = remember(colors) { TextSelectionColors(colors.accent, colors.accent.copy(alpha = 0.3f)) }
     CompositionLocalProvider(
@@ -103,6 +116,8 @@ fun KelvinTheme(
         LocalKelvinDark provides dark,
         LocalKelvinAccessibility provides a11y,
         LocalGlass provides glassParams,
+        LocalKelvinType provides KelvinType.of(fonts),
+        LocalIconStyle provides icons,
         LocalTextSelectionColors provides selection,
         content = content,
     )

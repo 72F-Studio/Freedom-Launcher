@@ -121,7 +121,7 @@ fun KelvinMenu(
         for (item in items) {
             val tint = when {
                 !item.enabled -> c.ink3
-                item.destructive -> c.critical
+                item.destructive -> c.critical.legibleOn(c.glassTint)
                 else -> c.ink
             }
             Row(
@@ -164,14 +164,14 @@ fun KelvinActionBar(
         for (a in actions) {
             val tint = when {
                 !a.enabled -> c.ink3
-                a.destructive -> c.critical
+                a.destructive -> c.critical.legibleOn(c.glassTint)
                 else -> c.ink
             }
             Column(
                 Modifier
                     .weight(1f)
                     .height(56.dp)
-                    .kelvinPress(a.onClick, a.enabled, role = Role.Button, onClickLabel = a.label, shape = CapsuleShape),
+                    .kelvinPull(a.onClick, a.enabled, role = Role.Button, onClickLabel = a.label, shape = CapsuleShape),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {

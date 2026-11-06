@@ -1,0 +1,264 @@
+@import url("https://fonts.googleapis.com/css2?family=Onest:wght@100..900&display=swap");
+
+/* Kelvin component styles. Every value comes from tokens.css; glass values come from the
+   --g-* variables that Kelvin.setGlass(level) writes on :root (Frosted by default), and the
+   texture from data-k-texture, which Kelvin.setTexture('liquid' | 'frost') writes there. */
+:root { --g-alpha: 0.70; --g-blur: 12px; --g-sat: 1.06; --g-deform: 0.15; }
+.k, .k * { box-sizing: border-box; }
+.k { font-family: var(--font-text); color: var(--ink); -webkit-font-smoothing: antialiased; }
+.k-stage { background: var(--canvas); padding: var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.k-stage.col { flex-direction: column; align-items: stretch; }
+.k-ic { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.k-ic.s18 { width: 18px; height: 18px; }
+.k-ic.s24 { width: 24px; height: 24px; }
+.k-ic.fill { fill: currentColor; stroke: none; }
+.k-press { transition: transform 160ms cubic-bezier(.2,.9,.3,1.2); }
+.k-press:active { transform: scale(.96); }
+.k :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Text roles */
+.k-display { font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.03em; margin: 0; }
+.k-headline { font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.k-title { font-size: 20px; line-height: 26px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+.k-rowtitle { font-size: 16px; line-height: 22px; font-weight: 600; }
+.k-body { font-size: 15px; line-height: 22px; font-weight: 400; }
+.k-summary { font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.k-micro { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.02em; }
+.k-brand { color: var(--accent); }
+.k-num { font-variant-numeric: tabular-nums; }
+
+/* Page header with Horizon */
+.k-header { position: relative; background: radial-gradient(120% 140% at 0% 0%, var(--horizon), transparent 62%), var(--canvas); padding: var(--space-8) var(--space-4) var(--space-4); }
+.k-header.detail { background: var(--canvas); }
+.k-header-row { display: flex; align-items: center; gap: var(--space-2); }
+.k-header-row .k-display { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-header .k-summary { margin-top: var(--space-1); }
+
+/* Raised circle icon button */
+.k-iconbtn { width: var(--space-12); height: var(--space-12); display: inline-grid; place-items: center; border: 0; background: none; padding: 0; color: var(--ink); cursor: pointer; border-radius: var(--radius-full); }
+.k-iconbtn > span { width: var(--space-10); height: var(--space-10); display: grid; place-items: center; border-radius: var(--radius-full); }
+.k-iconbtn.raised > span { background: var(--raised); box-shadow: var(--shadow-raise); }
+.k-iconbtn.tonal > span { background: var(--accent-soft); color: var(--on-accent-soft); }
+.k-iconbtn.accent > span { background: var(--accent); color: var(--on-accent); }
+
+/* Buttons */
+.k-btn { height: var(--space-12); padding: 0 var(--space-6); border-radius: var(--radius-full); border: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); font: 600 14px/20px var(--font-display); cursor: pointer; }
+.k-btn.primary { background: var(--accent); color: var(--on-accent); }
+.k-btn.tonal { background: var(--accent-soft); color: var(--on-accent-soft); }
+.k-btn.neutral { background: var(--sunken); color: var(--ink); }
+.k-btn.plain { background: none; color: var(--accent); padding: 0 var(--space-3); }
+.k-btn.danger { background: var(--critical-soft); color: var(--critical); }
+.k-btn.block { width: 100%; height: var(--space-14); font-size: 16px; }
+.k-btn[disabled] { opacity: var(--opacity-disabled); cursor: default; }
+
+/* Chips */
+.k-chips { display: flex; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; }
+.k-chips > * { flex: none; }
+.k-chip { height: 34px; padding: 0 14px; border-radius: var(--radius-full); border: 0; background: var(--lift); box-shadow: var(--shadow-raise); color: var(--ink); display: inline-flex; align-items: center; gap: var(--space-1); font: 500 14px/20px var(--font-text); cursor: pointer; }
+/* Resting pills among glass are lit glass; the chosen pill is the accent, as the primary button. */
+.k-chip.k-glass { background-color: color-mix(in srgb, var(--glass-lit) 90%, transparent); box-shadow: none; }
+.k-chip.on, .k-chip.k-glass.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.k-chip .k-ic { width: 18px; height: 18px; }
+
+/* Segmented control */
+.k-seg { display: flex; padding: 3px; background: var(--sunken); border-radius: var(--radius-md); gap: 2px; }
+.k-seg button { flex: 1; height: 38px; border: 0; background: none; border-radius: 13px; font: 600 14px/20px var(--font-text); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+.k-seg button.on { background: var(--lift); color: var(--ink); box-shadow: var(--shadow-raise); }
+
+/* Search */
+.k-search { height: 44px; border-radius: var(--radius-full); background: var(--sunken); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4); color: var(--ink-3); }
+.k-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: 400 15px/22px var(--font-text); color: var(--ink); }
+.k-search input::placeholder { color: var(--ink-2); }
+
+/* Text field */
+.k-field { display: flex; flex-direction: column; gap: 6px; }
+.k-field label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink-2); padding-left: var(--space-1); }
+.k-field .box { height: var(--space-14); border-radius: var(--radius-md); background: var(--sunken); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-4); border: 2px solid transparent; color: var(--ink-2); }
+.k-field .box.focus { border-color: var(--accent); background: var(--group); }
+.k-field .box.error { border-color: var(--critical); }
+.k-field input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: 400 15px/22px var(--font-text); color: var(--ink); }
+.k-field .help { font-size: 13px; line-height: 18px; color: var(--ink-2); padding-left: var(--space-1); }
+.k-field .help.error { color: var(--critical); }
+
+/* Groups and rows */
+.k-section { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink-2); padding: 0 var(--space-4) var(--space-2); }
+.k-group { background: var(--group); border-radius: var(--radius-lg); overflow: hidden; }
+.k-row { min-height: var(--space-14); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); position: relative; }
+.k-row + .k-row::before { content: ""; position: absolute; top: 0; right: var(--space-4); left: 60px; height: 1px; background: var(--hairline); }
+.k-row.noicon + .k-row.noicon::before { left: var(--space-4); }
+.k-row .sub { font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.k-row .lead { width: 32px; height: 32px; border-radius: var(--radius-xs); display: grid; place-items: center; flex: none; background: var(--tile-blue); color: #ffffff; }
+.k-row .lead .k-ic { width: 20px; height: 20px; stroke-width: 1.75; }
+.k-row .lead.orange { background: var(--tile-orange); } .k-row .lead.green { background: var(--tile-green); } .k-row .lead.red { background: var(--tile-red); }
+.k-row .lead.violet { background: var(--tile-violet); } .k-row .lead.teal { background: var(--tile-teal); } .k-row .lead.grey { background: var(--tile-grey); }
+.k-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.k-row .txt b { font-size: 16px; line-height: 22px; font-weight: 500; }
+.k-row .val { font-size: 15px; color: var(--ink-2); display: flex; align-items: center; gap: 2px; }
+.k-row .chev { color: var(--ink-3); width: 20px; height: 20px; }
+.k-row.danger b { color: var(--critical); }
+
+/* Switch */
+
+/* Message row */
+.k-msg { display: flex; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--group); position: relative; }
+.k-avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; font: 650 17px/1 var(--font-display); }
+.k-msg .body { flex: 1; min-width: 0; }
+.k-msg .top { display: flex; align-items: baseline; gap: var(--space-2); }
+.k-msg .from { flex: 1; min-width: 0; font-size: 16px; line-height: 22px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-msg .time { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.k-msg .subj { font-size: 15px; line-height: 21px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-msg .prev { font-size: 13px; line-height: 18px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.k-msg.unread .from, .k-msg.unread .subj { font-weight: 650; }
+.k-msg.unread .time { color: var(--accent); font-weight: 600; }
+.k-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; align-self: center; }
+.k-swipe { position: relative; overflow: hidden; border-radius: var(--radius-lg); background: var(--critical-soft); }
+.k-swipe .act { position: absolute; inset: 0 0 0 auto; width: 96px; display: grid; place-items: center; color: var(--critical); font: 600 12px/16px var(--font-text); }
+.k-swipe .act span { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.k-swipe .k-msg { transform: translateX(-96px); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+
+/* Notched tile */
+.k-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
+.k-tile { display: flex; flex-direction: column; min-width: 0; }
+.k-tile .img { position: relative; aspect-ratio: 1; max-width: 100%; }
+.k-tile .img .pic { position: absolute; inset: 0; border-radius: var(--radius-tile); }
+.k-tile.notched .img .pic { -webkit-mask: radial-gradient(circle at calc(100% - 22px) calc(100% - 22px), transparent 26px, #000 26.5px); mask: radial-gradient(circle at calc(100% - 22px) calc(100% - 22px), transparent 26px, #000 26.5px); }
+.k-tile .badge { position: absolute; right: 0; bottom: 0; width: 44px; height: 44px; border-radius: 50%; color: var(--ink); display: grid; place-items: center; font: 650 13px/1 var(--font-display); }
+.k-tile .name { font-size: 15px; line-height: 20px; font-weight: 600; margin: var(--space-2) var(--space-1) 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-tile .count { font-size: 13px; line-height: 18px; color: var(--ink-2); margin: 0 var(--space-1); }
+
+/* Dock */
+.k-orb { width: var(--space-16); height: var(--space-16); border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-float); flex: none; cursor: pointer; }
+
+/* Notice */
+.k-notice { border-radius: var(--radius-md); padding: var(--space-4); display: flex; gap: var(--space-3); align-items: flex-start; background: var(--info-soft); }
+.k-notice .k-ic { color: var(--info); margin-top: 1px; }
+.k-notice .txt { flex: 1; min-width: 0; }
+.k-notice b { display: block; font-size: 15px; line-height: 21px; font-weight: 600; }
+.k-notice p { margin: 2px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.k-notice .act { margin-top: var(--space-2); font: 600 14px/20px var(--font-display); color: var(--info); background: none; border: 0; padding: 0; cursor: pointer; }
+.k-notice.caution { background: var(--caution-soft); }
+.k-notice.caution .k-ic, .k-notice.caution .act { color: var(--caution); }
+.k-notice.critical { background: var(--critical-soft); }
+.k-notice.critical .k-ic, .k-notice.critical .act { color: var(--critical); }
+.k-progress { height: 4px; border-radius: 2px; background: var(--hairline); margin-top: var(--space-2); overflow: hidden; }
+.k-progress i { display: block; height: 100%; background: var(--info); border-radius: 2px; }
+
+/* Status pill */
+.k-pill { height: 26px; padding: 0 10px; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 5px; font: 600 12px/16px var(--font-text); background: var(--sunken); color: var(--ink-2); }
+.k-pill .k-ic { width: 14px; height: 14px; stroke-width: 2.2; }
+.k-pill.positive { background: var(--positive-soft); color: var(--positive); }
+.k-pill.caution { background: var(--caution-soft); color: var(--caution); }
+.k-pill.critical { background: var(--critical-soft); color: var(--critical); }
+.k-pill.accent { background: var(--accent-soft); color: var(--on-accent-soft); }
+
+/* Toast */
+.k-toast { display: flex; align-items: center; gap: var(--space-3); min-height: 52px; padding: 6px 6px 6px var(--space-5); border-radius: var(--radius-md); box-shadow: var(--shadow-float); }
+.k-toast .msg { flex: 1; min-width: 0; font-size: 15px; line-height: 21px; }
+.k-toast .k-btn { height: 40px; padding: 0 var(--space-4); }
+
+/* Sheet */
+.k-sheetwrap { position: relative; overflow: hidden; padding-top: var(--space-8); display: flex; flex-direction: column; justify-content: flex-end; }
+.k-sheet { border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-sheet); padding: var(--space-2) var(--space-6) var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); }
+.k-grab { width: 36px; height: 5px; border-radius: 3px; background: var(--hairline); align-self: center; }
+.k-sheet .actions { display: flex; gap: var(--space-3); }
+.k-sheet .head { display: flex; align-items: center; gap: var(--space-2); }
+.k-sheet .head h3 { flex: 1; text-align: center; margin: 0; font-size: 18px; line-height: 24px; font-weight: 650; }
+.k-pick { display: flex; align-items: center; gap: var(--space-3); min-height: var(--space-14); padding: 0 var(--space-4); border-radius: var(--radius-md); font-size: 16px; font-weight: 500; }
+.k-pick.on { background: var(--accent-soft); color: var(--on-accent-soft); }
+.k-pick .k-ic { margin-left: auto; color: var(--accent); }
+
+/* Floating bottom dialog */
+.k-dialogwrap { position: relative; overflow: hidden; padding: var(--space-8) var(--space-3) var(--space-3); display: flex; flex-direction: column; justify-content: flex-end; }
+.k-dialog { border-radius: var(--radius-xl); box-shadow: var(--shadow-sheet); padding: var(--space-6) var(--space-6) var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); text-align: center; }
+.k-dialog h3 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 650; }
+.k-dialog p { margin: 0 0 var(--space-4); font-size: 15px; line-height: 22px; color: var(--ink-2); }
+.k-dialog .actions { display: flex; gap: var(--space-3); }
+.k-dialog .actions .k-btn { flex: 1; }
+
+/* Thick slider */
+.k-slider { height: 52px; border-radius: var(--radius-md); background: var(--sunken); position: relative; overflow: hidden; }
+.k-slider .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.k-slider .k-ic { position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%); color: var(--on-accent); }
+.k-slider .v { position: absolute; right: var(--space-4); top: 50%; transform: translateY(-50%); font: 600 15px/1 var(--font-text); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.k-slider.thin { height: 28px; background: none; overflow: visible; }
+.k-slider.thin::before { content: ""; position: absolute; left: 0; right: 0; top: 11px; height: 6px; border-radius: 3px; background: var(--sunken); }
+.k-slider.thin .fill { top: 11px; bottom: auto; height: 6px; border-radius: 3px; }
+.k-slider.thin .knob { position: absolute; top: 0; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.k-sheet .actions .k-btn { flex: 1; height: var(--space-14); }
+.k-radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-3); flex: none; }
+.k-radio.on { border: 7px solid var(--accent); }
+
+/* Stat card */
+.k-stat { background: var(--group); border-radius: var(--radius-lg); padding: var(--space-5); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.k-stat .n { font-size: 34px; line-height: 40px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.k-stat .n small { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-2); margin-left: 2px; }
+
+/* Empty state */
+.k-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-3); padding: var(--space-8) var(--space-6); }
+.k-empty .mark { width: 72px; height: 72px; border-radius: 24px; background: var(--accent-soft); color: var(--on-accent-soft); display: grid; place-items: center; }
+.k-empty .mark .k-ic { width: 34px; height: 34px; stroke-width: 1.5; }
+.k-empty p { margin: 0; max-width: 300px; }
+
+.k-hero { font-size: 64px; line-height: 64px; font-weight: 250; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.k-ring { height: 10px; border-radius: 5px; background: var(--sunken); overflow: hidden; display: flex; gap: 2px; }
+.k-ring i { display: block; height: 100%; }
+
+/* Glass: a pane that refracts through its rounded rim (SVG displacement in Chromium), frosted
+   to the chosen level. No painted highlights: the edge shows through refraction alone. */
+.k-glass { position: relative; isolation: isolate; background: color-mix(in srgb, var(--glass-tint) calc(var(--g-alpha) * 100%), transparent); -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)); backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)); box-shadow: 0 0 0 0.5px var(--glass-edge); }
+.k-glass.grain { backdrop-filter: url(#k-grain) blur(var(--g-blur)) saturate(var(--g-sat)); }
+.k-glass.bevel { backdrop-filter: url(#k-bevel) blur(var(--g-blur)) saturate(var(--g-sat)); }
+.k-glass .k-g2, .k-glass .k-summary { color: var(--glass-ink-2); }
+/* Frost (Kelvin.setTexture('frost')): deep ground glass. One wide blur with colour pushed through,
+   a smoky coat and a fine fixed grain; matte, so no hairline or rim light, only the shadow. */
+[data-k-texture="frost"] .k-glass, [data-k-texture="frost"] .k-glass.grain, [data-k-texture="frost"] .k-glass.bevel { -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)); backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)); box-shadow: none; }
+[data-k-texture="frost"] .k-glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1; opacity: 0.05; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+/* Dark mode's float and sheet shadows carry a 1px light ring; frost drops it and keeps the shade. */
+[data-k-texture="frost"] { --k-frost-float: var(--shadow-float); --k-frost-sheet: var(--shadow-sheet); }
+[data-k-texture="frost"][data-theme="dark"], [data-k-texture="frost"] [data-theme="dark"] { --k-frost-float: 0 12px 32px rgba(0,0,0,0.6); --k-frost-sheet: 0 -6px 40px rgba(0,0,0,0.5); }
+[data-k-texture="frost"] .k-toast.k-glass, [data-k-texture="frost"] .k-dialog.k-glass, [data-k-texture="frost"] .k-dock.k-glass { box-shadow: var(--k-frost-float); }
+[data-k-texture="frost"] .k-sheet.k-glass { box-shadow: var(--k-frost-sheet); }
+/* Sheets and dialogs never coat thinner than 55% under frost. */
+[data-k-texture="frost"] .k-sheet.k-glass, [data-k-texture="frost"] .k-dialog.k-glass { background: color-mix(in srgb, var(--glass-tint) calc(max(var(--g-alpha), 0.55) * 100%), transparent); }
+.k-photo { background: linear-gradient(165deg,#a9cdee 0%,#6c9fcf 30%,#3d6b56 50%,#f6c27a 70%,#6b2d3a 100%); }
+.k-photo.b { background: linear-gradient(200deg,#ffd84a 0%,#f2b705 30%,#1a1a1a 50%,#7fd3c8 75%,#13343f 100%); }
+.k-photo.stripes { background: repeating-linear-gradient(100deg,#a9cdee 0 40px,#3d6b56 40px 80px,#f6c27a 80px 120px,#6b2d3a 120px 160px,#ffd84a 160px 200px,#13343f 200px 240px); }
+.k-over { position: relative; overflow: hidden; }
+.k-over > .k-photo { position: absolute; inset: 0; }
+.k-over > .k-photo + * { position: relative; }
+.k-glassdemo { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+.k-glassdemo .k-glass { height: 64px; border-radius: var(--radius-full); display: grid; place-items: center; font: 600 13px/16px var(--font-text); color: var(--ink); }
+.k-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.k-sheetwrap > .k-photo, .k-dialogwrap > .k-photo { position: absolute; inset: 0; }
+.k-sheetwrap > .k-sheet, .k-dialogwrap > .k-dialog { position: relative; }
+/* Liquid switch and slider knobs */
+.k-switch { width: 52px; height: 32px; border-radius: var(--radius-full); background: var(--hairline); position: relative; flex: none; border: 0; padding: 0; cursor: pointer; touch-action: none; transition: background-color 200ms; }
+.k-switch[aria-checked="true"] { background: var(--accent); }
+.k-switch::after { content: none; }
+.k-switch .knob { position: absolute; top: 2px; left: 2px; height: 28px; width: 28px; border-radius: var(--radius-full); background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none; }
+.k-switch .knob, .k-slider.thin .knob { transition: background-color 220ms, box-shadow 220ms; }
+.k-slider { touch-action: none; cursor: pointer; }
+.k-sheen { position: relative; overflow: hidden; }
+.k-sheen::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 260ms; background: radial-gradient(circle at var(--px, 50%) var(--py, 50%), rgba(255,255,255,calc(0.12 + 0.16 * var(--g-deform))), transparent 65%); }
+.k-sheen.down::after { opacity: 1; transition: opacity 60ms; }
+@media (prefers-reduced-motion: reduce) { .k-sheen.down::after { background: rgba(0,0,0,0.08); } }
+
+.k-toast.k-glass, .k-sheet.k-glass, .k-dialog.k-glass, .k-dock.k-glass { box-shadow: 0 0 0 0.5px var(--glass-edge), var(--shadow-float); }
+
+/* Dock: a floating glass capsule; the selection is a droplet that slides between tabs. */
+.k-dockwrap { display: flex; align-items: center; gap: var(--space-3); padding: 12px 16px; }
+.k-dock { flex: 1; min-width: 0; height: var(--space-16); border-radius: var(--radius-full); display: flex; padding: 6px; gap: 2px; position: relative; touch-action: pan-y; }
+.k-dock .drop { position: absolute; top: 6px; bottom: 6px; left: 6px; border-radius: var(--radius-full); background: var(--sunken); pointer-events: none; transform-origin: center; transition: background-color 160ms, box-shadow 160ms; }
+.k-dock .drop.lifted { background: color-mix(in srgb, var(--glass-tint) 10%, transparent); -webkit-backdrop-filter: blur(0.5px); backdrop-filter: url(#k-bevel) blur(0.5px); box-shadow: 0 0 0 0.5px var(--glass-edge), var(--shadow-float); z-index: 2; }
+.k-dock button { flex: 1; min-width: 0; border: 0; background: none; border-radius: var(--radius-full); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--glass-ink-2); font: 600 11px/14px var(--font-text); letter-spacing: 0.02em; cursor: pointer; position: relative; z-index: 1; }
+.k-dock button.on { color: var(--accent); }
+.k-dock button .badge { position: absolute; top: 8px; left: calc(50% + 6px); }
+.k-orb { width: var(--space-16); height: var(--space-16); border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); flex: none; cursor: pointer; }
+.k-clearwarn { font-size: 13px; line-height: 18px; color: var(--caution); margin-top: var(--space-1); }
+
+/* Hierarchy: Onest names and counts, Montserrat explains. In a figure, marks (/ : –) take the
+   accent and units sit small on the baseline: <span class="numeral">7<i class="k-mark">/</i>2026</span>,
+   <span class="hero">86<i class="k-unit">%</i></span>. */
+.eyebrow { text-transform: uppercase; }
+.k-mark { font-style: normal; color: var(--accent); }
+.k-unit { font-style: normal; font-size: 0.4em; font-weight: 600; color: var(--ink-2); margin-left: 0.08em; letter-spacing: 0; }

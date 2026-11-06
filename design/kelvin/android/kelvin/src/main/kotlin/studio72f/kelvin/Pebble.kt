@@ -9,6 +9,10 @@ import android.os.Build
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.remember
 import androidx.compose.ui.composed
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
@@ -25,13 +29,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 
 /*
- * Pebbles. Kelvin's buttons sit on the page like drops of water: a flat face true to its colour,
- * with all the depth at the edge, where the surface rolls over and tucks under. Nothing is
- * reflects on the face; a soft shine, a light inner glow and fine stroke on the top rim and an
- * inner shadow along the bottom give it body. On glass the steep, tucked rim bends the real
- * page behind it (Snell in OPTIC_AGSL). A solid pebble is a drop of coloured matter: its colour builds up
- * with the thickness of the drop (Beer-Lambert), so the thinning rim turns translucent over
- * whatever is really behind it. A soft glow beneath lifts it off the page.
+ * Pebbles, after HyperOS 4's: frosted, matte stones whose light lives in the bevel. The face is
+ * true to its colour; light soaks into the rounded edge and glows softly just inside it, a little
+ * more along the top, under a faint broad sheen. Kelvin's own trace is a thread of the accent's
+ * colour temperature (`glass-heat`) along the bottom rim, warm for Ember, cool for Glacier. A
+ * solid pebble's colour thins toward its edge (Beer-Lambert). Beneath it, a whisper of shadow
+ * falls straight down, a faint haze of its own colour under a vivid fill.
  */
 
 /** AGSL: a drop's thickness profile. Shared by glass and solid pebbles. */
@@ -43,23 +46,36 @@ float dropThickness(float d, float width) {
     return sqrt(max(1.0 - x * x, 0.0));
 }
 
-// The finish that lifts a pebble off the page: a faint shine over the upper face, a little inner
-// glow in the top-left, the liquid-glass rim light ([rimLight] 1 to draw it here; glass gets it
-// from Backdrop's highlight), and an inner shadow toward the bottom-right. [d] is the distance inside the edge, [g] points out through it, [y] runs 0 at
-// the top to 1 at the bottom, [px] is one dp, [strength] is gentler in dark mode.
-float3 pebbleFinish(float3 c, float d, float2 g, float y, float h, float px, float strength, float rimLight) {
-    float shine = 0.035 * (1.0 - smoothstep(0.0, 0.6, y));
-    // A little inner glow tucked into the top-left, where the light comes from.
-    float topLeft = max(dot(g, float2(-0.7071, -0.7071)), 0.0);
-    float glow = 0.07 * pow(topLeft, 1.5) * (1.0 - smoothstep(0.0, h * 0.3, d));
-    // Liquid-glass rim light: a fine line along the edge, brightest where the edge faces the
-    // 45-degree light or directly away from it (two opposite corners), as in Kyant's Backdrop.
+// Fixed fine grain, so a pebble reads as fired matter rather than a flat fill.
+float kGrain(float2 p) {
+    p = fract(p * float2(443.897, 441.423));
+    p += dot(p, p.yx + 19.19);
+    return fract((p.x + p.y) * p.x);
+}
+
+// Kelvin's pebble finish, after HyperOS 4's frosted pebbles: a matte face true to its colour,
+// with all the light in the bevel. Light soaks into the rounded edge and glows softly just inside
+// it, a little more along the top; a faint, broad sheen sits over the upper face. Heat is only a
+// thread: light at the accent's colour temperature ([heat]) leaking in along the bottom rim
+// ([heatAmt] 0 to leave it out). [d] is the distance inside the edge, [g] points out through it,
+// [y] runs 0 at the top to 1 at the bottom, [h] is the smaller side, [px] one dp, [strength]
+// gentler in dark mode. [rimLight] 1 draws the liquid-glass rim stroke, for the Liquid texture
+// only.
+float3 pebbleFinish(float3 c, float d, float2 g, float y, float h, float px, float strength, float rimLight,
+                    float3 heat, float heatAmt, float2 coord) {
+    float bevel = 1.0 - smoothstep(0.0, min(h * 0.22, px * 9.0), d);
+    // The bevel glow: light gathered in the rounded edge, stronger toward the top.
+    float glow = bevel * bevel * (0.035 + 0.045 * max(-g.y, 0.0));
+    float sheen = 0.025 * (1.0 - smoothstep(0.0, 0.55, y)) * (1.0 - bevel);
     float stroke = rimLight * 0.62 / max(strength, 0.01) * abs(dot(g, float2(0.7071, 0.7071))) * (1.0 - smoothstep(px * 0.25, px * 1.0, d));
-    // ...and the inner shadow sits opposite, toward the bottom-right.
-    float bottomRight = max(dot(g, float2(0.7071, 0.7071)), 0.0);
-    float shadow = 0.025 * bottomRight * (1.0 - smoothstep(0.0, h * 0.3, d));
-    c *= 1.0 - shadow * strength;
-    return 1.0 - (1.0 - c) * (1.0 - (shine + glow + stroke) * strength);
+    c = 1.0 - (1.0 - c) * (1.0 - (glow + sheen + stroke) * strength);
+    // A barely-there settle where the bottom edge tucks under.
+    c *= 1.0 - 0.025 * max(g.y, 0.0) * bevel * strength;
+    // Heat: a thread of the accent's temperature along the bottom rim.
+    float thread = pow(max(g.y, 0.0), 1.5) * exp(-d / max(px * 2.5, 1.0));
+    c = mix(c, heat, clamp(heatAmt * thread, 0.0, 1.0));
+    c += (kGrain(floor(coord / max(px * 0.75, 1.0))) - 0.5) * 0.006 * strength;
+    return clamp(c, 0.0, 1.0);
 }
 """
 
@@ -71,6 +87,8 @@ uniform float rimWidth;
 uniform float px;
 uniform float strength;
 uniform float rim;
+uniform float3 heat;
+uniform float heatAmt;
 
 $PaneSdf
 $PebbleLight
@@ -85,7 +103,7 @@ half4 main(float2 coord) {
     float path = 0.35 + 0.65 * dropThickness(d, rimWidth);
     float a = 1.0 - pow(0.004, path);
     float2 g = normalAt(p, halfSize, min(r * 1.5, min(halfSize.x, halfSize.y)));
-    float3 c = pebbleFinish(float3(color.rgb), d, g, coord.y / size.y, min(size.x, size.y), px, strength, 0.0);
+    float3 c = pebbleFinish(float3(color.rgb), d, g, coord.y / size.y, min(size.x, size.y), px, strength, 0.0, heat, heatAmt, coord);
     // The rim light sits on the drop's surface, over its translucent edge, so it reads on vivid
     // fills too rather than fading into the page with the edge.
     float light = rim * 0.62 * abs(dot(g, float2(0.7071, 0.7071))) * (1.0 - smoothstep(px * 0.25, px * 0.8, d));
@@ -108,6 +126,7 @@ internal fun pebbleRim(minSide: Float, density: Float): Float = minOf(minSide * 
  */
 fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow: Boolean = true): Modifier = composed {
     val dark = Kelvin.dark
+    val heat = Kelvin.colors.glassHeat
     // Frost is matte: its pebbles keep their body and shadow but draw no rim-light stroke.
     val matte = Kelvin.glass.isFrost
     // How colourful the fill is, 0 for greys and white to 1 for the accent: it decides between the
@@ -116,15 +135,20 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
     // Chroma pushed to the edge of sRGB at the same lightness: brightening a light accent such as
     // Glacier would wash out the white label.
     val fill = remember(color, vividness) { if (vividness >= 1f) color.vivid(lift = 0f) else color }
+    // One shader per pebble for its whole life: parsing the AGSL source is the expensive part, so
+    // it is never rebuilt when the pebble resizes or its colour changes; only uniforms update.
+    val shader = remember { if (Build.VERSION.SDK_INT >= 33) RuntimeShader(PEBBLE_AGSL) else null }
     this.then(if (!glow) Modifier else Modifier.drawWithCache {
         // The light comes from the top-left, so the glow falls to the south-east.
-        val glowColor = if (vividness > 0f) fill.copy(alpha = (if (dark) 0.5f else 0.42f) * vividness)
-            else Color.Black.copy(alpha = if (dark) 0.3f else 0.1f)
-        val radius = if (vividness > 0f) 10.dp.toPx() else 5.dp.toPx()
+        // A whisper of shadow, as under HyperOS 4's white buttons: light from straight above, so
+        // it falls straight down; a vivid fill's is a faint haze of its own colour.
+        val glowColor = if (vividness > 0f) fill.copy(alpha = (if (dark) 0.3f else 0.22f) * vividness)
+            else Color.Black.copy(alpha = if (dark) 0.3f else 0.055f)
+        val radius = if (vividness > 0f) 8.dp.toPx() else 10.dp.toPx()
         val glowPath = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }.asAndroidPath()
         val glowPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             this.color = android.graphics.Color.TRANSPARENT
-            setShadowLayer(radius, if (vividness > 0f) 2.dp.toPx() else 0f, if (vividness > 0f) 4.dp.toPx() else 2.dp.toPx(), glowColor.toArgb())
+            setShadowLayer(radius, 0f, 3.dp.toPx(), glowColor.toArgb())
         }
         onDrawBehind { drawIntoCanvas { it.nativeCanvas.drawPath(glowPath, glowPaint) } }
     })
@@ -134,7 +158,6 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
         val lift = 1f - 0.85f * color.luminance()
         val outline = shape.createOutline(size, layoutDirection, this)
         val radii = shape.paneRadii(size, layoutDirection, this)
-        val shader = if (Build.VERSION.SDK_INT >= 33) RuntimeShader(PEBBLE_AGSL) else null
         onDrawBehind {
             if (Build.VERSION.SDK_INT < 33 || shader == null) { drawOutline(outline, color); press?.run { drawPressLight(outline, lift) }; return@onDrawBehind }
             shader.setFloatUniform("size", size.width, size.height)
@@ -147,6 +170,9 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
             // lit edge against the dark group.
             shader.setFloatUniform("strength", if (dark) 0.25f + 0.3f * vividness else 1f)
             shader.setFloatUniform("rim", if (matte) 0f else if (dark) 0.2f + 0.3f * vividness else 0.8f)
+            shader.setFloatUniform("heat", heat.red, heat.green, heat.blue)
+            // Knobs (no glow) take only a hint, so a switch never reads as lit.
+            shader.setFloatUniform("heatAmt", (if (dark) 0.28f else 0.12f) * (if (glow) 1f else 0f))
             drawOutline(outline, ShaderBrush(shader))
             press?.run { drawPressLight(outline, lift) }
         }
@@ -184,34 +210,9 @@ fun Modifier.glowRoom(vertical: androidx.compose.ui.unit.Dp = GlowRoom, horizont
     },
 )
 
-/** A sideways carousel's edges: fades out at whichever end has more to scroll to. */
-fun Modifier.carouselFade(state: androidx.compose.foundation.ScrollState): Modifier =
-    carouselFade({ state.canScrollBackward }, { state.canScrollForward })
-
-/** A sideways carousel's edges: fades out at whichever end has more to scroll to. */
-fun Modifier.carouselFade(state: androidx.compose.foundation.lazy.LazyListState): Modifier =
-    carouselFade({ state.canScrollBackward }, { state.canScrollForward })
-
-private fun Modifier.carouselFade(start: () -> Boolean, end: () -> Boolean): Modifier = this
-    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        val fs = start()
-        val fe = end()
-        if (!fs && !fe) return@drawWithContent
-        val f = (32.dp.toPx() / size.width).coerceAtMost(0.5f)
-        drawRect(
-            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                0f to if (fs) Color.Transparent else Color.Black, f to Color.Black,
-                1f - f to Color.Black, 1f to if (fe) Color.Transparent else Color.Black,
-            ),
-            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-        )
-    }
-
 /**
- * A sideways row of chips, pills or swatches as a Kelvin carousel: scrolls with [scroll], fades
- * at the end that has more, leaves room for a chosen pill's glow, and insets its content by
+ * A sideways row of chips, pills or swatches as a Kelvin carousel: scrolls with [scroll] (never faded at
+ * its edges: a chip cut off by the edge is what says the row scrolls), leaves room for a chosen pill's glow, and insets its content by
  * [inset]. [bleed] lets it run that far past its container's padding on either side (pass the
  * container's horizontal padding so the carousel meets the card or screen edge).
  */
@@ -221,6 +222,39 @@ fun Modifier.kelvinCarousel(
     bleed: androidx.compose.ui.unit.Dp = 0.dp,
 ): Modifier = this
     .glowRoom(GlowRoom, bleed)
-    .carouselFade(scroll)
     .then(Modifier.horizontalScroll(scroll))
     .padding(horizontal = inset, vertical = GlowRoom)
+
+/**
+ * Click plus the buttons' press physics, for anything pressable that is not a filled pebble: plain
+ * icon buttons (a control capsule's play and skip), Text buttons, action bar items, filter pills
+ * and swatches. Under the finger it swells, is pulled toward it and stretches along the pull, then
+ * springs back with a wobble on release, exactly as a pebble does. [wash] lays a faint ink tint in
+ * [shape] while held, for controls with no fill of their own to press into.
+ */
+fun Modifier.kelvinPull(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    role: Role? = Role.Button,
+    onClickLabel: String? = null,
+    shape: Shape = CircleShape,
+    wash: Boolean = true,
+): Modifier = composed {
+    val press = rememberGlassPress()
+    // Inside a control capsule the capsule moves as one pebble; its buttons only wash.
+    val moves = !LocalInControlCapsule.current
+    val ink = Kelvin.colors.ink
+    this
+        .clickable(interactionSource = null, indication = null, enabled = enabled, role = role, onClickLabel = onClickLabel, onClick = onClick)
+        .graphicsLayer { alpha = if (enabled) 1f else KelvinMotion.DISABLED_ALPHA }
+        .then(if (enabled && moves) Modifier.graphicsLayer(press.layerBlock).then(press.gestures) else if (enabled) press.gestures else Modifier)
+        .then(
+            if (wash) Modifier.drawBehind {
+                val p = press.value
+                if (p > 0.01f) drawOutline(shape.createOutline(size, layoutDirection, this), ink.copy(alpha = 0.07f * p))
+            } else Modifier,
+        )
+}
+
+/** Inside a [KelvinControlCapsule]: its buttons leave the press physics to the capsule. */
+internal val LocalInControlCapsule = androidx.compose.runtime.staticCompositionLocalOf { false }

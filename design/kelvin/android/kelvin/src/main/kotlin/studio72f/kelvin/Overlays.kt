@@ -1,5 +1,8 @@
 package studio72f.kelvin
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.core.Animatable
@@ -78,11 +81,15 @@ private fun RisingOverlay(
     ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val h = constraints.maxHeight.toFloat()
+        val pulled = drag.value
         Box(
-            Modifier.fillMaxSize().graphicsLayer { alpha = shown.value }.background(c.scrim)
+            Modifier.fillMaxSize()
+                // The scrim follows the finger: pulling the sheet down lifts the dim with it, so
+                // the page comes back as the sheet goes, rather than all at once on release.
+                .graphicsLayer { alpha = shown.value * (1f - (pulled.coerceAtLeast(0f) / (h * 0.45f))).coerceIn(0f, 1f) }
+                .background(c.scrim)
                 .pointerInput(Unit) { detectTapGestures { dismiss() } },
         )
-        val pulled = drag.value
         content(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -140,6 +147,8 @@ fun KelvinSheet(
             modifier.then(motion)
                 .fillMaxWidth()
                 .glass(backdrop, SheetShape, GlassContent.Pane, elevated = true)
+                // A softer aurora rises with the sheet, so it carries the app's temperature too.
+                .horizon(0.5f)
                 .navigationBarsPadding()
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -147,7 +156,7 @@ fun KelvinSheet(
             Box(Modifier.align(Alignment.CenterHorizontally).size(36.dp, 5.dp).background(Kelvin.colors.hairline, CapsuleShape))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 KelvinIconButton(KelvinIcons.X, closeLabel, onDismiss, kind = IconButtonKind.Raised)
-                KText(title, Modifier.weight(1f), Kelvin.type.rowTitle.copy(fontSize = Kelvin.type.title.fontSize, fontWeight = FontWeight.SemiBold), align = TextAlign.Center, maxLines = 1)
+                KText(title, Modifier.weight(1f), Kelvin.type.title, align = TextAlign.Center, maxLines = 1)
                 if (onConfirm != null && confirmLabel != null) KelvinIconButton(KelvinIcons.Check, confirmLabel, onConfirm, kind = IconButtonKind.Accent)
                 else Spacer(Modifier.width(48.dp))
             }
@@ -180,7 +189,7 @@ fun KelvinDialog(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            KText(title, style = Kelvin.type.rowTitle.copy(fontSize = Kelvin.type.title.fontSize, fontWeight = FontWeight.SemiBold), align = TextAlign.Center)
+            KText(title, style = Kelvin.type.title, align = TextAlign.Center)
             KText(message, Modifier.padding(bottom = 12.dp), Kelvin.type.body, Kelvin.colors.glassInk2, align = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 KelvinButton(cancelText, onDismiss, Modifier.weight(1f), ButtonKind.Secondary)
@@ -253,7 +262,11 @@ fun KelvinDialogPane(
 
 private val SheetShape = ContinuousShape(32.dp, flatBottom = true)
 
-/** Glass slab above the dock for a result, with at most one action. */
+/**
+ * Glass slab above the dock for a result, with at most one action (Undo, for anything that can be
+ * taken back). It grows with large text, wrapping the message and setting the action under it,
+ * and keeps to a readable width on tablets.
+ */
 @Composable
 fun KelvinToast(
     message: String,
@@ -262,16 +275,23 @@ fun KelvinToast(
     actionText: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    Row(
-        modifier.fillMaxWidth().padding(horizontal = 16.dp).height(52.dp)
-            // Reading text: capped at the Glass mark like sheets and dialogs.
-            .glass(backdrop, KelvinShapes.md, GlassContent.Pane, elevated = true)
-            .padding(start = 20.dp, end = 4.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        KText(message, Modifier.weight(1f), Kelvin.type.body, maxLines = 1)
-        if (actionText != null && onAction != null) KelvinButton(actionText, onAction, kind = ButtonKind.Text)
+    val large = largeText()
+    val action = @Composable { if (actionText != null && onAction != null) KelvinButton(actionText, onAction, kind = ButtonKind.Text) }
+    val pane = modifier.fillMaxWidth().wrapContentWidth().padding(horizontal = 16.dp).widthIn(max = 520.dp).fillMaxWidth()
+        .heightIn(min = 52.dp.withTextScale(Kelvin.type.body.lineHeight))
+        // Reading text: capped at the Glass mark like sheets and dialogs.
+        .glass(backdrop, KelvinShapes.md, GlassContent.Pane, elevated = true)
+        .semantics { liveRegion = LiveRegionMode.Polite }
+    if (large) {
+        Column(pane.padding(start = 20.dp, end = 4.dp, top = 12.dp, bottom = 4.dp)) {
+            KText(message, Modifier.padding(end = 16.dp), Kelvin.type.body)
+            Box(Modifier.align(Alignment.End)) { action() }
+        }
+    } else {
+        Row(pane.padding(start = 20.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            KText(message, Modifier.weight(1f).padding(vertical = 14.dp), Kelvin.type.body, maxLines = 2)
+            action()
+        }
     }
 }
 
@@ -309,11 +329,9 @@ fun KelvinTip(
             .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
-                KIcon(icon, null, size = 20.dp, color = c.onAccentSoft)
-            }
+            KelvinGlassTile(icon, c.accent, size = 36.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                KText(title, style = Kelvin.type.body.copy(fontWeight = FontWeight.SemiBold))
+                KText(title, style = Kelvin.type.name)
                 KText(message, style = Kelvin.type.summary, color = if (backdrop != null) c.glassInk2 else c.ink2)
             }
         }

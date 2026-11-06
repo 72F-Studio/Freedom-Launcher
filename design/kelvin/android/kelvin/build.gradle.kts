@@ -6,8 +6,13 @@ plugins {
 
 android {
     namespace = "studio72f.kelvin"
-    compileSdk = 37
-    defaultConfig { minSdk = 24 }
+    compileSdk { version = release(37) { minorApiLevel = 2 } }
+    defaultConfig {
+        minSdk = 24
+        // Kelvin compiles against API 37.2 for the platform backdrop (NativeBackdrop.kt), but only
+        // calls it after a runtime check, so apps can keep compiling against plain API 37.
+        aarMetadata { minCompileSdk { version = release(37) } }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
