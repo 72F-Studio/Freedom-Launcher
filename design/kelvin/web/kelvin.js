@@ -221,6 +221,41 @@
     set._raf = requestAnimationFrame(step);
   }
 
+  // Tabs are places side by side: showing a panel to the right pans the view right. The old panel
+  // slides a fraction toward the far side and fades early; the new one comes in from the near side
+  // on an unbouncing curve, a screen frosting as it goes (data-k-travel="pane" for a part of a page:
+  // half the distance, no frost). RTL mirrors the pan; reduced motion swaps in place.
+  var PAN = 'cubic-bezier(.22,1,.36,1)';
+  function panels(el) {
+    var list = Array.prototype.slice.call(el.children);
+    var idx = Math.max(0, list.findIndex(function (p) { return !p.hidden; }));
+    list.forEach(function (p, i) { p.hidden = i !== idx; p.setAttribute('role', 'tabpanel'); });
+    el.style.display = 'grid';
+    list.forEach(function (p) { p.style.gridArea = '1 / 1'; });
+    el.kelvinShow = function (i) {
+      if (i === idx || !list[i]) return;
+      var from = list[idx], to = list[i];
+      var rtl = getComputedStyle(el).direction === 'rtl';
+      var dir = ((i > idx) !== rtl) ? 1 : -1;
+      idx = i;
+      to.hidden = false;
+      var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (still || !to.animate) { from.hidden = true; return; }
+      var pane = el.getAttribute('data-k-travel') === 'pane';
+      var d = (pane ? 12.5 : 25) * dir, blur = pane ? '0px' : '12px';
+      from.style.pointerEvents = 'none';
+      var out = from.animate([
+        { transform: 'translateX(0)', opacity: 1, filter: 'blur(0)' },
+        { transform: 'translateX(' + (-d) + '%)', opacity: 0, filter: 'blur(' + blur + ')' },
+      ], { duration: 300, easing: PAN });
+      to.animate([
+        { transform: 'translateX(' + d + '%)', opacity: 0, filter: 'blur(' + blur + ')' },
+        { transform: 'translateX(0)', opacity: 1, filter: 'blur(0)' },
+      ], { duration: 420, easing: PAN });
+      out.onfinish = function () { if (list[idx] !== from) from.hidden = true; from.style.pointerEvents = ''; };
+    };
+  }
+
   function dock(el) {
     var tabs = Array.prototype.slice.call(el.querySelectorAll('button'));
     var drop = el.querySelector('.drop') || el.insertBefore(Object.assign(document.createElement('span'), { className: 'drop' }), el.firstChild);
@@ -236,7 +271,12 @@
       drop.classList.toggle('lifted', !!lifted && state.texture !== 'frost' && state.deform > 0.2 && state.level > 0.02);
       tabs.forEach(function (b, i) { var near = 1 - Math.min(1, Math.abs(p - i)); b.style.color = near > 0.5 ? 'var(--accent)' : 'var(--glass-ink-2)'; });
     }
-    function select(i) { idx = i; tabs.forEach(function (b, j) { b.classList.toggle('on', j === i); b.setAttribute('aria-selected', String(j === i)); }); }
+    // data-k-panels names the container whose panels the dock switches, in the dock's order.
+    var target = el.getAttribute('data-k-panels') && document.getElementById(el.getAttribute('data-k-panels'));
+    function select(i) {
+      idx = i; tabs.forEach(function (b, j) { b.classList.toggle('on', j === i); b.setAttribute('aria-selected', String(j === i)); });
+      if (target && target.kelvinShow) target.kelvinShow(i);
+    }
     place(idx, 0, false, false);
     el.addEventListener('pointerdown', function (e) { dragging = true; moved = false; startX = lastX = e.clientX; lastT = e.timeStamp; });
     el.addEventListener('pointermove', function (e) {
@@ -296,6 +336,7 @@
     each('[data-k="press"]', press);
     each('[data-k="switch"]', toggle);
     each('[data-k="slider"]', slider);
+    each('[data-k="panels"]', panels);
     each('[data-k="dock"]', dock);
     try { var t = localStorage.getItem(KEY_TEXTURE); if (t) state.texture = t === 'frost' ? 'frost' : 'liquid'; } catch (e) {}
     each('[data-k="texture"]', textureControl);
@@ -307,5 +348,5 @@
     if (e.key === KEY_TEXTURE && e.newValue) setTexture(e.newValue, false);
     else if (e.key === keyFor(state.texture) && e.newValue !== null) setTexture(state.texture, false);
   });
-  window.Kelvin = { setGlass: setGlass, setTexture: setTexture, params: params, mount: mount, press: press, toggle: toggle, slider: slider, dock: dock };
+  window.Kelvin = { setGlass: setGlass, setTexture: setTexture, params: params, mount: mount, press: press, toggle: toggle, slider: slider, dock: dock, panels: panels };
 })();

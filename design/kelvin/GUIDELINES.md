@@ -113,6 +113,17 @@ Four controls look alike; each has one job, and a screen never uses two for the 
 | `KelvinTabs` (filter pills) | Narrow what a list shows; the list stays the same list | All, Images, Notes |
 | `KelvinSegmented` | Choose a value of a setting or a scale | System / Light / Dark, Day / Month / Year |
 
+## Settings
+
+Settings is a list of places, not a list of options. Past about a dozen options (count every switch, choice, slider and link), one long page stops being findable: a person scrolls past what they came for, and every new feature makes it worse. So from there Settings becomes a list of categories, each opening a page of its own. Below that, one page under section headers is right.
+
+- **The top page lists categories.** Each is a `KelvinRow` with its glass tile in the topic's colour, a title, a summary and a chevron. Two or three `KelvinGroup`s sort them by kind (how the app looks and reads; what it tells you and keeps; the app itself), with no section headers: the gap between wells does their job. An account or plan card may sit above them.
+- **Summaries name what is inside**, not the category: the two to four things a person most likely came for, on one line at the default text size ("Theme, accent colour, glass"), never "Manage appearance settings".
+- **A category is a detail page**: circle back button, the `headline` title, then its groups under `KelvinSectionHeader`s. It is pushed with Kelvin's push and leaves by predictive back (`KelvinStack`, or `KelvinTransitions` with `KelvinDestination` in a NavHost). The dock steps aside on it, and Settings keeps its scroll for the return.
+- **The same names in every 72F app**, so the same thing is in the same place: Appearance (theme, accent, glass, system font), Accessibility (reduce motion, reading aids), Notifications, Data & privacy (backup, sync, diagnostics, deleting the account), Support, About (version, licences). The app's own categories sit among them: Reading and Music in Rediom, Memories in Gallery. A category of one or two options folds into its nearest neighbour.
+- **Every setting lives in one place**, the one a person would open first; never the same switch in two categories. A link to a deeper screen (backup, licences) lives in its category, not on the top page.
+- **One level, rarely two.** A category page that passes a dozen options splits into sections; only a tool of its own (backup, a catalog browser) gets a page below a category.
+
 ## Colour
 
 - Build screens from `canvas` → `group` → `raised`. In light mode `canvas` is paper white and `group` a pale grey well; raised controls and resting pills on the page are white pebbles on a soft shadow. Text is `ink`; values, summaries and timestamps are `ink-2`; placeholders and disabled glyphs are `ink-3`.
@@ -167,7 +178,9 @@ Four controls look alike; each has one job, and a screen never uses two for the 
 
 
 - **Direction follows the hand.** A back swipe dismisses the screen the way the finger moves: from the left edge it leaves to the right, from the right edge to the left, and the screen beneath comes in from the edge the swipe began at. A push, and a pop by a back button, use the reading direction: in from the end, back out toward it. Pushing is popping played backwards.
-- **Predictive back, premium.** As a back swipe starts, the screen lifts into a card (continuous 32dp corners, a growing shadow, a slight squash wider than tall, a lean toward the finger's height) and travels with the finger, frosting as it goes; the screen beneath grows in from the edge the swipe began at, a dim lifting off it, over the canvas (never black). The screen beneath stays composed while covered (undrawn, inert, hidden from TalkBack), so nothing is rebuilt and its glass never flashes when it returns. On release the card springs on and a tick confirms; a cancelled swipe wobbles home. `KelvinStack` has all of it built in; NavHost apps use `KelvinTransitions` (push, pop, tab cross-fade, predictive pop, finger-tracked and linear) and wrap each destination in `KelvinDestination` for the card, squash and frost. Reduced motion snaps. Apps opt in with `android:enableOnBackInvokedCallback="true"`.
+- **Predictive back, premium.** As a back swipe starts, the screen lifts into a card (continuous 32dp corners, a growing shadow, a slight squash wider than tall, a lean toward the finger's height) and travels with the finger, frosting as it goes; the screen beneath grows in from the edge the swipe began at, a dim lifting off it, over the canvas (never black). The screen beneath stays composed while covered (undrawn, inert, hidden from TalkBack), so nothing is rebuilt and its glass never flashes when it returns. On release the card springs on and a tick confirms; a cancelled swipe wobbles home. `KelvinStack` has all of it built in; NavHost apps use `KelvinTransitions` (push, pop, directional tab pans, predictive pop, finger-tracked and linear) and wrap each destination in `KelvinDestination` for the card, squash and frost. Reduced motion snaps. Apps opt in with `android:enableOnBackInvokedCallback="true"`.
+- **Tabs are places side by side.** The bar that picks them (the dock, title tabs, a segmented control, filter pills) is a map of them in order, so switching pans the view toward the tab picked: pick one to the right and the old content slides off to the left as the new one comes in from the right; pick one to the left and it all runs the other way. Both travel on one spring with no bounce (damping 0.9, stiffness 360), the old fading early so the two never read as one. Dock tabs are whole screens: they pan a quarter of the width and frost as they leave, clearing as they land, as screens do in the stack. A pane within a page pans an eighth, without frost, and the page eases to its new height. Right-to-left mirrors the bar and the pan; a second pick mid-pan turns it from where it is; each tab keeps its scroll and fields while another shows. Reduced motion swaps in place. `KelvinTabContent(selected, travel = TabTravel.Screen | Pane)` has all of it; NavHost apps pass `KelvinTransitions.tabEnter(dir)` and `tabExit(dir)`; on the web, a dock with `data-k-panels` pans a `data-k="panels"` container.
+- **Chrome stays put.** The dock, the orb and the toasts never move with a tab switch: they are the hand's place, and the page moves under them.
 
 - **Follow the finger, never flip.** Whatever moves under a finger carries its state with it: words take the accent's ink as the filter pill slides over them, segment labels weight toward the thumb, title tabs brighten as their bar arrives, a slider's icon and value change ink as its fill actually crosses them, slide to confirm trades colours between knob and track along the way, a sheet's scrim lifts as the sheet is pulled down. Nothing changes state at a threshold the person cannot see.
 - **Everything pressable moves like a pebble.** Buttons, a control capsule as one piece (pressed or dragged anywhere on it, its play and skip only wash), plain icon buttons, Text buttons, action bar items, filter pills and swatches swell, are pulled toward the finger and stretch along a drag, then wobble back (`Modifier.kelvinPull`).
@@ -225,6 +238,8 @@ Everything is in the `:kelvin` library and shown in the catalog. Each follows th
 | Mail | `KelvinMessageRow` (unread by the time; attachment, important, star; sender badge), `KelvinSwipeRow` (archive, delete), `KelvinRecipientField`, `KelvinAttachmentChip`, `KelvinVoiceNote` |
 | Listening | `KelvinEpisodeRow`, `KelvinMiniPlayer` (skip previous and next for music; a close for sound with no player), `KelvinFullPlayer`, `KelvinTransport` (anything that plays: episodes, tracks, words), `KelvinScrubber`, `KelvinVoiceNote`, `KelvinDownloadButton`, `KelvinReorderList` + `KelvinGrip` (the queue), `KelvinWheelPicker` (sleep timer, speed), `KelvinStepper` (skip length) |
 | Media | `KelvinTile`, `KelvinGlassTile` |
+| Plans and payments | `KelvinPlanMark`, `KelvinPlanHero`, `KelvinPlanPicker` (`PlanOption`), `KelvinPurchaseBar`, `KelvinPlanBenefits` (`PlanBenefit`), `KelvinPlanOwned`, `KelvinPlanCta`, `KelvinTipJar` (`TipTier`, list or grid), `KelvinPlanTerms`, `KelvinPlanSheet` |
+| Choosing one of several that need a line | `KelvinChoiceList` (`KelvinChoice`): a reading font set in itself, a strength that shows its effect |
 | Pages of their own colour | `KelvinOnPage` (a reader's sepia or night page, a viewer's black: Kelvin's controls inked in the page's colours) |
 | Chrome | `KelvinReachHeader` / `KelvinReachBar`, `KelvinPageHeader`, `KelvinDetailHeader`, `KelvinCompactBar`, `KelvinDock`, `KelvinSheet`, `KelvinDialog`, veiled headers and pages |
 
@@ -241,8 +256,22 @@ Everything is in the `:kelvin` library and shown in the catalog. Each follows th
 - **Codes** are one field underneath, so paste and SMS autofill fill every box at once; the cursor stays at the end, so digits always go into the next box.
 - **Quick tiles** fill with their own colour when on (blue Wi-Fi, violet quiet hours), never the app's accent; their glass tile flips to a solid white front carrying the glyph in that colour, over a back squircle that lets a little of the colour through. The state is also written.
 
+## Plans and payments
+
+Every 72F app sells and thanks the same way (`Plans.kt`). Kelvin draws; the app keeps billing.
+
+- **Offered, never pushed.** A plan opens from a tap on something it adds, or from Settings, and its hero names that thing first ("Picture search is part of Plus."). Upsell cards (`KelvinPlanCta`) sit where they fit, can be hidden, and never show to someone who has the plan. No popups.
+- **The free app is complete.** Say what the plan adds, never what the free app lacks; say what stays free.
+- **One thing to tap.** The purchase bar's button, with the price in it ("Get Plus · ₹699"). Restore is always beside it. Loading holds the button; an unavailable store says why and what to do.
+- **Plans are radio cards** (`KelvinPlanPicker`): the radio drawn in the card, the price a figure at the end ("₹99/mo", ₹ and / in the accent), one plan badged ("Best value"), an introductory offer in the accent with when it ends. The plan the person has is marked current and cannot be chosen.
+- **Prices come from the store.** A preview price stands in until the store answers, and the page says it is a preview.
+- **Owned is a state, not a sale** (`KelvinPlanOwned`): the rosette, the plan's name, thanks, and Manage for a subscription.
+- **Tips unlock nothing, and say so** (`KelvinTipJar`). They come after everything the plan does: a row each with an accent price button, or a grid of a few short tips. A tip with no price yet dims.
+- **Marks** (`KelvinPlanMark`) sit beside what a plan adds: the sparkle and the plan's name, or the sparkle alone inside a chip. Gone once it is owned.
+- Each app wears its own accent here as everywhere: no plan colour of its own.
+
 ## Building with Kelvin
 
 - **Android**: the `studio72f.kelvin` Compose library, on AndroidX Compose foundation and UI plus Backdrop (Kyant) as the glass renderer, all Apache 2.0. Kelvin's look comes from its own shaders and components running on Backdrop's pipeline; no Material and no third-party UI kit. Wrap the app in `KelvinTheme(dark, accent, glass, reduceMotion)`; read tokens from `Kelvin.colors`, `Kelvin.space`, `Kelvin.shape`, `Kelvin.type`, `Kelvin.motion`. Put `Modifier.kelvinBackdrop(backdrop)` on the page and pass the same backdrop to the glass components over it (`KelvinDock`, `KelvinCompactBar`, `KelvinSheet`, `KelvinDialog`, `KelvinToast`, `KelvinTip`).
 - **Web**: load `tokens.css`, `bundle.css` and `bundle.js`, add `class="k-glass"` to glass surfaces and `data-k="press|switch|slider|dock|glass"` to interactive ones, then call `Kelvin.mount()`. `Kelvin.setTexture('liquid' | 'frost')` picks the material and `Kelvin.setGlass(level)` sets its intensity; each texture's intensity is saved separately. For a settings page, mark the picker `data-k="texture"` with `data-texture` buttons and the slider `data-k="glass"`.
-- The Glass level and Reduce motion live in each app's Appearance settings and persist per device.
+- The Glass level lives in each app's Appearance settings and Reduce motion in its Accessibility settings; both persist per device.

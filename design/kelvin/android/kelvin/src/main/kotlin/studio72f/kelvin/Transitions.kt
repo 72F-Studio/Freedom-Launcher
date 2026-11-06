@@ -2,7 +2,10 @@ package studio72f.kelvin
 
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -33,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlurEffect
@@ -224,6 +228,69 @@ fun <T> KelvinStack(
     }
 }
 
+/** How far switched tab content travels. */
+enum class TabTravel(internal val fraction: Float) {
+    /** Top-level tabs, the dock's: whole screens, a quarter of the width, frosting on the way. */
+    Screen(0.25f),
+    /** A pane within a page (title tabs, a segmented control, filter pills): an eighth, no frost. */
+    Pane(0.125f),
+}
+
+/*
+ * Tabs are places side by side, not a deck of cards: the bar that picks them (the dock, title
+ * tabs, a segmented control, filter pills) is a map of them in order. Picking a tab to the right
+ * pans the view right: the old content slides off to the left as the new one comes in from the
+ * right, both on one unbouncing spring, the old fading early so the two never read as one. A
+ * screen frosts as it leaves and clears as it lands, as screens do in the stack; a pane only
+ * pans, and the page around it eases to its new height. Right-to-left layouts mirror the bar and
+ * so the pan. A second pick mid-pan turns it from where it is. Reduced motion swaps in place.
+ */
+
+/**
+ * Content that switches with a tab bar: [content] for the [selected] tab, panning in from the
+ * side the tab lies on in its bar. Indices are the bar's order. Each tab keeps its saved state
+ * (scroll position, fields) while another is showing. Use [TabTravel.Screen] under a dock, where
+ * each tab is a whole page, and [TabTravel.Pane] for a part of a page under title tabs, a
+ * segmented control or filter pills.
+ */
+@Composable
+fun KelvinTabContent(
+    selected: Int,
+    modifier: Modifier = Modifier,
+    travel: TabTravel = TabTravel.Screen,
+    content: @Composable (Int) -> Unit,
+) {
+    val reduce = Kelvin.reduceMotion
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val holder = rememberSaveableStateHolder()
+    AnimatedContent(
+        selected,
+        modifier,
+        transitionSpec = {
+            if (reduce || initialState == targetState) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                val dir = if ((targetState > initialState) != rtl) 1 else -1
+                (KelvinTransitions.tabEnter(dir, travel) togetherWith KelvinTransitions.tabExit(dir, travel))
+                    .using(SizeTransform(clip = false) { _, _ -> spring(0.9f, 260f) })
+            }
+        },
+        contentAlignment = Alignment.TopStart,
+        label = "tab",
+    ) { i ->
+        val frosted = travel == TabTravel.Screen && !reduce && android.os.Build.VERSION.SDK_INT >= 31
+        val frost by transition.animateFloat(transitionSpec = { spring(1f, 500f) }, label = "frost") { state ->
+            if (state == EnterExitState.Visible || !frosted) 0f else 1f
+        }
+        Box(
+            Modifier.graphicsLayer {
+                val blur = 12.dp.toPx() * frost
+                renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
+            },
+        ) { holder.SaveableStateProvider(i) { content(i) } }
+    }
+}
+
 /** A covered screen: no touch reaches it and TalkBack does not see it. */
 private fun Modifier.inert(): Modifier = this
     .clearAndSetSemantics { }
@@ -246,6 +313,10 @@ private fun Modifier.inert(): Modifier = this
  *     predictivePopExitTransition = { KelvinTransitions.predictivePopExit(it) },
  * )
  * ```
+ *
+ * Top-level tabs pan toward the tab picked: give the tab destinations `tabEnter(dir)` and
+ * `tabExit(dir)`, with `dir` +1 when the new tab sits to the right of the old in the dock, -1 to
+ * the left. Or skip the NavHost for tabs and switch them with [KelvinTabContent].
  */
 object KelvinTransitions {
     private fun <T> spatial() = spring<T>(0.86f, 380f)
@@ -261,9 +332,23 @@ object KelvinTransitions {
     fun popEnter(): EnterTransition = slideInHorizontally(spatial()) { -it / 10 } + fadeIn(gentle())
     /** The screen popped: it slides a sixth out and fades. */
     fun popExit(): ExitTransition = slideOutHorizontally(spatial()) { it / 6 } + fadeOut(gentle())
-    /** Switching between top-level tabs: a cross-fade, no travel. */
-    fun tabEnter(): EnterTransition = fadeIn(gentle())
-    fun tabExit(): ExitTransition = fadeOut(gentle())
+    // A pan carries no bounce: the page settles, it does not rock.
+    private fun <T> pan() = spring<T>(0.9f, 360f)
+
+    /**
+     * The tab switched to. Tabs sit side by side in their bar's order, so the new one comes in
+     * from the side it lies on: [dir] is +1 when it is to the right of the old one on screen, -1
+     * to the left (mind right-to-left layouts, which mirror the bar), 0 for a plain cross-fade.
+     * [travel] says how far: a screen pans a quarter of its width, a pane within a page an eighth.
+     */
+    fun tabEnter(dir: Int = 0, travel: TabTravel = TabTravel.Screen): EnterTransition =
+        if (dir == 0) fadeIn(gentle())
+        else slideInHorizontally(pan()) { full -> (dir * full * travel.fraction).toInt() } + fadeIn(spring(1f, 500f))
+
+    /** The tab switched from: it pans away from the new one, toward the side the bar left, and fades early. */
+    fun tabExit(dir: Int = 0, travel: TabTravel = TabTravel.Screen): ExitTransition =
+        if (dir == 0) fadeOut(gentle())
+        else slideOutHorizontally(pan()) { full -> (-dir * full * travel.fraction).toInt() } + fadeOut(spring(1f, 900f))
 
     /** Predictive back, the screen leaving: the way the finger moves (from the right edge, to the left). */
     fun predictivePopExit(edge: Int): ExitTransition {

@@ -1,5 +1,9 @@
 package studio72f.kelvin
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.layout.Column
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -269,5 +273,51 @@ fun KelvinBadged(count: Int, modifier: Modifier = Modifier, offset: Dp = 6.dp, c
     Box(modifier) {
         content()
         KelvinBadge(count, Modifier.align(Alignment.TopEnd).offset(x = offset, y = -offset))
+    }
+}
+
+/**
+ * One option in a [KelvinChoiceList]: its [label], set in [labelStyle] when the option is a face
+ * (a reading font shows itself), and a [summary] that says or shows what it does (a sample line
+ * with the effect applied).
+ */
+@Immutable
+data class KelvinChoice(
+    val label: String,
+    val summary: androidx.compose.ui.text.AnnotatedString? = null,
+    val labelStyle: androidx.compose.ui.text.TextStyle? = null,
+)
+
+/**
+ * Choosing one of a handful of options that each deserve a line (a reading font, a strength):
+ * rows with a radio at the end, the whole row the target. Pills are for narrowing a list and the
+ * segmented control for two or three short values; reach for this when options need room to say
+ * or show what they are. Put it in a [KelvinGroup] of its own under a [KelvinSectionHeader] that
+ * names the setting; the rows go straight into the group, so it draws its dividers between them.
+ * TalkBack reads each row as a radio button, selected or not, with its summary.
+ */
+@Composable
+fun KelvinChoiceList(choices: List<KelvinChoice>, selected: Int, onSelect: (Int) -> Unit) {
+    val c = Kelvin.colors
+    val haptics = rememberKelvinHaptics()
+    choices.forEachIndexed { i, choice ->
+        val chosen = i == selected
+        Row(
+            Modifier.groupDividerInset(16.dp).fillMaxWidth().heightIn(min = 56.dp)
+                .kelvinPress({ if (!chosen) { haptics.tick(); onSelect(i) } }, role = Role.RadioButton)
+                .semantics(mergeDescendants = true) { this.selected = chosen }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                KText(choice.label, style = choice.labelStyle?.let { Kelvin.type.rowTitle.merge(it) } ?: Kelvin.type.rowTitle, color = c.ink)
+                if (choice.summary != null) {
+                    androidx.compose.foundation.text.BasicText(choice.summary, style = Kelvin.type.summary.copy(color = c.ink2))
+                }
+            }
+            // The row is the control; the radio only draws its state.
+            KelvinRadio(chosen, { if (!chosen) { haptics.tick(); onSelect(i) } }, Modifier.clearAndSetSemantics {})
+        }
     }
 }

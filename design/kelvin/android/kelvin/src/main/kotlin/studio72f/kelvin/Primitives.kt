@@ -219,6 +219,11 @@ object KelvinIcons {
     /** Back and forward by a step smaller than a chapter: a sentence, a few seconds. */
     val TrackPrevious by lazy { set("player-track-prev") }
     val TrackNext by lazy { set("player-track-next") }
+    /** Plans and tips: a plan's crown, a gift tier, a coffee tip, and the verified rosette of an owned plan. */
+    val Crown by lazy { set("crown") }
+    val Gift by lazy { set("gift") }
+    val Coffee by lazy { set("coffee") }
+    val Rosette by lazy { set("rosette-discount-check") }
     val Sleep by lazy { set("zzz") }
     val Speed by lazy { set("gauge") }
     val Queue by lazy { set("playlist") }
@@ -309,8 +314,10 @@ fun Modifier.kelvinPress(
  * [strength] scales it: 1 behind top-level titles, less behind sheets and empty states. With
  * [circadian] the top-end light is the colour temperature of the hour ([circadianKelvin]): the
  * aurora is candlelit at night, gold at sunrise and sunset and sky-blue at midday.
+ * [inset] is for a glow inside a page rather than at its top (an empty state): it feathers out at
+ * the top as well as the bottom, so no edge shows where it begins.
  */
-fun Modifier.horizon(strength: Float = 1f, circadian: Boolean = true, animate: Boolean = false): Modifier = composed {
+fun Modifier.horizon(strength: Float = 1f, circadian: Boolean = true, animate: Boolean = false, inset: Boolean = false): Modifier = composed {
     // Motion: the blobs drift, breathe and turn on unrelated cycles (9 to 19 seconds), so it never
     // visibly loops. The clock runs only while [animate], and never with reduced motion or
     // battery saver; a frame of drift only redraws, it never recomposes.
@@ -385,9 +392,11 @@ fun Modifier.horizon(strength: Float = 1f, circadian: Boolean = true, animate: B
                     drawCircle(brush, radius = r, center = Offset(cx, cy))
                 }
             }
-            // Feather the field to nothing toward the bottom: no edge where the aurora ends.
+            // Feather the field to nothing toward the bottom: no edge where the aurora ends. Inset
+            // in a page (an empty state), it feathers from the top too, so it has no edge at all.
             drawRect(
-                androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Black, 0.4f to Color.Black, 1f to Color.Transparent),
+                if (inset) androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Transparent, 0.3f to Color.Black, 0.55f to Color.Black, 1f to Color.Transparent)
+                else androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Black, 0.4f to Color.Black, 1f to Color.Transparent),
                 blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
             )
         }

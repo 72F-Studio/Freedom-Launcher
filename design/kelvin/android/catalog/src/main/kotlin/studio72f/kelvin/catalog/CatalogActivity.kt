@@ -176,19 +176,30 @@ private fun Catalog() {
         KelvinStack(stack, { stack = stack.dropLast(1) }) { route ->
         if (route == "detail") SearchDetail(onBack = { stack = stack.dropLast(1) })
         else Box(Modifier.fillMaxSize().background(c.canvas)) {
+          // The dock's tabs are places side by side: picking one to the right pans the view right.
+          // The dock's glass sees the whole pan; each page's own bar sees only its page.
+          KelvinTabContent(tab, Modifier.fillMaxSize().kelvinBackdrop(page).background(c.canvas)) { t ->
+          if (t != 0) CatalogTab(t) else {
+          val home = rememberKelvinBackdrop()
           // One-handed: the large title opens the page low, within the thumb's reach, and
           // scrolls away; the compact bar on the veil takes over once it has gone.
           Box(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().kelvinBackdrop(page).background(c.canvas).verticalScroll(scroll),
+                Modifier.fillMaxSize().kelvinBackdrop(home).background(c.canvas).verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 KelvinReachHeader(reach, summary = "Everything you touch heats up and cools. Hold a row, drag a slider, pick a tab.")
                 Box(Modifier.padding(horizontal = 16.dp)) { KelvinSearchField(query, { query = it }, "Search photos, places and text", "Clear search") }
                 KelvinTabs(listOf("All", "Images", "Notes", "Audio", "Bookmarks"), filter, { filter = it })
+                // What the filter shows pans with the pill: pick to the right, it comes from the right.
+                KelvinTabContent(filter, Modifier.fillMaxWidth(), TabTravel.Pane) { f ->
+                    val counts = listOf("5,480 items", "4,912 images", "214 notes", "88 recordings", "266 bookmarks")
+                    KText(counts[f], Modifier.padding(horizontal = 24.dp), Kelvin.type.summary, c.ink2)
+                }
 
                 // Hierarchy: views switch as titles, figures carry accent marks and small units.
                 KelvinTitleTabs(listOf("Today", "Money"), pane, { pane = it }, Modifier.padding(top = 12.dp))
+                KelvinTabContent(pane, Modifier.fillMaxWidth(), TabTravel.Pane) { pane ->
                 if (pane == 0) {
                     val now = remember { java.util.Date() }
                     KelvinTimeLockup(
@@ -202,6 +213,7 @@ private fun Catalog() {
                         KelvinStatCard("Income", "₹48.2k", Modifier.weight(1f), detail = "12 transactions", tone = Tone.Positive)
                         KelvinStatCard("Spent", "₹31.9k", Modifier.weight(1f), detail = "38 transactions", tone = Tone.Critical)
                     }
+                }
                 }
 
                 KelvinSectionHeader("Appearance")
@@ -408,6 +420,49 @@ private fun Catalog() {
                     KelvinVoiceNote(note, { note = !note }, noteAt, 48_000L, { noteAt = it }, "Play", "Pause", "Voice note")
                 }
 
+                KelvinSectionHeader("Plans")
+                var planSheet by remember { mutableStateOf(false) }
+                var chosenPlan by remember { mutableStateOf("lifetime") }
+                var ownsPlan by remember { mutableStateOf(false) }
+                val plans = listOf(
+                    PlanOption("lifetime", "Lifetime", "Pay once, yours to keep", "₹699", "once", badge = "Best value"),
+                    PlanOption("monthly", "Monthly", "Cancel any time", "₹99", "/mo", note = "First month ₹49 until 30 Nov"),
+                )
+                val benefits = listOf(
+                    PlanBenefit(KelvinIcons.Cloud, "Every cloud", "pCloud, Dropbox, MEGA and your own server", KelvinTiles.Blue),
+                    PlanBenefit(KelvinIcons.Search, "Picture search", "Find a photo by what is in it", KelvinTiles.Violet),
+                    PlanBenefit(KelvinIcons.Sparkles, "People and places", "Faces and trips gathered for you", KelvinTiles.Orange),
+                )
+                KelvinPlanCta("Plus", "Search your photos by what's in them", "Type \"beach at sunset\" and find it.", "See Plus", { planSheet = true },
+                    onDismiss = {}, dismissLabel = "Hide for a week")
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    KelvinPlanHero("Plus", "Make it yours", reason = "Picture search is part of Plus.")
+                    KelvinPlanPicker(plans, chosenPlan, { chosenPlan = it })
+                    KelvinPurchaseBar(if (chosenPlan == "lifetime") "Get Plus · ₹699" else "Get Plus · ₹99/mo", { ownsPlan = true }, "Restore purchase", {},
+                        note = if (chosenPlan == "lifetime") "One payment, no subscription" else "Renews monthly until you cancel")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        KText("Picture search", style = Kelvin.type.rowTitle); KelvinPlanMark("Plus")
+                    }
+                }
+                if (ownsPlan) KelvinPlanOwned("Plus is on", "Thank you for backing 72F.", manageText = "Manage", onManage = { ownsPlan = false })
+                KelvinPlanBenefits(benefits)
+                KelvinSectionHeader("Tips")
+                val tips = listOf(
+                    TipTier("coffee", "Coffee", "Keeps the lights on", "₹99", icon = KelvinIcons.Coffee, tile = KelvinTiles.Orange),
+                    TipTier("lunch", "Lunch", "Funds a week of fixes", "₹249", icon = KelvinIcons.Gift, tile = KelvinTiles.Green),
+                    TipTier("dinner", "Dinner", "Backs the next feature", "₹499", icon = KelvinIcons.Heart, tile = KelvinTiles.Red),
+                    TipTier("patron", "Patron", "Keeps 72F independent", "₹999", icon = KelvinIcons.Star, tile = KelvinTiles.Violet),
+                )
+                KelvinGroup { KelvinTipJar(tips, {}, note = "Tips unlock nothing. They keep 72F free and independent.", footnote = "Payments go through Google Play.") }
+                KelvinGroup { KelvinTipJar(tips, {}, layout = TipJarLayout.Grid) }
+                KelvinPlanTerms("Monthly renews until you cancel in Google Play. Lifetime stays with your Play account.")
+                KelvinPlanSheet(planSheet, { planSheet = false }, "Close", page, "Plus", "Make it yours", plans, chosenPlan, { chosenPlan = it },
+                    "Get Plus · ₹699", { ownsPlan = true; planSheet = false }, "Restore purchase", {}, benefits,
+                    reason = "Picture search is part of Plus.", note = "One payment, no subscription", owned = ownsPlan, ownedMessage = "Thank you for backing 72F.",
+                    terms = "Lifetime stays with your Play account.") {
+                    KelvinGroup(gutter = 0.dp) { KelvinTipJar(tips.take(2), {}, note = "Tips unlock nothing.") }
+                }
+
                 KelvinSectionHeader("Empty")
                 KelvinEmptyState(KelvinIcons.Book, "Nothing saved yet", "Books you save show up here, ready when you are.",
                     actionText = "Browse books", onAction = {}, doodle = KelvinDoodle.SittingReading)
@@ -574,7 +629,9 @@ private fun Catalog() {
             }
             // Search lives in the capsule under the opening, within the thumb's reach; a second
             // search circle in the top corner would be the hardest target on the screen.
-            KelvinReachBar(kelvinWordmark("72F", "Kelvin"), reach, page)
+            KelvinReachBar(kelvinWordmark("72F", "Kelvin"), reach, home)
+          }
+          }
           }
 
             Column(Modifier.align(Alignment.BottomCenter), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -618,6 +675,44 @@ private fun Catalog() {
             )
         }
         }
+    }
+}
+
+/** The dock's other tabs: pages of their own, so switching to them can be tried for real. */
+@Composable
+private fun CatalogTab(tab: Int) {
+    val c = Kelvin.colors
+    val own = rememberKelvinBackdrop()
+    val reach = rememberKelvinReach()
+    val title = listOf("Photos", "Albums", "Memories", "Settings")[tab]
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().kelvinBackdrop(own).background(c.canvas).verticalScroll(rememberScrollState())) {
+            KelvinReachHeader(reach, summary = "Pick a tab to the left or right in the dock: the view pans that way.")
+            when (tab) {
+                1 -> {
+                    KelvinSectionHeader("Albums")
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        for (r in 0 until 3) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            for (k in 0 until 2) {
+                                val i = r * 2 + k
+                                KelvinTile(listOf("Favourites", "Bruges", "Camera", "Sunsets", "Lisbon", "Screenshots")[i], "${(i + 1) * 37} items", {}, Modifier.weight(1f)) { Photo(i, Modifier.fillMaxSize()) }
+                            }
+                        }
+                    }
+                }
+                2 -> KelvinEmptyState(KelvinIcons.Calendar, "No memories yet", "Kelvin gathers a day's photos into a memory once there are a few of them.", doodle = KelvinDoodle.Chilling)
+                else -> {
+                    KelvinSectionHeader("General")
+                    KelvinGroup {
+                        KelvinRow("Connected clouds", icon = KelvinIcons.Cloud, value = "3", chevron = true, onClick = {})
+                        KelvinRow("Lock hidden albums", icon = KelvinIcons.Lock, tile = KelvinTiles.Green, divider = true, trailing = { KelvinSwitch(true, {}) })
+                        KelvinRow("Smart search", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Violet, chevron = true, divider = true, onClick = {})
+                    }
+                }
+            }
+            KelvinDockSpacer()
+        }
+        KelvinReachBar(kelvinWordmark("72F", title), reach, own)
     }
 }
 

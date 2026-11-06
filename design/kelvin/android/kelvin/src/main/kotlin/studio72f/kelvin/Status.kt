@@ -152,7 +152,7 @@ fun KelvinEmptyState(
         )
         t
     }
-    Column(modifier.fillMaxWidth().horizon(0.7f).padding(horizontal = 24.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxWidth().horizon(0.7f, inset = true).padding(horizontal = 24.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val float = Modifier.graphicsLayer { translationY = bob * density }
         if (doodle != null) KelvinDoodle(doodle, float.widthIn(max = 280.dp).fillMaxWidth().padding(bottom = 8.dp))
         else KelvinGlassTile(icon, c.accent, float, size = 72.dp)

@@ -54,7 +54,7 @@ Beyond the core set, `Selection.kt` (checkbox, radio, stepper, chips, count badg
 page dots) and `MailAndMedia.kt` (recipient field, attachment chip, episode row, mini player,
 scrubber, wheel picker), `Calendar.kt` (month calendar), `Input.kt` (code field, formatting bar),
 `Interaction.kt` (pull to refresh, reorderable lists), `Player.kt` (transport, full player, ring
-meter, quick tiles, action lists), `Page.kt` (`KelvinOnPage`, controls on a page of its own colour)
+meter, quick tiles, action lists), `Page.kt` (`KelvinOnPage`, controls on a page of its own colour), `Plans.kt` (plans, purchase, owned state, upsell cards and tips, one way in every app)
 and `Doodles.kt` (Open Doodles scenes for empty states, CC0) cover the next apps, an email client
 and a podcast player, and what the shipping apps needed (a reader's transport, music skips, voice
 notes).
