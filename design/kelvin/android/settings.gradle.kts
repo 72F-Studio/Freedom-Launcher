@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Kelvin"
-include(":kelvin", ":catalog")
+rootProject.name = "KelvinAndroid"
+include(":kelvin", ":kelvin-views", ":kelvin-wear", ":catalog")

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kelvin's type scale for Views (GUIDELINES.md, Typography). Onest names and counts; Montserrat explains.
+     Each style is bound to the exact weight's font file, so the weight never depends on the platform's family matching.
+     Text colour is left to the view, except Summary, which is ink-2 by definition. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="TextAppearance.Kelvin.Masthead" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_700</item>
+        <item name="fontFamily">@font/onest_700</item>
+        <item name="android:textSize">52sp</item>
+        <item name="lineHeight">58sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Hero" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_300</item>
+        <item name="fontFamily">@font/onest_300</item>
+        <item name="android:textSize">64sp</item>
+        <item name="lineHeight">64sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Numeral" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_300</item>
+        <item name="fontFamily">@font/onest_300</item>
+        <item name="android:textSize">40sp</item>
+        <item name="lineHeight">44sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Display" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">30sp</item>
+        <item name="lineHeight">36sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Tab" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_700</item>
+        <item name="fontFamily">@font/onest_700</item>
+        <item name="android:textSize">28sp</item>
+        <item name="lineHeight">34sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Headline" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">22sp</item>
+        <item name="lineHeight">28sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Title" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">18sp</item>
+        <item name="lineHeight">24sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Name" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">16sp</item>
+        <item name="lineHeight">22sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Action" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">15sp</item>
+        <item name="lineHeight">20sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Figure" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_500</item>
+        <item name="fontFamily">@font/onest_500</item>
+        <item name="android:textSize">15sp</item>
+        <item name="lineHeight">20sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Section" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_600</item>
+        <item name="fontFamily">@font/onest_600</item>
+        <item name="android:textSize">14sp</item>
+        <item name="lineHeight">18sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Eyebrow" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/onest_700</item>
+        <item name="fontFamily">@font/onest_700</item>
+        <item name="android:textSize">11sp</item>
+        <item name="lineHeight">14sp</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.RowTitle" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_500</item>
+        <item name="fontFamily">@font/montserrat_500</item>
+        <item name="android:textSize">16sp</item>
+        <item name="lineHeight">22sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Body" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_400</item>
+        <item name="fontFamily">@font/montserrat_400</item>
+        <item name="android:textSize">15sp</item>
+        <item name="lineHeight">22sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Label" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_600</item>
+        <item name="fontFamily">@font/montserrat_600</item>
+        <item name="android:textSize">14sp</item>
+        <item name="lineHeight">20sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Summary" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_400</item>
+        <item name="fontFamily">@font/montserrat_400</item>
+        <item name="android:textSize">13sp</item>
+        <item name="lineHeight">18sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/kelvinInk2</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Caption" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_400</item>
+        <item name="fontFamily">@font/montserrat_400</item>
+        <item name="android:textSize">12sp</item>
+        <item name="lineHeight">16sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.Kelvin.Micro" parent="TextAppearance.AppCompat">
+        <item name="android:fontFamily">@font/montserrat_500</item>
+        <item name="fontFamily">@font/montserrat_500</item>
+        <item name="android:textSize">11sp</item>
+        <item name="lineHeight">14sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+</resources>

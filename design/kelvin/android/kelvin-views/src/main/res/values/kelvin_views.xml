@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kelvin for Views: the bar and its actions as Kelvin draws them, for screens not yet in Compose.
+     A bar is the page's own colour, flat, never a tinted band; its actions are raised circles at the top-end; neutral
+     glyphs are ink-2, light rather than loud. Apply ThemeOverlay.Kelvin.Light / .Dark, or set the kelvin* attributes and
+     these styles in a theme that inherits from elsewhere. -->
+<resources>
+    <style name="ThemeOverlay.Kelvin.Light" parent="">
+        <item name="kelvinCanvas">@color/kelvin_light_canvas</item>
+        <item name="kelvinGroup">@color/kelvin_light_group</item>
+        <item name="kelvinSunken">@color/kelvin_light_sunken</item>
+        <item name="kelvinInk">@color/kelvin_light_ink</item>
+        <item name="kelvinInk2">@color/kelvin_light_ink_2</item>
+        <item name="kelvinAccent">@color/kelvin_light_accent</item>
+        <item name="kelvinAccentSoft">@color/kelvin_light_accent_soft</item>
+        <item name="colorControlNormal">@color/kelvin_light_icon</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="actionButtonStyle">@style/Widget.Kelvin.ActionButton</item>
+        <item name="actionOverflowButtonStyle">@style/Widget.Kelvin.ActionButton.Overflow</item>
+        <item name="toolbarNavigationButtonStyle">@style/Widget.Kelvin.Toolbar.Button.Navigation</item>
+        <item name="toolbarStyle">@style/Widget.Kelvin.Toolbar</item>
+        <item name="android:textAppearance">@style/TextAppearance.Kelvin.Body</item>
+    </style>
+
+    <style name="ThemeOverlay.Kelvin.Dark" parent="">
+        <item name="kelvinCanvas">@color/kelvin_dark_canvas</item>
+        <item name="kelvinGroup">@color/kelvin_dark_group</item>
+        <item name="kelvinSunken">@color/kelvin_dark_sunken</item>
+        <item name="kelvinInk">@color/kelvin_dark_ink</item>
+        <item name="kelvinInk2">@color/kelvin_dark_ink_2</item>
+        <item name="kelvinAccent">@color/kelvin_dark_accent</item>
+        <item name="kelvinAccentSoft">@color/kelvin_dark_accent_soft</item>
+        <item name="colorControlNormal">@color/kelvin_dark_icon</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="actionButtonStyle">@style/Widget.Kelvin.ActionButton</item>
+        <item name="actionOverflowButtonStyle">@style/Widget.Kelvin.ActionButton.Overflow</item>
+        <item name="toolbarNavigationButtonStyle">@style/Widget.Kelvin.Toolbar.Button.Navigation</item>
+        <item name="toolbarStyle">@style/Widget.Kelvin.Toolbar</item>
+        <item name="android:textAppearance">@style/TextAppearance.Kelvin.Body</item>
+    </style>
+
+    <style name="Widget.Kelvin.Toolbar" parent="Widget.AppCompat.Toolbar">
+        <item name="android:background">?attr/kelvinCanvas</item>
+        <item name="android:minHeight">64dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="contentInsetStart">20dp</item>
+        <item name="contentInsetStartWithNavigation">4dp</item>
+        <item name="titleTextAppearance">@style/TextAppearance.Kelvin.Headline</item>
+        <item name="subtitleTextAppearance">@style/TextAppearance.Kelvin.Summary</item>
+        <item name="titleTextColor">?attr/kelvinInk</item>
+        <item name="subtitleTextColor">?attr/kelvinInk2</item>
+    </style>
+
+    <style name="Widget.Kelvin.ActionButton" parent="Widget.AppCompat.ActionButton">
+        <item name="android:background">@drawable/kelvin_circle</item>
+        <item name="android:minWidth">52dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+    </style>
+
+    <style name="Widget.Kelvin.ActionButton.Overflow" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:background">@drawable/kelvin_circle</item>
+        <item name="srcCompat">@drawable/kelvin_ic_dots_vertical</item>
+        <item name="android:src">@drawable/kelvin_ic_dots_vertical</item>
+        <item name="android:minWidth">52dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+    </style>
+
+    <style name="Widget.Kelvin.Toolbar.Button.Navigation" parent="Widget.AppCompat.Toolbar.Button.Navigation">
+        <item name="android:background">@drawable/kelvin_circle</item>
+        <item name="android:minWidth">60dp</item>
+        <item name="android:scaleType">center</item>
+    </style>
+</resources>

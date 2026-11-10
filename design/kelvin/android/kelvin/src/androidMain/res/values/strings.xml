@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kelvin's own words: the defaults its components speak and show when an app passes none. -->
+<resources>
+    <string name="kelvin_back">Back</string>
+    <string name="kelvin_selected">Selected</string>
+    <string name="kelvin_chosen">Chosen</string>
+    <string name="kelvin_select_message">Select message</string>
+    <string name="kelvin_current_account">Current account</string>
+    <string name="kelvin_current_plan">Current plan</string>
+    <string name="kelvin_images_hidden">Images are hidden</string>
+    <string name="kelvin_show_images">Show images</string>
+    <string name="kelvin_error_view_more">View more</string>
+    <string name="kelvin_error_code">Error code</string>
+    <string name="kelvin_error_why">Why it happened</string>
+    <string name="kelvin_error_detail">Technical detail</string>
+    <string name="kelvin_error_log_preview">What will be sent</string>
+    <string name="kelvin_error_email_logs">Email the logs</string>
+    <string name="kelvin_texture_liquid">Liquid glass</string>
+    <string name="kelvin_texture_liquid_summary">Bends the page at its edges and catches the light</string>
+    <string name="kelvin_texture_frost">Frost</string>
+    <string name="kelvin_texture_frost_summary">Calm ground glass, easiest to read through</string>
+    <string name="kelvin_player_play">Play</string>
+    <string name="kelvin_player_pause">Pause</string>
+    <string name="kelvin_player_back">Back 15 seconds</string>
+    <string name="kelvin_player_forward">Forward 30 seconds</string>
+    <string name="kelvin_player_position">Position</string>
+    <string name="kelvin_player_queue">Queue</string>
+    <!-- TalkBack for the page dots: "Page 2 of 5". -->
+    <string name="kelvin_page_of">Page %1$d of %2$d</string>
+</resources>

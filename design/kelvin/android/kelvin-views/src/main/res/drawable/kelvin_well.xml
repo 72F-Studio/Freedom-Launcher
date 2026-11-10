@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A Kelvin group well for View screens: the group grey with 28dp corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="?attr/kelvinGroup" />
+    <corners android:radius="28dp" />
+</shape>

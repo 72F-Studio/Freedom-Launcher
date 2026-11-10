@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Kelvin roles a View screen reads. ThemeOverlay.Kelvin.Light / .Dark set them; an app whose theme has to inherit
+     from somewhere else sets them itself, from the kelvin_light_* / kelvin_dark_* colours. -->
+<resources>
+    <attr name="kelvinCanvas" format="color" />
+    <attr name="kelvinGroup" format="color" />
+    <attr name="kelvinSunken" format="color" />
+    <attr name="kelvinInk" format="color" />
+    <attr name="kelvinInk2" format="color" />
+    <attr name="kelvinAccent" format="color" />
+    <attr name="kelvinAccentSoft" format="color" />
+</resources>

@@ -84,6 +84,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import studio72f.kelvin.KelvinPill
 import studio72f.kelvin.KelvinRow
 import studio72f.kelvin.KelvinSearchField
+import studio72f.kelvin.KelvinSection
 import studio72f.kelvin.KelvinSectionHeader
 import studio72f.kelvin.KelvinSegmented
 import studio72f.kelvin.KelvinSheet
@@ -123,7 +124,7 @@ private val Photos = listOf(
 
 /** Keeps the chosen accent through rotation and other recreations, as the other settings are kept. */
 private val AccentSaver = Saver<Accent, String>(
-    save = { when (it) { Accent.Ember -> "ember"; Accent.Graphite -> "graphite"; is Accent.Preset -> it.preset.name } },
+    save = { when (it) { Accent.Ember -> "ember"; Accent.Graphite -> "graphite"; is Accent.Preset -> it.preset.name; is Accent.Custom -> "ember" } },
     restore = { when (it) { "ember" -> Accent.Ember; "graphite" -> Accent.Graphite; else -> Accent.Preset(AccentPreset.valueOf(it)) } },
 )
 
@@ -144,6 +145,8 @@ private fun Catalog() {
     // One intensity per texture, so switching back restores where each was left.
     // Frost and Kelvin's pebbles by default; Liquid glass is the option.
     var texture by rememberSaveable { mutableStateOf(GlassTexture.Frost) }
+    // 0 Pebble, 1 Flat: the finish is an app's choice; the catalog shows both.
+    var finish by rememberSaveable { mutableStateOf(0) }
     var glass by rememberSaveable { mutableFloatStateOf(GlassLevel.Frosted) }
     var frost by rememberSaveable { mutableFloatStateOf(FrostLevel.Default) }
     var refraction by rememberSaveable { mutableFloatStateOf(RefractionLevel.Default) }
@@ -151,7 +154,7 @@ private fun Catalog() {
     var reduceMotion by rememberSaveable { mutableStateOf(false) }
     var systemFont by rememberSaveable { mutableStateOf(false) }
     var doodles by rememberSaveable { mutableStateOf(DoodleSet.Casual) }
-    KelvinTheme(dark = dark, accent = accent, glass = if (texture == GlassTexture.Frost) frost else glass, texture = texture, refraction = refraction, reduceMotion = reduceMotion, fonts = if (systemFont) studio72f.kelvin.KelvinFonts.System else studio72f.kelvin.KelvinFonts.Kelvin, doodles = doodles) {
+    KelvinTheme(dark = dark, accent = accent, glass = if (texture == GlassTexture.Frost) frost else glass, texture = texture, refraction = refraction, reduceMotion = reduceMotion, fonts = if (systemFont) studio72f.kelvin.KelvinFonts.System else studio72f.kelvin.KelvinFonts.Kelvin, doodles = doodles, finish = if (finish == 1) studio72f.kelvin.KelvinFinish.Flat else studio72f.kelvin.KelvinFinish.Pebble) {
         val page = rememberKelvinBackdrop()
         val scroll = rememberScrollState()
         var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -225,36 +228,42 @@ private fun Catalog() {
                 }
                 }
 
-                KelvinSectionHeader("Appearance")
-                KelvinGroup {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KText("Theme", style = Kelvin.type.rowTitle)
-                        KelvinSegmented(listOf("System", "Light", "Dark"), theme, { theme = it })
-                    }
-                    Column(Modifier.padding(16.dp)) {
-                        KText("Glass", style = Kelvin.type.rowTitle)
-                        KText("Frost and Kelvin's pebbles, or Liquid glass that bends the page at its rim.", style = Kelvin.type.summary, color = c.ink2)
-                        Spacer(Modifier.height(8.dp))
-                        KelvinTexturePicker(texture, { texture = it })
-                        // Frost does not refract: it has only its transparency.
-                        if (texture == GlassTexture.Liquid) {
+                KelvinSection("Appearance") {
+                    KelvinGroup {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KText("Theme", style = Kelvin.type.rowTitle)
+                            KelvinSegmented(listOf("System", "Light", "Dark"), theme, { theme = it })
+                        }
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KText("Finish", style = Kelvin.type.rowTitle)
+                            KText("Pebbles are Kelvin's own. Flat is for work apps: solid fills, hairline edges, nothing that swells.", style = Kelvin.type.summary, color = c.ink2)
+                            KelvinSegmented(listOf("Pebble", "Flat"), finish, { finish = it })
+                        }
+                        Column(Modifier.padding(16.dp)) {
+                            KText("Glass", style = Kelvin.type.rowTitle)
+                            KText("Frost and Kelvin's pebbles, or Liquid glass that bends the page at its rim.", style = Kelvin.type.summary, color = c.ink2)
                             Spacer(Modifier.height(8.dp))
-                            KelvinGlassControl(refraction, { refraction = it }, GlassRangeLabels("Subtle", "Strong", null), "Refraction")
+                            KelvinTexturePicker(texture, { texture = it })
+                            // Frost does not refract: it has only its transparency.
+                            if (texture == GlassTexture.Liquid) {
+                                Spacer(Modifier.height(8.dp))
+                                KelvinGlassControl(refraction, { refraction = it }, GlassRangeLabels("Subtle", "Strong", null), "Refraction")
+                            }
                         }
-                    }
-                    Column(Modifier.padding(16.dp)) {
-                        KText("Transparency", style = Kelvin.type.rowTitle)
-                        KText("How much of the page shows through.", style = Kelvin.type.summary, color = c.ink2)
-                        Spacer(Modifier.height(8.dp))
-                        if (texture == GlassTexture.Frost) {
-                            KelvinGlassControl(frost, { frost = it }, GlassRangeLabels("Opaque", "Sheer", null), "Frost transparency")
-                        } else {
-                            KelvinGlassControl(glass, { glass = it }, GlassRangeLabels("Opaque", "Clear", "Clear glass has no contrast protection. Text over photos may be hard to read."), "Transparency")
+                        Column(Modifier.padding(16.dp)) {
+                            KText("Transparency", style = Kelvin.type.rowTitle)
+                            KText("How much of the page shows through.", style = Kelvin.type.summary, color = c.ink2)
+                            Spacer(Modifier.height(8.dp))
+                            if (texture == GlassTexture.Frost) {
+                                KelvinGlassControl(frost, { frost = it }, GlassRangeLabels("Opaque", "Sheer", null), "Frost transparency")
+                            } else {
+                                KelvinGlassControl(glass, { glass = it }, GlassRangeLabels("Opaque", "Clear", "Clear glass has no contrast protection. Text over photos may be hard to read."), "Transparency")
+                            }
                         }
+                        KelvinRow("Reduce motion", summary = "Controls stop stretching and wobbling", divider = true, trailing = { KelvinSwitch(reduceMotion, { reduceMotion = it }) })
+                        KelvinRow("System font", summary = "Use the phone's own font instead of Onest and Montserrat", divider = true, trailing = { KelvinSwitch(systemFont, { systemFont = it }) })
+                        KelvinRow("Accent", icon = KelvinIcons.Sun, tile = KelvinTiles.Orange, value = accent.name(), chevron = true, divider = true, onClick = { sheet = true })
                     }
-                    KelvinRow("Reduce motion", summary = "Controls stop stretching and wobbling", divider = true, trailing = { KelvinSwitch(reduceMotion, { reduceMotion = it }) })
-                    KelvinRow("System font", summary = "Use the phone's own font instead of Onest and Montserrat", divider = true, trailing = { KelvinSwitch(systemFont, { systemFont = it }) })
-                    KelvinRow("Accent", icon = KelvinIcons.Sun, tile = KelvinTiles.Orange, value = accent.name(), chevron = true, divider = true, onClick = { sheet = true })
                 }
 
                 // Busy content so the glass has something to work with.
@@ -262,84 +271,90 @@ private fun Catalog() {
                     repeat(3) { i -> Photo(i + 3, Modifier.weight(1f).aspectRatio(1f).clip(Kelvin.shape.sm)) }
                 }
 
-                KelvinSectionHeader("Albums")
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        KelvinTile("Favourites", "48 items", {}, Modifier.weight(1f), KelvinIcons.Heart, "Favourites") { Photo(0, Modifier.fillMaxSize()) }
-                        KelvinTile("Bruges", "312 items", {}, Modifier.weight(1f), KelvinIcons.Cloud, "In pCloud") { Photo(2, Modifier.fillMaxSize()) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        KelvinTile("Camera", "5,120 items", {}, Modifier.weight(1f), KelvinIcons.SdCard, "On this phone") { Photo(3, Modifier.fillMaxSize()) }
-                        KelvinTile("Sunsets", "27 items", {}, Modifier.weight(1f)) { Photo(1, Modifier.fillMaxSize()) }
+                KelvinSection("Albums") {
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            KelvinTile("Favourites", "48 items", {}, Modifier.weight(1f), KelvinIcons.Heart, "Favourites") { Photo(0, Modifier.fillMaxSize()) }
+                            KelvinTile("Bruges", "312 items", {}, Modifier.weight(1f), KelvinIcons.Cloud, "In pCloud") { Photo(2, Modifier.fillMaxSize()) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            KelvinTile("Camera", "5,120 items", {}, Modifier.weight(1f), KelvinIcons.SdCard, "On this phone") { Photo(3, Modifier.fillMaxSize()) }
+                            KelvinTile("Sunsets", "27 items", {}, Modifier.weight(1f)) { Photo(1, Modifier.fillMaxSize()) }
+                        }
                     }
                 }
 
-                KelvinSectionHeader("Library")
-                KelvinGroup {
-                    KelvinRow("Connected clouds", summary = "Koofr, pCloud, Dropbox", icon = KelvinIcons.Cloud, value = "3", chevron = true, onClick = {})
-                    KelvinRow("Lock hidden albums", icon = KelvinIcons.Lock, tile = KelvinTiles.Green, divider = true, trailing = { KelvinSwitch(lock, { lock = it }) })
-                    KelvinRow("Smart search", summary = "On-device, 1,204 photos indexed", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Violet, chevron = true, divider = true, onClick = { stack = stack + "detail" })
+                KelvinSection("Library") {
+                    KelvinGroup {
+                        KelvinRow("Connected clouds", summary = "Koofr, pCloud, Dropbox", icon = KelvinIcons.Cloud, value = "3", chevron = true, onClick = {})
+                        KelvinRow("Lock hidden albums", icon = KelvinIcons.Lock, tile = KelvinTiles.Green, divider = true, trailing = { KelvinSwitch(lock, { lock = it }) })
+                        KelvinRow("Smart search", summary = "On-device, 1,204 photos indexed", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Violet, chevron = true, divider = true, onClick = { stack = stack + "detail" })
+                    }
                 }
                 KelvinGroup { KelvinRow("Sign out of Koofr", danger = true, onClick = { dialog = true }) }
 
-                KelvinSectionHeader("Controls")
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    KelvinSegmented(listOf("Day", "Month", "Year"), view, { view = it })
-                    KelvinSlider(exposure, { exposure = it }, "Exposure", thick = true, icon = KelvinIcons.Sun, valueText = "${(exposure * 100).toInt()}")
-                    KelvinSlider(cache, { cache = it }, "Cache size", valueText = "${(cache * 8).toInt()} GB")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KelvinButton("Back up now", { toast = true })
-                        KelvinButton("Add cloud", {}, kind = ButtonKind.Tinted, icon = KelvinIcons.Plus)
+                KelvinSection("Controls") {
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        KelvinSegmented(listOf("Day", "Month", "Year"), view, { view = it })
+                        KelvinSlider(exposure, { exposure = it }, "Exposure", thick = true, icon = KelvinIcons.Sun, valueText = "${(exposure * 100).toInt()}")
+                        KelvinSlider(cache, { cache = it }, "Cache size", valueText = "${(cache * 8).toInt()} GB")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KelvinButton("Back up now", { toast = true })
+                            KelvinButton("Add cloud", {}, kind = ButtonKind.Tinted, icon = KelvinIcons.Plus)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KelvinButton("Cancel", {}, kind = ButtonKind.Secondary)
+                            KelvinButton("Delete", { deleted = true }, kind = ButtonKind.Danger, icon = KelvinIcons.Trash)
+                            KelvinButton("See all", {}, kind = ButtonKind.Text)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            KelvinPill("Ready", tone = Tone.Positive, icon = KelvinIcons.Check)
+                            KelvinPill("Paused", tone = Tone.Caution, icon = KelvinIcons.Alert)
+                            KelvinPill("Failed", tone = Tone.Critical, icon = KelvinIcons.X)
+                        }
+                        KelvinTextField(key, { key = it }, "API key", icon = KelvinIcons.Lock, error = if (key.length < 8) "That key is too short. Keys start with gsk_ and are 56 characters." else null)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KelvinButton("Cancel", {}, kind = ButtonKind.Secondary)
-                        KelvinButton("Delete", { deleted = true }, kind = ButtonKind.Danger, icon = KelvinIcons.Trash)
-                        KelvinButton("See all", {}, kind = ButtonKind.Text)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        KelvinPill("Ready", tone = Tone.Positive, icon = KelvinIcons.Check)
-                        KelvinPill("Paused", tone = Tone.Caution, icon = KelvinIcons.Alert)
-                        KelvinPill("Failed", tone = Tone.Critical, icon = KelvinIcons.X)
-                    }
-                    KelvinTextField(key, { key = it }, "API key", icon = KelvinIcons.Lock, error = if (key.length < 8) "That key is too short. Keys start with gsk_ and are 56 characters." else null)
                 }
 
-                KelvinSectionHeader("Air this week")
-                KelvinGroup(contentPadding = 16.dp) {
-                    val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-                    val names = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-                    val aqi = listOf(42, 58, 35, 71, 49, 28, 33)
-                    KelvinBarChart(
-                        days.mapIndexed { i, d -> KelvinBar(aqi[i] / 80f, d) },
-                        day, { day = it },
-                        valueText = { "${aqi[it]} AQI" },
-                        caption = { names[it] },
-                        average = aqi.average().toFloat() / 80f,
-                        averageText = "avg ${aqi.average().roundToInt()}",
-                    )
+                KelvinSection("Air this week") {
+                    KelvinGroup(contentPadding = 16.dp) {
+                        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                        val names = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                        val aqi = listOf(42, 58, 35, 71, 49, 28, 33)
+                        KelvinBarChart(
+                            days.mapIndexed { i, d -> KelvinBar(aqi[i] / 80f, d) },
+                            day, { day = it },
+                            valueText = { "${aqi[it]} AQI" },
+                            caption = { names[it] },
+                            average = aqi.average().toFloat() / 80f,
+                            averageText = "avg ${aqi.average().roundToInt()}",
+                        )
+                    }
                 }
 
-                KelvinSectionHeader("Slide to confirm")
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    KelvinSlideToConfirm("Slide to back up now", { toast = true }, icon = KelvinIcons.Cloud)
-                    KelvinSlideToConfirm("Slide to delete 3 photos", { deleted = true }, icon = KelvinIcons.Trash, destructive = true)
+                KelvinSection("Slide to confirm") {
+                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        KelvinSlideToConfirm("Slide to back up now", { toast = true }, icon = KelvinIcons.Cloud)
+                        KelvinSlideToConfirm("Slide to delete 3 photos", { deleted = true }, icon = KelvinIcons.Trash, destructive = true)
+                    }
                 }
 
-                KelvinSectionHeader("Recorder")
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    KelvinFigure(
-                        "%02d:%02d.%02d".format(elapsed / 60000, elapsed / 1000 % 60, elapsed / 10 % 100),
-                        style = Kelvin.type.ticking(Kelvin.type.hero.copy(fontSize = Kelvin.type.numeral.fontSize * 1.4f)),
-                    )
-                    KText("High quality", style = Kelvin.type.summary, color = c.ink2)
-                    KelvinControlBar(
-                        leading = { KelvinIconButton(KelvinIcons.X, "Discard", {}) },
-                        trailing = { KelvinIconButton(KelvinIcons.Adjustments, "Recording settings", {}) },
-                    ) {
-                        KelvinControlCapsule {
-                            KelvinIconButton(KelvinIcons.SkipBack, "Back 5 seconds", {}, kind = IconButtonKind.Plain)
-                            KelvinIconButton(if (playing) KelvinIcons.Pause else KelvinIcons.Play, if (playing) "Pause" else "Play", { playing = !playing }, kind = IconButtonKind.Plain)
-                            KelvinIconButton(KelvinIcons.SkipForward, "Forward 5 seconds", {}, kind = IconButtonKind.Plain)
+                KelvinSection("Recorder") {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        KelvinFigure(
+                            "%02d:%02d.%02d".format(elapsed / 60000, elapsed / 1000 % 60, elapsed / 10 % 100),
+                            style = Kelvin.type.ticking(Kelvin.type.hero.copy(fontSize = Kelvin.type.numeral.fontSize * 1.4f)),
+                        )
+                        KText("High quality", style = Kelvin.type.summary, color = c.ink2)
+                        KelvinControlBar(
+                            leading = { KelvinIconButton(KelvinIcons.X, "Discard", {}) },
+                            trailing = { KelvinIconButton(KelvinIcons.Adjustments, "Recording settings", {}) },
+                        ) {
+                            KelvinControlCapsule {
+                                KelvinIconButton(KelvinIcons.SkipBack, "Back 5 seconds", {}, kind = IconButtonKind.Plain)
+                                KelvinIconButton(if (playing) KelvinIcons.Pause else KelvinIcons.Play, if (playing) "Pause" else "Play", { playing = !playing }, kind = IconButtonKind.Plain)
+                                KelvinIconButton(KelvinIcons.SkipForward, "Forward 5 seconds", {}, kind = IconButtonKind.Plain)
+                            }
                         }
                     }
                 }
@@ -352,50 +367,111 @@ private fun Catalog() {
                     KelvinStatCard("Next flight", "06:40", Modifier.weight(1f), detail = "LH 490, Sunday")
                 }
 
-                KelvinSectionHeader("Inbox")
-                KelvinGroup {
-                    var starA by remember { mutableStateOf(false) }
-                    var starB by remember { mutableStateOf(true) }
-                    KelvinMessageRow("Koofr", "18:42", "Your vault is ready", "Koofr Vault is set up on this phone. Photos you add to Private are encrypted before they leave.", true, {},
-                        attachment = true, badge = studio72f.kelvin.SenderBadge.Verified("Verified sender"), onStar = { starA = !starA }, starred = starA, starLabel = "Star")
-                    KelvinMessageRow("Ana Marić", "Tue", "Bruges photos", "Added 32 photos to the shared album. The canal ones came out great.", false, {},
-                        badge = studio72f.kelvin.SenderBadge.Vip("Favourite"), onStar = { starB = !starB }, starred = starB, starLabel = "Star")
-                    KelvinMessageRow("Tomás Ruiz", "Mon", "Lisbon trip", "Booked the flat in Alfama. Sharing the album when we land.", true, {},
-                        important = true, attachment = true)
+                KelvinSection("Inbox") {
+                    KelvinGroup {
+                        var starA by remember { mutableStateOf(false) }
+                        var starB by remember { mutableStateOf(true) }
+                        KelvinMessageRow("Koofr", "18:42", "Your vault is ready", "Koofr Vault is set up on this phone. Photos you add to Private are encrypted before they leave.", true, {},
+                            attachment = true, badge = studio72f.kelvin.SenderBadge.Verified("Verified sender"), onStar = { starA = !starA }, starred = starA, starLabel = "Star")
+                        KelvinMessageRow("Ana Marić", "Tue", "Bruges photos", "Added 32 photos to the shared album. The canal ones came out great.", false, {},
+                            badge = studio72f.kelvin.SenderBadge.Vip("Favourite"), onStar = { starB = !starB }, starred = starB, starLabel = "Star")
+                        KelvinMessageRow("Tomás Ruiz", "Mon", "Lisbon trip", "Booked the flat in Alfama. Sharing the album when we land.", true, {},
+                            important = true, attachment = true)
+                    }
                 }
-                KelvinSectionHeader("Swipe a message")
+                KelvinSectionHeader("Smart inbox")
+                var category by remember { mutableStateOf(0) }
+                studio72f.kelvin.KelvinTabs(
+                    listOf(
+                        studio72f.kelvin.KelvinTab("All", KelvinIcons.Inbox),
+                        studio72f.kelvin.KelvinTab("Due soon", KelvinIcons.Clock, count = 2, alert = true),
+                        studio72f.kelvin.KelvinTab("Priority", KelvinIcons.Flag, count = 4),
+                        studio72f.kelvin.KelvinTab("Money", KelvinIcons.Receipt, count = 11),
+                        studio72f.kelvin.KelvinTab("Promotions", KelvinIcons.Promotions, count = 23),
+                        studio72f.kelvin.KelvinTab("Low priority", KelvinIcons.LowPriority, count = 40),
+                    ),
+                    category,
+                    { category = it },
+                )
                 KelvinGroup {
-                    var archived by remember { mutableStateOf(0) }
-                    KelvinSwipeRow(
-                        leading = SwipeAction(KelvinIcons.Archive, "Archive", Kelvin.colors.positive) { archived++ },
-                        trailing = SwipeAction(KelvinIcons.Trash, "Delete", Kelvin.colors.critical) { deleted = true },
-                    ) {
-                        KelvinMessageRow("Lena Fischer", "09:15", "Proofs are in", "The printer sent the proofs for the Bruges book. Two pages need a second look.", true, {}, attachment = true)
+                    KelvinMessageRow("Airtel", "09:12", "Your bill is ready", "Your postpaid bill of ₹749 is due on 12 November.", true, {},
+                        tags = listOf(
+                            studio72f.kelvin.MessageTag("Due", studio72f.kelvin.Tone.Caution, KelvinIcons.Clock, figure = "12/11"),
+                            studio72f.kelvin.MessageTag("Money", onClick = {}, clickLabel = "Why Money"),
+                        ))
+                    KelvinMessageRow("Priya Natarajan", "Sat", "Invoice 2026-114", "Attached is the invoice for October. Thanks for the quick turnaround.", false, {},
+                        attachment = true, tags = listOf(studio72f.kelvin.MessageTag("Money", onClick = {}, clickLabel = "Why Money")))
+                    studio72f.kelvin.KelvinBundleRow(KelvinIcons.Promotions, "Promotions", 23, "Myntra, Swiggy and 21 more", {}, unread = 5)
+                    studio72f.kelvin.KelvinBundleRow(KelvinIcons.LowPriority, "Low priority", 40, "Newsletters, notifications and receipts you have read", {})
+                }
+                KelvinSectionHeader("A batch to approve")
+                var batchIn by remember { mutableStateOf(true) }
+                KelvinGroup {
+                    studio72f.kelvin.KelvinBatchRow("Paperleaf", "7 emails · New arrivals: dot-grid and beyond", if (batchIn) "Unsubscribe" else "Left out", if (batchIn) studio72f.kelvin.BatchMark.Included else studio72f.kelvin.BatchMark.LeftOut, onClick = { batchIn = !batchIn })
+                    studio72f.kelvin.KelvinBatchRow("Studio Supply Co", "5 emails · Members' deals this week", "Done", studio72f.kelvin.BatchMark.Done)
+                    studio72f.kelvin.KelvinBatchRow("Bookworm Weekly", "4 emails · This week's shelf", "Needs you", studio72f.kelvin.BatchMark.NeedsYou, onClick = {})
+                    studio72f.kelvin.KelvinBatchRow("Trailhead Gear", "3 emails · Winter kit is in", "Failed", studio72f.kelvin.BatchMark.Failed, onClick = {})
+                }
+                studio72f.kelvin.KelvinUndoBar("Archiving 19 emails", "Undo", {}, remaining = 0.6f, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                KelvinSectionHeader("Folders")
+                var projectsOpen by remember { mutableStateOf(true) }
+                KelvinGroup(contentPadding = 6.dp) {
+                    studio72f.kelvin.KelvinFolderRow("Inbox", {}, icon = KelvinIcons.Inbox, unread = 12, alertUnread = true, selected = true)
+                    studio72f.kelvin.KelvinFolderRow("Drafts", {}, icon = KelvinIcons.Drafts, unread = 2)
+                    studio72f.kelvin.KelvinFolderRow("Sent", {}, icon = KelvinIcons.Send)
+                    studio72f.kelvin.KelvinFolderRow("Spam", {}, icon = KelvinIcons.Spam, unread = 4)
+                    studio72f.kelvin.KelvinFolderRow("Trash", {}, icon = KelvinIcons.Trash)
+                }
+                KelvinGroup(Modifier.padding(top = 12.dp), contentPadding = 6.dp) {
+                    studio72f.kelvin.KelvinFolderRow("Projects", {}, icon = KelvinIcons.Folder, unread = 3,
+                        expanded = projectsOpen, onToggle = { projectsOpen = !projectsOpen }, toggleLabel = "Show subfolders")
+                    if (projectsOpen) {
+                        studio72f.kelvin.KelvinFolderRow("Bruges book", {}, icon = KelvinIcons.Folder, depth = 1, unread = 3)
+                        studio72f.kelvin.KelvinFolderRow("Lisbon", {}, icon = KelvinIcons.Folder, depth = 1)
+                    }
+                }
+                KelvinSection("Swipe a message") {
+                    KelvinGroup {
+                        var archived by remember { mutableStateOf(0) }
+                        KelvinSwipeRow(
+                            leading = SwipeAction(KelvinIcons.Archive, "Archive", Kelvin.colors.positive) { archived++ },
+                            trailing = SwipeAction(KelvinIcons.Trash, "Delete", Kelvin.colors.critical) { deleted = true },
+                        ) {
+                            KelvinMessageRow("Lena Fischer", "09:15", "Proofs are in", "The printer sent the proofs for the Bruges book. Two pages need a second look.", true, {}, attachment = true)
+                        }
                     }
                 }
 
-                KelvinSectionHeader("Compose")
-                KelvinGroup {
-                    val to = remember { mutableStateListOf("ana@koofr.net", "Tomás Ruiz") }
-                    KelvinRecipientField("To", to, { to.add(it) }, { to.removeAt(it) }, { "Remove $it" }, placeholder = "Add people")
-                    Row(Modifier.kelvinCarousel(rememberScrollState()).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KelvinAttachmentChip("Bruges-proofs.pdf", "2.4 MB", {}, icon = KelvinIcons.Book, tile = KelvinTiles.Red)
-                        KelvinAttachmentChip("Canal.jpg", "840 KB", {}, icon = KelvinIcons.Photo, onRemove = {}, removeLabel = "Remove Canal.jpg")
+                KelvinSection("Compose") {
+                    KelvinGroup {
+                        // Saved contacts show their name; tap a pill to edit it, x to remove it.
+                        val contacts = mapOf("ana@koofr.net" to "Ana Marić", "tomas@ruiz.example" to "Tomás Ruiz")
+                        val to = remember { mutableStateListOf("ana@koofr.net", "tomas@ruiz.example", "lena@studio.example") }
+                        studio72f.kelvin.KelvinRecipientField(
+                            "To",
+                            to.map { studio72f.kelvin.KelvinRecipient(it, contacts[it]) },
+                            { to.add(it) }, { to.removeAt(it) }, { "Remove $it" }, placeholder = "Add people",
+                        )
+                        Row(Modifier.kelvinCarousel(rememberScrollState()).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KelvinAttachmentChip("Bruges-proofs.pdf", "2.4 MB", {}, icon = KelvinIcons.Book, tile = KelvinTiles.Red)
+                            KelvinAttachmentChip("Canal.jpg", "840 KB", {}, icon = KelvinIcons.Photo, onRemove = {}, removeLabel = "Remove Canal.jpg")
+                        }
                     }
                 }
 
-                KelvinSectionHeader("Podcasts")
-                KelvinGroup {
-                    var dl by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
-                    LaunchedEffect(dl) {
-                        if (dl == DownloadState.Queued) { kotlinx.coroutines.delay(700); dl = DownloadState.Downloading(0f) }
-                        val d = dl
-                        if (d is DownloadState.Downloading) { kotlinx.coroutines.delay(120); dl = if (d.progress >= 1f) DownloadState.Done else DownloadState.Downloading(d.progress + 0.05f) }
+                KelvinSection("Podcasts") {
+                    KelvinGroup {
+                        var dl by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
+                        LaunchedEffect(dl) {
+                            if (dl == DownloadState.Queued) { kotlinx.coroutines.delay(700); dl = DownloadState.Downloading(0f) }
+                            val d = dl
+                            if (d is DownloadState.Downloading) { kotlinx.coroutines.delay(120); dl = if (d.progress >= 1f) DownloadState.Done else DownloadState.Downloading(d.progress + 0.05f) }
+                        }
+                        KelvinEpisodeRow("Slow Light", "The colour of a candle, and why 1,900 K feels like home", "Nov 4 · 42 min", {}, {}, "Play", unplayed = true,
+                            download = dl, onDownload = { dl = if (dl == DownloadState.Idle) DownloadState.Queued else DownloadState.Idle }, downloadLabel = "Download") { Photo(4, Modifier.fillMaxSize()) }
+                        KelvinEpisodeRow("Field Notes", "Mapping Lisbon by its tiles", "Oct 30 · 1 h 08 min", {}, {}, "Play", progress = 0.4f,
+                            download = DownloadState.Done, onDownload = {}, downloadLabel = "Remove download") { Photo(1, Modifier.fillMaxSize()) }
                     }
-                    KelvinEpisodeRow("Slow Light", "The colour of a candle, and why 1,900 K feels like home", "Nov 4 · 42 min", {}, {}, "Play", unplayed = true,
-                        download = dl, onDownload = { dl = if (dl == DownloadState.Idle) DownloadState.Queued else DownloadState.Idle }, downloadLabel = "Download") { Photo(4, Modifier.fillMaxSize()) }
-                    KelvinEpisodeRow("Field Notes", "Mapping Lisbon by its tiles", "Oct 30 · 1 h 08 min", {}, {}, "Play", progress = 0.4f,
-                        download = DownloadState.Done, onDownload = {}, downloadLabel = "Remove download") { Photo(1, Modifier.fillMaxSize()) }
                 }
                 var playing by remember { mutableStateOf(false) }
                 var at by remember { mutableLongStateOf(754_000L) }
@@ -472,15 +548,17 @@ private fun Catalog() {
                     KelvinGroup(gutter = 0.dp) { KelvinTipJar(tips.take(2), {}, note = "Tips unlock nothing.") }
                 }
 
-                KelvinSectionHeader("Empty")
-                KelvinEmptyState(KelvinIcons.Book, "Nothing saved yet", "Books you save show up here, ready when you are.",
-                    actionText = "Browse books", onAction = {}, doodle = KelvinDoodle.SittingReading)
+                KelvinSection("Empty") {
+                    KelvinEmptyState(KelvinIcons.Book, "Nothing saved yet", "Books you save show up here, ready when you are.",
+                        actionText = "Browse books", onAction = {}, doodle = KelvinDoodle.SittingReading)
+                }
 
-                KelvinSectionHeader("Doodles")
-                KelvinGroup {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KText("Every empty, waiting and error scene, in the set an app picks in KelvinTheme.", style = Kelvin.type.summary, color = c.ink2)
-                        KelvinSegmented(listOf("Casual", "Semi-pro", "Corporate"), doodles.ordinal, { doodles = DoodleSet.entries[it] })
+                KelvinSection("Doodles") {
+                    KelvinGroup {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KText("Every empty, waiting and error scene, in the set an app picks in KelvinTheme.", style = Kelvin.type.summary, color = c.ink2)
+                            KelvinSegmented(listOf("Casual", "Semi-pro", "Corporate"), doodles.ordinal, { doodles = DoodleSet.entries[it] })
+                        }
                     }
                 }
                 KelvinGroup(contentPadding = 12.dp) {
@@ -493,24 +571,26 @@ private fun Catalog() {
                     }
                 }
 
-                KelvinSectionHeader("Sleep timer")
-                KelvinGroup(contentPadding = 8.dp) {
-                    var sleep by remember { mutableIntStateOf(3) }
-                    KelvinWheelPicker(listOf("Off", "5 min", "10 min", "15 min", "30 min", "45 min", "1 h", "End of episode"), sleep, { sleep = it }, "Sleep timer")
+                KelvinSection("Sleep timer") {
+                    KelvinGroup(contentPadding = 8.dp) {
+                        var sleep by remember { mutableIntStateOf(3) }
+                        KelvinWheelPicker(listOf("Off", "5 min", "10 min", "15 min", "30 min", "45 min", "1 h", "End of episode"), sleep, { sleep = it }, "Sleep timer")
+                    }
                 }
 
-                KelvinSectionHeader("Choices")
-                KelvinGroup {
-                    var a by remember { mutableStateOf(true) }
-                    var b by remember { mutableStateOf(false) }
-                    var speed by remember { mutableIntStateOf(1) }
-                    KelvinRow("Download on Wi-Fi only", trailing = { KelvinCheckbox(a, { a = it }) })
-                    KelvinRow("Delete played episodes", trailing = { KelvinCheckbox(b, { b = it }) })
-                    listOf("1×", "1.5×", "2×").forEachIndexed { i, label ->
-                        KelvinRow(label, trailing = { KelvinRadio(speed == i, { speed = i }) })
+                KelvinSection("Choices") {
+                    KelvinGroup {
+                        var a by remember { mutableStateOf(true) }
+                        var b by remember { mutableStateOf(false) }
+                        var speed by remember { mutableIntStateOf(1) }
+                        KelvinRow("Download on Wi-Fi only", trailing = { KelvinCheckbox(a, { a = it }) })
+                        KelvinRow("Delete played episodes", trailing = { KelvinCheckbox(b, { b = it }) })
+                        listOf("1×", "1.5×", "2×").forEachIndexed { i, label ->
+                            KelvinRow(label, trailing = { KelvinRadio(speed == i, { speed = i }) })
+                        }
+                        var skip by remember { mutableIntStateOf(30) }
+                        KelvinRow("Skip forward", trailing = { KelvinStepper(skip, { skip = it }, "Shorter", "Longer", range = 5..60, step = 5, format = { "$it s" }) })
                     }
-                    var skip by remember { mutableIntStateOf(30) }
-                    KelvinRow("Skip forward", trailing = { KelvinStepper(skip, { skip = it }, "Shorter", "Longer", range = 5..60, step = 5, format = { "$it s" }) })
                 }
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     var news by remember { mutableStateOf(true) }
@@ -521,21 +601,22 @@ private fun Catalog() {
                     KelvinBadged(12) { KIcon(KelvinIcons.Bell, "Notifications", size = 26.dp) }
                 }
 
-                KelvinSectionHeader("Loading")
-                KelvinGroup(contentPadding = 16.dp) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        KelvinProgressBar(0.62f)
-                        KelvinProgressBar(null)
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            KelvinProgressRing(0.7f)
-                            KelvinProgressRing(null)
-                            KelvinAvatarStack(listOf("Ana Marić", "Tomás Ruiz", "Lena Fischer", "Koofr", "Sam Okafor"))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            KelvinSkeleton(Modifier.size(44.dp), CircleShape)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                KelvinSkeleton(Modifier.fillMaxWidth(0.6f).height(14.dp))
-                                KelvinSkeleton(Modifier.fillMaxWidth().height(12.dp))
+                KelvinSection("Loading") {
+                    KelvinGroup(contentPadding = 16.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            KelvinProgressBar(0.62f)
+                            KelvinProgressBar(null)
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                KelvinProgressRing(0.7f)
+                                KelvinProgressRing(null)
+                                KelvinAvatarStack(listOf("Ana Marić", "Tomás Ruiz", "Lena Fischer", "Koofr", "Sam Okafor"))
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                KelvinSkeleton(Modifier.size(44.dp), CircleShape)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    KelvinSkeleton(Modifier.fillMaxWidth(0.6f).height(14.dp))
+                                    KelvinSkeleton(Modifier.fillMaxWidth().height(12.dp))
+                                }
                             }
                         }
                     }
@@ -552,76 +633,82 @@ private fun Catalog() {
                     KelvinSlider(page / 3f, { page = it * 3f }, "Page")
                 }
 
-                KelvinSectionHeader("Calendar")
-                KelvinGroup(contentPadding = 12.dp) {
-                    var ym by remember { mutableStateOf(2026 to 11) }
-                    var dayPick by remember { mutableStateOf<Triple<Int, Int, Int>?>(Triple(2026, 11, 5)) }
-                    KelvinMonthCalendar(
-                        ym.first, ym.second, dayPick, { y, m, d -> dayPick = Triple(y, m, d) }, { y, m -> ym = y to m },
-                        listOf("S", "M", "T", "W", "T", "F", "S"), "Previous month", "Next month",
-                        today = Triple(2026, 11, 5),
-                        marks = { y, m, d ->
-                            if (y != 2026 || m != 11) null
-                            else when (d) { in 12..14 -> DayMark(Tone.Critical, "Trip"); 20, 27 -> DayMark(Tone.Info, "New episode"); else -> null }
-                        },
-                    )
-                }
-
-                KelvinSectionHeader("Sign-in code")
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    var code by remember { mutableStateOf("42") }
-                    KelvinCodeField(code, { code = it }, "Sign-in code", error = code.length == 6 && code != "123456", errorText = "That code didn't match. Check the newest email.")
-                }
-
-                KelvinSectionHeader("Compose formatting")
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    var bold by remember { mutableStateOf(true) }
-                    var italic by remember { mutableStateOf(false) }
-                    var list by remember { mutableStateOf(false) }
-                    KelvinFormatBar(listOf(
-                        FormatAction(KelvinIcons.Bold, "Bold", bold) { bold = !bold },
-                        FormatAction(KelvinIcons.Italic, "Italic", italic) { italic = !italic },
-                        FormatAction(KelvinIcons.Underline, "Underline", false) {},
-                        FormatAction(KelvinIcons.ListNumbers, "Numbered list", list) { list = !list },
-                        FormatAction(KelvinIcons.Quote, "Quote", false) {},
-                        FormatAction(KelvinIcons.Link, "Link", false) {},
-                    ))
-                }
-
-                KelvinSectionHeader("Up next")
-                KelvinGroup {
-                    val queue = remember { mutableStateListOf("Mapping Lisbon by its tiles", "The colour of a candle", "Why trains hum", "Bruges at night") }
-                    KelvinReorderList(queue, { it }, { from, to -> queue.add(to, queue.removeAt(from)) }, "Move up", "Move down") { item, handle, lifted ->
-                        Row(Modifier.fillMaxWidth().background(Kelvin.colors.group).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Photo(queue.indexOf(item), Modifier.size(40.dp).clip(Kelvin.shape.sm))
-                            KText(item, Modifier.weight(1f), Kelvin.type.rowTitle, maxLines = 1)
-                            KelvinGrip(handle)
-                        }
+                KelvinSection("Calendar") {
+                    KelvinGroup(contentPadding = 12.dp) {
+                        var ym by remember { mutableStateOf(2026 to 11) }
+                        var dayPick by remember { mutableStateOf<Triple<Int, Int, Int>?>(Triple(2026, 11, 5)) }
+                        KelvinMonthCalendar(
+                            ym.first, ym.second, dayPick, { y, m, d -> dayPick = Triple(y, m, d) }, { y, m -> ym = y to m },
+                            listOf("S", "M", "T", "W", "T", "F", "S"), "Previous month", "Next month",
+                            today = Triple(2026, 11, 5),
+                            marks = { y, m, d ->
+                                if (y != 2026 || m != 11) null
+                                else when (d) { in 12..14 -> DayMark(Tone.Critical, "Trip"); 20, 27 -> DayMark(Tone.Info, "New episode"); else -> null }
+                            },
+                        )
                     }
                 }
 
-                KelvinSectionHeader("Pull to refresh")
-                KelvinGroup {
-                    var refreshing by remember { mutableStateOf(false) }
-                    LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1600); refreshing = false } }
-                    KelvinPullToRefresh(refreshing, { refreshing = true }, Modifier.height(260.dp)) {
-                        androidx.compose.foundation.lazy.LazyColumn {
-                            items(6) { i ->
-                                KelvinMessageRow(listOf("Koofr", "Ana Marić", "Tomás Ruiz", "Lena Fischer", "pCloud", "Sam Okafor")[i], "0${9 - i}:1$i", "Message ${i + 1}", "Pull this list down from the top to refresh it.", i < 2, {})
+                KelvinSection("Sign-in code") {
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        var code by remember { mutableStateOf("42") }
+                        KelvinCodeField(code, { code = it }, "Sign-in code", error = code.length == 6 && code != "123456", errorText = "That code didn't match. Check the newest email.")
+                    }
+                }
+
+                KelvinSection("Compose formatting") {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        var bold by remember { mutableStateOf(true) }
+                        var italic by remember { mutableStateOf(false) }
+                        var list by remember { mutableStateOf(false) }
+                        KelvinFormatBar(listOf(
+                            FormatAction(KelvinIcons.Bold, "Bold", bold) { bold = !bold },
+                            FormatAction(KelvinIcons.Italic, "Italic", italic) { italic = !italic },
+                            FormatAction(KelvinIcons.Underline, "Underline", false) {},
+                            FormatAction(KelvinIcons.ListNumbers, "Numbered list", list) { list = !list },
+                            FormatAction(KelvinIcons.Quote, "Quote", false) {},
+                            FormatAction(KelvinIcons.Link, "Link", false) {},
+                        ))
+                    }
+                }
+
+                KelvinSection("Up next") {
+                    KelvinGroup {
+                        val queue = remember { mutableStateListOf("Mapping Lisbon by its tiles", "The colour of a candle", "Why trains hum", "Bruges at night") }
+                        KelvinReorderList(queue, { it }, { from, to -> queue.add(to, queue.removeAt(from)) }, "Move up", "Move down") { item, handle, lifted ->
+                            Row(Modifier.fillMaxWidth().background(Kelvin.colors.group).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Photo(queue.indexOf(item), Modifier.size(40.dp).clip(Kelvin.shape.sm))
+                                KText(item, Modifier.weight(1f), Kelvin.type.rowTitle, maxLines = 1)
+                                KelvinGrip(handle)
                             }
                         }
                     }
                 }
 
-                KelvinSectionHeader("Player")
-                KelvinGroup {
-                    var p2 by remember { mutableStateOf(false) }
-                    var pos by remember { mutableLongStateOf(1_204_000L) }
-                    LaunchedEffect(p2) { while (p2) { kotlinx.coroutines.delay(1000); pos += 1000 } }
-                    KelvinFullPlayer(
-                        "Mapping Lisbon by its tiles", "Field Notes", pos, 4_080_000L, p2, { p2 = !p2 }, { pos = it },
-                        { pos = (pos - 15_000).coerceAtLeast(0) }, { pos += 30_000 }, speed = "1.5×", sleep = "30 min",
-                    ) { Photo(1, Modifier.fillMaxSize()) }
+                KelvinSection("Pull to refresh") {
+                    KelvinGroup {
+                        var refreshing by remember { mutableStateOf(false) }
+                        LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1600); refreshing = false } }
+                        KelvinPullToRefresh(refreshing, { refreshing = true }, Modifier.height(260.dp)) {
+                            androidx.compose.foundation.lazy.LazyColumn {
+                                items(6) { i ->
+                                    KelvinMessageRow(listOf("Koofr", "Ana Marić", "Tomás Ruiz", "Lena Fischer", "pCloud", "Sam Okafor")[i], "0${9 - i}:1$i", "Message ${i + 1}", "Pull this list down from the top to refresh it.", i < 2, {})
+                                }
+                            }
+                        }
+                    }
+                }
+
+                KelvinSection("Player") {
+                    KelvinGroup {
+                        var p2 by remember { mutableStateOf(false) }
+                        var pos by remember { mutableLongStateOf(1_204_000L) }
+                        LaunchedEffect(p2) { while (p2) { kotlinx.coroutines.delay(1000); pos += 1000 } }
+                        KelvinFullPlayer(
+                            "Mapping Lisbon by its tiles", "Field Notes", pos, 4_080_000L, p2, { p2 = !p2 }, { pos = it },
+                            { pos = (pos - 15_000).coerceAtLeast(0) }, { pos += 30_000 }, speed = "1.5×", sleep = "30 min",
+                        ) { Photo(1, Modifier.fillMaxSize()) }
+                    }
                 }
 
                 KelvinSectionHeader("At a glance")
@@ -716,23 +803,25 @@ private fun CatalogTab(tab: Int) {
             KelvinReachHeader(reach, summary = "Pick a tab to the left or right in the dock: the view pans that way.")
             when (tab) {
                 1 -> {
-                    KelvinSectionHeader("Albums")
-                    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        for (r in 0 until 3) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            for (k in 0 until 2) {
-                                val i = r * 2 + k
-                                KelvinTile(listOf("Favourites", "Bruges", "Camera", "Sunsets", "Lisbon", "Screenshots")[i], "${(i + 1) * 37} items", {}, Modifier.weight(1f)) { Photo(i, Modifier.fillMaxSize()) }
+                    KelvinSection("Albums") {
+                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            for (r in 0 until 3) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                for (k in 0 until 2) {
+                                    val i = r * 2 + k
+                                    KelvinTile(listOf("Favourites", "Bruges", "Camera", "Sunsets", "Lisbon", "Screenshots")[i], "${(i + 1) * 37} items", {}, Modifier.weight(1f)) { Photo(i, Modifier.fillMaxSize()) }
+                                }
                             }
                         }
                     }
                 }
                 2 -> KelvinEmptyState(KelvinIcons.Calendar, "No memories yet", "Kelvin gathers a day's photos into a memory once there are a few of them.", doodle = KelvinDoodle.Chilling)
                 else -> {
-                    KelvinSectionHeader("General")
-                    KelvinGroup {
-                        KelvinRow("Connected clouds", icon = KelvinIcons.Cloud, value = "3", chevron = true, onClick = {})
-                        KelvinRow("Lock hidden albums", icon = KelvinIcons.Lock, tile = KelvinTiles.Green, divider = true, trailing = { KelvinSwitch(true, {}) })
-                        KelvinRow("Smart search", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Violet, chevron = true, divider = true, onClick = {})
+                    KelvinSection("General") {
+                        KelvinGroup {
+                            KelvinRow("Connected clouds", icon = KelvinIcons.Cloud, value = "3", chevron = true, onClick = {})
+                            KelvinRow("Lock hidden albums", icon = KelvinIcons.Lock, tile = KelvinTiles.Green, divider = true, trailing = { KelvinSwitch(true, {}) })
+                            KelvinRow("Smart search", icon = KelvinIcons.Sparkles, tile = KelvinTiles.Violet, chevron = true, divider = true, onClick = {})
+                        }
                     }
                 }
             }
@@ -748,15 +837,17 @@ private fun SearchDetail(onBack: () -> Unit) {
     val c = Kelvin.colors
     Column(Modifier.fillMaxSize().background(c.canvas).verticalScroll(rememberScrollState())) {
         KelvinDetailHeader("Smart search", onBack, "Back", summary = "On-device, 1,204 photos indexed")
-        KelvinSectionHeader("Index")
-        KelvinGroup {
-            KelvinRow("Photos indexed", value = "1,204")
-            KelvinRow("Last run", value = "18:42")
-            KelvinRow("Search text in photos", trailing = { KelvinSwitch(true, {}) })
+        KelvinSection("Index") {
+            KelvinGroup {
+                KelvinRow("Photos indexed", value = "1,204")
+                KelvinRow("Last run", value = "18:42")
+                KelvinRow("Search text in photos", trailing = { KelvinSwitch(true, {}) })
+            }
         }
-        KelvinSectionHeader("Recent")
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            repeat(3) { i -> Photo(i, Modifier.weight(1f).aspectRatio(1f)) }
+        KelvinSection("Recent") {
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(3) { i -> Photo(i, Modifier.weight(1f).aspectRatio(1f)) }
+            }
         }
         Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             repeat(3) { i -> Photo(i + 3, Modifier.weight(1f).aspectRatio(1f)) }
@@ -769,4 +860,5 @@ private fun Accent.name(): String = when (this) {
     Accent.Ember -> "Ember"
     Accent.Graphite -> "Graphite"
     is Accent.Preset -> preset.name
+    is Accent.Custom -> "Custom"
 }

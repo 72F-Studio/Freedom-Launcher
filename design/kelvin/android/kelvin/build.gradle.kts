@@ -1,37 +1,54 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.android.multiplatform.library)
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.jetbrains.compose)
     alias(libs.plugins.kotlin.compose)
 }
 
-android {
-    namespace = "studio72f.kelvin"
-    compileSdk { version = release(37) { minorApiLevel = 2 } }
-    defaultConfig {
-        minSdk = 24
+// Kelvin is one library for Android and for desktop (Linux and Windows, on the JVM). What every platform shares is in
+// commonMain; what only Android can do (glass, shaders, haptics, the system's settings) is in androidMain, and desktop
+// has its own plain answers in desktopMain.
+kotlin {
+    compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
+
+    android {
+        namespace = "studio72f.kelvin"
         // Kelvin compiles against API 37.2 for the platform backdrop (NativeBackdrop.kt), but only
         // calls it after a runtime check, so apps can keep compiling against plain API 37.
+        compileSdk { version = release(37) { minorApiLevel = 2 } }
+        minSdk = 24
         aarMetadata { minCompileSdk { version = release(37) } }
+        androidResources.enable = true
+        compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+
+    jvm("desktop") {
+        compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
     }
-}
 
-kotlin {
-    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
-}
-
-// Kelvin depends on AndroidX Compose foundation and UI, on Backdrop (Kyant, glass rendering) and
-// on Vitro (itshedimisawi, the iOS-calibrated Vitro texture), all Apache 2.0. No Material, no Miuix.
-dependencies {
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    api(libs.androidx.compose.foundation)
-    api(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kyant.backdrop)
-    implementation(libs.vitro)
+    sourceSets {
+        commonMain.dependencies {
+            api(libs.jetbrains.compose.runtime)
+            api(libs.jetbrains.compose.foundation)
+            api(libs.jetbrains.compose.ui)
+        }
+        // Android adds Backdrop (Kyant, glass rendering) and Vitro (itshedimisawi, the iOS-calibrated Vitro texture),
+        // both Apache 2.0. No Material, no Miuix.
+        // Desktop takes the same fonts and doodles Android ships as resources, straight from Android's folders, so
+        // there is one copy of each. The variable fonts are Android's; desktop loads the static weights.
+        named("desktopMain") {
+            resources.srcDir("src/androidMain/res")
+            resources.include("font/*_?00.ttf", "raw/*.txt")
+        }
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(project.dependencies.platform(libs.androidx.compose.bom))
+            api(libs.androidx.compose.foundation)
+            api(libs.androidx.compose.ui)
+            implementation(libs.androidx.compose.ui.graphics)
+            implementation(libs.androidx.core.ktx)
+            implementation(libs.kyant.backdrop)
+            implementation(libs.vitro)
+        }
+    }
 }

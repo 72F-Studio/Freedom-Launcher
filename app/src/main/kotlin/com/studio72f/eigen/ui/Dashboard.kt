@@ -65,6 +65,7 @@ import studio72f.kelvin.KelvinTiles
 import studio72f.kelvin.KelvinSwitch
 import studio72f.kelvin.KelvinStatCard
 import studio72f.kelvin.KelvinSegmented
+import studio72f.kelvin.KelvinSection
 import studio72f.kelvin.KelvinSectionHeader
 import studio72f.kelvin.KelvinRow
 import studio72f.kelvin.KelvinNotice
@@ -147,22 +148,23 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
                 }
             }
             Spacer(Modifier.height(24.dp))
-            KelvinSectionHeader("On home")
-            KelvinGroup(contentPadding = 16.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    // A live preview of the card as it will look on home.
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        AppCard(state, host, app, 0, Modifier.width(if (wide) 168.dp else 84.dp), interactive = false, styleOverride = trial)
+            KelvinSection("On home") {
+                KelvinGroup(contentPadding = 16.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        // A live preview of the card as it will look on home.
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            AppCard(state, host, app, 0, Modifier.width(if (wide) 168.dp else 84.dp), interactive = false, styleOverride = trial)
+                        }
+                        KelvinSegmented(STYLES.map { it.second }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i ->
+                            val id = STYLES[i].first
+                            if (state.plus || !Plus.cardStyle(id)) { trial = null; host.setCardStyle(app, id) } else trial = id
+                        })
+                        if (!state.plus && trial == null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                            PlusMark(state)
+                            KText("Stained and Lit come with Plus. Tap one to try it.", Modifier.padding(start = 6.dp), Kelvin.type.caption, c.ink2)
+                        }
+                        if (trial != null) KelvinButton("Keep ${STYLES.first { it.first == trial }.second} with Plus", { state.plusSheet = "The ${STYLES.first { it.first == trial }.second} card style" }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, icon = KelvinIcons.Sparkles)
                     }
-                    KelvinSegmented(STYLES.map { it.second }, STYLES.indexOfFirst { it.first == style }.coerceAtLeast(0), { i ->
-                        val id = STYLES[i].first
-                        if (state.plus || !Plus.cardStyle(id)) { trial = null; host.setCardStyle(app, id) } else trial = id
-                    })
-                    if (!state.plus && trial == null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        PlusMark(state)
-                        KText("Stained and Lit come with Plus. Tap one to try it.", Modifier.padding(start = 6.dp), Kelvin.type.caption, c.ink2)
-                    }
-                    if (trial != null) KelvinButton("Keep ${STYLES.first { it.first == trial }.second} with Plus", { state.plusSheet = "The ${STYLES.first { it.first == trial }.second} card style" }, Modifier.fillMaxWidth(), kind = ButtonKind.Tinted, icon = KelvinIcons.Sparkles)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -172,12 +174,13 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
                 KelvinRow("Favourite", summary = "Shown first on home", icon = KelvinIcons.Heart, tile = KelvinTiles.Red, trailing = { KelvinSwitch(host.isFavorite(app), { host.toggleFavorite(app) }) })
             }
             Spacer(Modifier.height(24.dp))
-            KelvinSectionHeader("App")
-            KelvinGroup {
-                KelvinRow("Shortcuts and more", icon = Shortcuts, tile = KelvinTiles.Orange, chevron = true, onClick = { host.appMenu(app) })
-                KelvinRow("Move to drawer", value = host.drawerOf(app).replaceFirstChar { it.uppercaseChar() }, icon = KelvinIcons.Folder, tile = KelvinTiles.Teal, chevron = true, onClick = { host.moveApp(app) })
-                KelvinRow("App info", icon = KelvinIcons.Info, tile = KelvinTiles.Grey, chevron = true, onClick = { host.appInfo(app) })
-                KelvinRow("Uninstall", danger = true, onClick = { host.uninstall(app) })
+            KelvinSection("App") {
+                KelvinGroup {
+                    KelvinRow("Shortcuts and more", icon = Shortcuts, tile = KelvinTiles.Orange, chevron = true, onClick = { host.appMenu(app) })
+                    KelvinRow("Move to drawer", value = host.drawerOf(app).replaceFirstChar { it.uppercaseChar() }, icon = KelvinIcons.Folder, tile = KelvinTiles.Teal, chevron = true, onClick = { host.moveApp(app) })
+                    KelvinRow("App info", icon = KelvinIcons.Info, tile = KelvinTiles.Grey, chevron = true, onClick = { host.appInfo(app) })
+                    KelvinRow("Uninstall", danger = true, onClick = { host.uninstall(app) })
+                }
             }
             Spacer(Modifier.height(32.dp))
         }

@@ -35,6 +35,7 @@ import studio72f.kelvin.KelvinIconButton
 import studio72f.kelvin.KelvinIcons
 import studio72f.kelvin.KelvinPageHeader
 import studio72f.kelvin.KelvinRow
+import studio72f.kelvin.KelvinSection
 import studio72f.kelvin.KelvinSectionHeader
 import studio72f.kelvin.KelvinSwitch
 import studio72f.kelvin.KelvinTiles
@@ -114,10 +115,11 @@ fun SettingsOverlay(state: EigenState, host: EigenHost) {
             })
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 for ((i, section) in state.settings.withIndex()) {
-                    KelvinSectionHeader(section.title, Modifier.padding(top = if (i == 0) 4.dp else 0.dp))
-                    KelvinGroup {
-                        for (row in section.rows) SettingsRowView(row)
-                        if (section.title == "Look") { BrightnessRow(state, host); GlassRow(state, host) }
+                    KelvinSection(section.title, Modifier.padding(top = if (i == 0) 4.dp else 0.dp)) {
+                        KelvinGroup {
+                            for (row in section.rows) SettingsRowView(row)
+                            if (section.title == "Look") { BrightnessRow(state, host); GlassRow(state, host) }
+                        }
                     }
                     Spacer(Modifier.height(24.dp))
                 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kelvin's input pill (a recipient, a chip): a capsule in the sunken grey. The View twin of KelvinRecipientPill. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="?attr/kelvinSunken" />
+    <corners android:radius="100dp" />
+</shape>

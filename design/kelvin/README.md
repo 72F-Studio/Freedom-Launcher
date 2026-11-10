@@ -23,9 +23,11 @@ frost shader. No Material components and no third-party UI kit.
 | --- | --- |
 | [GUIDELINES.md](GUIDELINES.md) | The brand book: glass, liquid controls, colour, type, layout, motion, icons, copy |
 | [tokens.json](tokens.json) | Source of truth for colours (light/dark), glass levels, type, spacing, radii, shadows |
-| [android/](android) | Gradle project: `:kelvin` (the Compose library) and `:catalog` (a demo app with every component) |
+| [android/](android) | Gradle project: `:kelvin` (the Compose library), `:kelvin-views` (Kelvin for screens still built from Views), `:kelvin-wear` (Kelvin for Wear OS) and `:catalog` (a demo app with every component) |
 | [web/](web) | `tokens.css`, `kelvin.css` and `kelvin.js` for the website and store pages |
 | [tools/kt-colors.js](tools/kt-colors.js) | Regenerates `KelvinColors.kt` from `tokens.json` |
+| [tools/xml-colors.js](tools/xml-colors.js) | Regenerates `kelvin-views`' colour resources from `tokens.json` |
+| [tools/material_to_tabler.py](tools/material_to_tabler.py) | Draws an app's Material icons as Kelvin's Tabler glyphs: a Compose `Icons` object, a standalone facade for code that cannot link Kelvin, or vector drawables that override a library's by name; also Kelvin's own glyphs as drawables |
 | [licenses/](licenses) | Vitro and Backdrop (Apache 2.0), Onest and Montserrat (SIL OFL 1.1), and Tabler Icons (MIT) notices |
 
 ## Thermal
@@ -38,6 +40,13 @@ motion keeps everything still. The aurora is six soft radial blobs that drift an
 only redraws a few gradients, so it moves on every Android version. The masthead is Onest Black and slims on the variable weight axis
 as it folds. `Signatures.kt` adds layered glass tiles, a thermal bar chart and slide to confirm.
 See GUIDELINES.md, Thermal and Signatures.
+
+## Finish
+
+Controls come in two finishes, picked per app with `KelvinTheme(finish = …)`. `KelvinFinish.Pebble` is Kelvin's own
+and the default. `KelvinFinish.Flat` is for work apps (72F Mail): solid fills, hairline edges in place of shadows, and
+presses that dim in place instead of swelling. Flat uses no shader, so it is also the finish that runs on desktop. See
+GUIDELINES.md, Finish.
 
 ## Hierarchy
 
@@ -63,6 +72,26 @@ predictive back built in) and `KelvinTransitions` / `KelvinDestination` for Navi
 after Rediom's predictive back. Icons are
 filled by default (Tabler's filled set, `KelvinIconPaths.kt`). GUIDELINES.md, Components, maps
 needs to components.
+
+## Kelvin for Wear OS
+
+`:kelvin-wear` (`studio72f:kelvin-wear`) is Kelvin cut to a glance: `KelvinWearTheme` (always dark, always Flat),
+`KelvinWearPage` (one list that scales toward the edges of a round screen and turns with the crown), `KelvinWearTitle`,
+`KelvinWearSection`, `KelvinWearRow`, `KelvinWearStat`, `KelvinWearAction` and `KelvinWearProblem` (an error as a
+headline, what to try, and details that open). The list is AndroidX Wear Compose Foundation's (Apache 2.0); there is no
+Wear Material. See GUIDELINES.md, Watch.
+
+## Kelvin for Views
+
+Apps grown from older codebases (72F Mail, on Thunderbird) still have screens built from Views. `:kelvin-views`
+(`studio72f:kelvin-views`) gives them Kelvin without Material components: the colours as resources
+(`kelvin_light_*`, `kelvin_dark_*`, every dial, coloured text already held to 4.5:1 and neutral glyphs drawn light, as
+`legibleOn` and `KIcon` do at runtime), the type scale as `TextAppearance.Kelvin.*`, a page-coloured bar with
+raised-circle actions (`Widget.Kelvin.Toolbar`, `Widget.Kelvin.ActionButton`), Kelvin's glyphs as `kelvin_ic_*`
+drawables, `KelvinGroupDecoration` (a RecyclerView's rows in a `group` well, the View twin of `KelvinGroup`) and
+`clearKelvinDock()` (a list that runs beneath the floating dock). Apply `ThemeOverlay.Kelvin.Light` / `.Dark`, or set the
+`kelvin*` attributes in a theme that has to inherit from elsewhere. Glass needs Compose: over Views the dock is a solid
+floating pane until the screen moves to Compose.
 
 ## The glass engine (Android)
 
@@ -123,6 +152,7 @@ filter pills, a white segmented thumb).
 | Backdrop (`io.github.kyant0:backdrop`) and its Shapes dependency | Apache 2.0 | Frost, the veil and glass in overlay windows |
 | Onest and Montserrat fonts | SIL Open Font License 1.1 | Bundled typefaces (display and text) |
 | Tabler Icons paths | MIT | Icons (paths unmodified) |
+| AndroidX AppCompat and RecyclerView | Apache 2.0 | `:kelvin-views` only: the bar styles' parents and the group decoration |
 
 All are free for commercial use. Ship `licenses/` in each app's open-source notices screen.
 

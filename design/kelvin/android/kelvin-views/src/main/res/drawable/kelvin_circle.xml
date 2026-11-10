@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kelvin's raised circle for a bar action on the page (HyperOS 4): a 44dp disc in the group grey, centred in the
+     action's slot, which stays the full touch target. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight"
+    >
+    <item
+        android:id="@android:id/mask"
+        android:width="44dp"
+        android:height="44dp"
+        android:gravity="center"
+        >
+        <shape android:shape="oval">
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+    <item
+        android:width="44dp"
+        android:height="44dp"
+        android:gravity="center"
+        >
+        <shape android:shape="oval">
+            <solid android:color="?attr/kelvinGroup" />
+        </shape>
+    </item>
+</ripple>

@@ -43,6 +43,7 @@ import studio72f.kelvin.KelvinIconButton
 import studio72f.kelvin.KelvinIcons
 import studio72f.kelvin.KelvinPill
 import studio72f.kelvin.KelvinRow
+import studio72f.kelvin.KelvinSection
 import studio72f.kelvin.KelvinSectionHeader
 import studio72f.kelvin.KelvinSegmented
 import studio72f.kelvin.KelvinSwitch

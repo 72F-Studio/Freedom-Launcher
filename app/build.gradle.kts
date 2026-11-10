@@ -52,7 +52,7 @@ dependencies {
     implementation("com.android.billingclient:billing:9.1.0")
 
     // UI: Kelvin (72F design system) on Compose. Home, the side pages, search and the assistant are Compose.
-    implementation(project(":kelvin"))
+    implementation("studio72f:kelvin")
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
