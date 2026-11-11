@@ -144,7 +144,7 @@ fun KelvinSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     RisingOverlay(visible, onDismiss, title) { motion ->
-        Box(modifier.then(motion).fillMaxWidth().glass(backdrop, SheetShape, GlassContent.Pane, elevated = true)) {
+        Box(modifier.then(motion).fillMaxWidth().glass(backdrop, KelvinShapes.sheet, GlassContent.Pane, elevated = true)) {
         // A softer aurora carries the app's temperature into the sheet, behind its title only: it has faded out
         // before the content begins, so rows, text and buttons sit on a calm pane whatever the sheet's height.
         Box(Modifier.fillMaxWidth().height(SheetAuroraHeight).horizon(0.5f))
@@ -236,7 +236,7 @@ fun KelvinSheetPane(
         Column(
             modifier.then(motion)
                 .fillMaxWidth()
-                .glass(backdrop, SheetShape, GlassContent.Pane, elevated = true)
+                .glass(backdrop, KelvinShapes.sheet, GlassContent.Pane, elevated = true)
                 .navigationBarsPadding()
                 .padding(top = 8.dp, bottom = 8.dp),
         ) {
@@ -270,7 +270,6 @@ fun KelvinDialogPane(
     }
 }
 
-private val SheetShape = ContinuousShape(32.dp, flatBottom = true)
 
 /**
  * Glass slab above the dock for a result, with at most one action (Undo, for anything that can be

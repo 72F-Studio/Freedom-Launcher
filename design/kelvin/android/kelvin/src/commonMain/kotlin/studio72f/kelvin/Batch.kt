@@ -137,7 +137,7 @@ fun KelvinUndoBar(
             KText(text, Modifier.weight(1f).padding(vertical = 14.dp), Kelvin.type.body, maxLines = 2)
             KText(
                 actionText,
-                Modifier.kelvinPress(onAction, shape = CapsuleShape).padding(horizontal = 12.dp, vertical = 14.dp),
+                Modifier.kelvinPress(onAction, shape = KelvinShapes.control).padding(horizontal = 12.dp, vertical = 14.dp),
                 Kelvin.type.action,
                 c.accent.legibleOn(c.sunken),
             )

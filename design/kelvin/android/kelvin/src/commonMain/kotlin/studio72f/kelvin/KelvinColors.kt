@@ -160,4 +160,10 @@ object KelvinTiles {
     val Violet = Color(0xFFA47DFF)
     val Teal = Color(0xFF0AA4AB)
     val Grey = Color(0xFF91949A)
+
+    /** The colours a cover may take, in a fixed order; grey is left out, it reads as "nothing here". */
+    private val covers = listOf(Blue, Orange, Green, Violet, Teal, Red)
+
+    /** One of the tile colours for [key], the same every time, so a thing keeps its colour across screens. */
+    fun forKey(key: String): Color = key.trim().lowercase().hashCode().let { h -> covers[((h % covers.size) + covers.size) % covers.size] }
 }

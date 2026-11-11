@@ -5,12 +5,16 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -36,15 +40,78 @@ object KelvinSpace {
     val touchTarget = space12
 }
 
-/** Continuous-corner shapes for every role. */
+/**
+ * How round Kelvin's corners are. [Soft] is Kelvin's own: deep corners, and every control a pill.
+ * [Firm] is for work apps: a tighter scale (4 to 20dp) and buttons as rounded rectangles; chips and
+ * round things (avatars, switches, the compose orb, progress) stay pills in either. Pass it to [KelvinTheme].
+ */
+enum class KelvinCorners { Soft, Firm }
+
+/**
+ * One scale of corner radii. Read it through [KelvinShapes] (or `Kelvin.shape`) inside a
+ * [KelvinTheme]; the theme picks the scale from [KelvinCorners].
+ */
+@Immutable
+class KelvinShapeScale private constructor(
+    /** Badges, a checkbox, small icon tiles, skeletons. */
+    val xsRadius: Dp,
+    /** Chips' and segments' inner pieces, thumbnails. */
+    val smRadius: Dp,
+    /** Fields, notices, toasts, inset panels. */
+    val mdRadius: Dp,
+    /** Groups (the well), cards, choice cards. */
+    val lgRadius: Dp,
+    /** Media tiles. */
+    val tileRadius: Dp,
+    /** Sheets and dialogs. */
+    val xlRadius: Dp,
+    /** Buttons, the search field, the dock, a segmented control's track: null is a pill. */
+    controlRadius: Dp?,
+    /**
+     * How far each corner eases into its straight edges ([ContinuousShape.smoothing]). The easing makes a corner
+     * look larger than its radius, about half again at Soft's 0.6, so Firm keeps it low.
+     */
+    val smoothing: Float,
+) {
+    val xs = ContinuousShape(xsRadius, smoothing)
+    val sm = ContinuousShape(smRadius, smoothing)
+    val md = ContinuousShape(mdRadius, smoothing)
+    val lg = ContinuousShape(lgRadius, smoothing)
+    val tile = ContinuousShape(tileRadius, smoothing)
+    val xl = ContinuousShape(xlRadius, smoothing)
+    val full: Shape = CapsuleShape
+    val control: Shape = controlRadius?.let { ContinuousShape(it, smoothing) } ?: CapsuleShape
+    /** Filter chips, status pills and recipient chips: round in every scale. */
+    val pill: Shape = CapsuleShape
+
+    /** A sheet's shape: [xl] at the top, square at the foot. */
+    val sheet = ContinuousShape(xlRadius, smoothing, flatBottom = true)
+
+    companion object {
+        val Soft = KelvinShapeScale(8.dp, 12.dp, 16.dp, 24.dp, 22.dp, 32.dp, controlRadius = null, smoothing = 0.6f)
+        val Firm = KelvinShapeScale(4.dp, 8.dp, 12.dp, 16.dp, 14.dp, 20.dp, controlRadius = 12.dp, smoothing = 0.2f)
+        fun of(corners: KelvinCorners) = when (corners) {
+            KelvinCorners.Soft -> Soft
+            KelvinCorners.Firm -> Firm
+        }
+    }
+}
+
+val LocalKelvinShapes = staticCompositionLocalOf { KelvinShapeScale.Soft }
+
+/** Continuous-corner shapes for every role, in the scale the [KelvinTheme] picked. */
 object KelvinShapes {
-    val xs = ContinuousShape(8.dp)
-    val sm = ContinuousShape(12.dp)
-    val md = ContinuousShape(16.dp)
-    val lg = ContinuousShape(24.dp)
-    val tile = ContinuousShape(22.dp)
-    val xl = ContinuousShape(32.dp)
-    val full = CapsuleShape
+    val xs: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.xs
+    val sm: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.sm
+    val md: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.md
+    val lg: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.lg
+    val tile: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.tile
+    val xl: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.xl
+    val full: Shape get() = CapsuleShape
+    val control: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.control
+    val pill: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.pill
+    val sheet: Shape @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current.sheet
+    val scale: KelvinShapeScale @Composable @ReadOnlyComposable get() = LocalKelvinShapes.current
 }
 
 /**
@@ -134,8 +201,12 @@ class KelvinType private constructor(val fonts: KelvinFonts) {
     )
 
     // The sizes are set for the two faces, not for a system sans: Onest and Montserrat are wide, with
-    // a tall x-height, so they read a size larger than Roboto at the same sp. Reading text is 14,
-    // a row's title 15, and nothing a person reads in a sentence goes under 12.
+    // a tall x-height, so they read a size larger than Roboto at the same sp.
+    // The scale has ten sizes and no neighbours a point apart: 11 (marks only: an eyebrow, a badge),
+    // then 12, 14 and 16 for everything a person reads, then 20, 24, 28, 34, 44 and 56 for titles
+    // and figures. Reading text and a row's title are both 14, what explains them is 12, and a
+    // title is 16; nothing a person reads in a sentence goes under 12. Styles that share a size are
+    // told apart by face, weight and ink, never by a point of size.
     // Hierarchy is carried by the face as much as the size: everything that names or counts is
     // Onest, everything that explains is Montserrat. Figures are light and large; titles calm,
     // except the masthead, which is Black.
@@ -145,25 +216,25 @@ class KelvinType private constructor(val fonts: KelvinFonts) {
     val masthead = style(44, 50, 900, -0.035, display = true).copy(fontFamily = displayAt(900))
     val numeral = style(34, 40, 300, -0.03, display = true)
     val headline = style(20, 26, 600, -0.015, display = true)
-    val title = style(17, 22, 600, -0.01, display = true)
+    val title = style(16, 22, 600, -0.01, display = true)
     /** Top-level switch between a page's views (Apps, Widgets), as OriginOS sets it. */
     val tab = style(24, 30, 700, -0.02, display = true)
     /** Small uppercase label above a figure or a coloured card. */
     val eyebrow = style(11, 14, 700, 0.1, display = true)
     /** A section's name over its group. */
-    val section = style(13, 18, 600, -0.005, display = true)
+    val section = style(12, 16, 600, 0.0, display = true)
     /** The name of a thing inside a component: a notice, a toast, an album, a sender. */
-    val name = style(15, 20, 600, -0.01, display = true)
+    val name = style(14, 20, 600, -0.01, display = true)
     /** A button's or a confirm slider's words: an action is named, so it is set in the display face. */
     val action = style(14, 20, 600, -0.005, display = true)
     /** A small figure in a row, a list or on a control (a count, a time, a level). */
     val figure = style(14, 20, 500, -0.01, display = true)
     /** [style] with one width per digit, for a figure that ticks in place, such as a running timer. */
     fun ticking(style: TextStyle): TextStyle = style.copy(fontFeatureSettings = "tnum")
-    val rowTitle = style(15, 20, 500)
-    val label = style(13, 18, 600)
+    val rowTitle = style(14, 20, 500)
+    val label = style(12, 16, 600)
     val body = style(14, 20, 400)
-    val summary = style(13, 18, 400)
+    val summary = style(12, 18, 400)
     val caption = style(12, 16, 500, 0.01)
     val micro = style(11, 14, 600, 0.02)
 
@@ -176,15 +247,15 @@ class KelvinType private constructor(val fonts: KelvinFonts) {
     val material: KelvinMaterialType by lazy {
         KelvinMaterialType(
             displayLarge = hero,
-            displayMedium = style(40, 46, 600, -0.03, display = true),
-            displaySmall = style(32, 38, 600, -0.025, display = true),
+            displayMedium = style(44, 50, 600, -0.035, display = true),
+            displaySmall = style(34, 40, 600, -0.03, display = true),
             headlineLarge = display,
             headlineMedium = style(24, 30, 600, -0.02, display = true),
             headlineSmall = headline,
             titleLarge = title,
             titleMedium = name,
             titleSmall = section,
-            bodyLarge = style(15, 22, 400),
+            bodyLarge = body,
             bodyMedium = body,
             bodySmall = summary,
             labelLarge = action,

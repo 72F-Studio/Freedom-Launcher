@@ -48,7 +48,7 @@ fun KelvinFolderRow(
     val ink = if (selected) c.onAccentSoft else c.ink
     val indent = 16.dp + 20.dp * depth.coerceIn(0, 6)
     // Concentric with the well it sits in (well radius minus the gap), else Kelvin's medium corner.
-    val shape = LocalGroupInnerRadius.current?.let { ContinuousShape(it) } ?: KelvinShapes.md
+    val shape = LocalGroupInnerRadius.current?.let { ContinuousShape(it, KelvinShapes.scale.smoothing) } ?: KelvinShapes.md
     Row(
         // In a group the divider starts where the name does: past the indent and the glyph.
         modifier.groupDividerInset(indent + if (icon != null) 34.dp else 0.dp).fillMaxWidth().heightIn(min = 42.dp)
@@ -60,7 +60,7 @@ fun KelvinFolderRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (icon != null) KIcon(icon, null, size = 22.dp, color = if (selected) c.onAccentSoft else c.ink2)
+        if (icon != null) KIcon(icon, null, size = 22.dp, color = if (selected) c.onAccentSoft else c.ink2, style = IconStyle.of(selected))
         KText(
             name,
             Modifier.weight(1f),

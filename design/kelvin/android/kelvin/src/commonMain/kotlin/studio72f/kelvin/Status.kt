@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -80,7 +81,7 @@ internal fun Tone.base(): Color {
 fun KelvinPill(text: String, modifier: Modifier = Modifier, tone: Tone = Tone.Neutral, icon: ImageVector? = null) {
     val t = tone.colors()
     Row(
-        modifier.height(26.dp.withTextScale(Kelvin.type.caption.lineHeight)).background(t.fill, CapsuleShape).padding(horizontal = 10.dp),
+        modifier.height(26.dp.withTextScale(Kelvin.type.caption.lineHeight)).background(t.fill, KelvinShapes.pill).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -191,7 +192,13 @@ fun KelvinEmptyState(
     }
 }
 
-/** Filled text field: label above, grey box, accent border on focus, critical border and message on error. */
+/**
+ * Filled text field: label above, grey box, accent border on focus, critical border and message on error.
+ *
+ * [trailing] is one control at the field's end, inside it: the eye that shows a [secret] value, a clear. Give it a
+ * [KelvinIconButton] of [IconButtonKind.Plain]; the app decides what a tap does (a saved password may ask for the
+ * screen lock before it shows). [contentType] tells the system's autofill what the field holds.
+ */
 @Composable
 fun KelvinTextField(
     value: String,
@@ -203,6 +210,8 @@ fun KelvinTextField(
     error: String? = null,
     secret: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    contentType: androidx.compose.ui.autofill.ContentType? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = Kelvin.colors
     var focused by remember { mutableStateOf(false) }
@@ -217,18 +226,23 @@ fun KelvinTextField(
             keyboardOptions = keyboardOptions,
             visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
-                .semantics { if (error != null) error(error) },
+                .semantics {
+                    if (error != null) error(error)
+                    if (contentType != null) this.contentType = contentType
+                },
             decorationBox = { field ->
                 Row(
                     Modifier.fillMaxWidth().height(KelvinSizes.field.withTextScale(Kelvin.type.body.lineHeight)).clip(KelvinShapes.md)
                         .background(if (focused) c.group else c.sunken)
                         .border(2.dp, when { error != null -> c.critical; focused -> c.accent; else -> Color.Transparent }, KelvinShapes.md)
-                        .padding(horizontal = 16.dp),
+                        // A trailing control brings its own 48dp target; its glyph then stands where the gutter would end.
+                        .padding(start = 16.dp, end = if (trailing != null) 2.dp else 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (trailing != null) 4.dp else 12.dp),
                 ) {
-                    if (icon != null) KIcon(icon, null, size = 20.dp, color = c.ink2)
+                    if (icon != null) KIcon(icon, null, Modifier.padding(end = if (trailing != null) 8.dp else 0.dp), size = 20.dp, color = c.ink2)
                     Box(Modifier.weight(1f)) { field() }
+                    if (trailing != null) trailing()
                 }
             },
         )

@@ -118,7 +118,7 @@ fun KelvinFormatBar(actions: List<FormatAction>, modifier: Modifier = Modifier, 
                     .semantics { contentDescription = a.label; stateDescription = if (a.active) "on" else "off" }
                     .background(fill, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { KIcon(a.icon, null, size = 20.dp, color = if (a.active) c.onAccentSoft else c.ink) }
+            ) { KIcon(a.icon, null, size = 20.dp, color = if (a.active) c.onAccentSoft else c.ink, style = IconStyle.of(a.active)) }
         }
     }
 }

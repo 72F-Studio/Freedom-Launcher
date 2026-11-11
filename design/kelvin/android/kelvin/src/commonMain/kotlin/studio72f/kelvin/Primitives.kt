@@ -81,15 +81,17 @@ fun KIcon(
     /** Overrides the theme's icon style for this glyph (an empty star stays an outline). */
     style: IconStyle? = null,
 ) {
-    // Kelvin draws icons filled (solid glyphs sit with the glass tiles' coloured shapes); the
-    // theme can switch to outline. Glyphs Tabler has no filled form of stay lines either way.
+    // Filled is a state: a glyph is a 1.5 line at rest and fills only where it is the chosen or
+    // active one (the current tab, an on toggle, a starred item). Glyphs Tabler has no filled
+    // form of stay lines either way.
     val filled = (style ?: LocalIconStyle.current) == IconStyle.Filled
     val shown = if (filled) KelvinIcons.filled(icon) else icon
     // A filled glyph carries far more ink than a stroke, so one set in plain ink (or the glass's
     // secondary ink, as on the dock) is drawn well toward the page, as light as it can go and still hold 3:1
-    // on the group grey. Coloured and white icons keep their colour.
+    // on the group grey. Coloured and white icons keep their colour. A glyph with no filled form (Back's arrow, the
+    // chevrons) is still a thin line and keeps full ink, or it reads as disabled, worst in dark mode.
     val c = Kelvin.colors
-    val tint = if (filled && (color == c.ink || color == c.glassInk2)) androidx.compose.ui.graphics.lerp(color, c.canvas, 0.6f).legibleOn(c.group, 3f) else color
+    val tint = if (filled && shown !== icon && (color == c.ink || color == c.glassInk2)) androidx.compose.ui.graphics.lerp(color, c.canvas, 0.6f).legibleOn(c.group, 3f) else color
     Image(
         painter = rememberVectorPainter(shown),
         contentDescription = contentDescription,
@@ -374,8 +376,9 @@ fun Modifier.horizon(strength: Float = 1f, circadian: Boolean = true, animate: B
     val still = Kelvin.reduceMotion || LocalKelvinAccessibility.current.powerSave
     androidx.compose.runtime.LaunchedEffect(animate, still) {
         if (!animate || still) return@LaunchedEffect
-        val start = androidx.compose.runtime.withFrameMillis { it } - (time.floatValue * 1000f).toLong()
-        while (true) androidx.compose.runtime.withFrameMillis { time.floatValue = (it - start) / 1000f }
+        // An endless animation, and said to be one, so a UI test waiting for the screen to settle is not kept waiting.
+        val start = androidx.compose.animation.core.withInfiniteAnimationFrameMillis { it } - (time.floatValue * 1000f).toLong()
+        while (true) androidx.compose.animation.core.withInfiniteAnimationFrameMillis { time.floatValue = (it - start) / 1000f }
     }
     val c = Kelvin.colors
     val accent = c.horizon.copy(alpha = 1f)
@@ -612,7 +615,14 @@ fun Modifier.kelvinClick(onClick: () -> Unit, enabled: Boolean = true, onClickLa
     clickable(interactionSource = null, indication = null, enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
         .graphicsLayer { alpha = if (enabled) 1f else KelvinMotion.DISABLED_ALPHA }
 
-/** How [KIcon] draws glyphs: [Filled] (Kelvin's default) or [Outline], Tabler's 1.5 stroke. */
-enum class IconStyle { Filled, Outline }
+/** How [KIcon] draws glyphs: [Outline], Tabler's 1.5 stroke, at rest; [Filled] for what is chosen or on. */
+enum class IconStyle {
+    Filled, Outline;
 
-val LocalIconStyle = androidx.compose.runtime.staticCompositionLocalOf { IconStyle.Filled }
+    companion object {
+        /** The style for a glyph that marks a state: filled while [active], a line otherwise. */
+        fun of(active: Boolean): IconStyle = if (active) Filled else Outline
+    }
+}
+
+val LocalIconStyle = androidx.compose.runtime.staticCompositionLocalOf { IconStyle.Outline }

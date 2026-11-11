@@ -137,9 +137,9 @@ fun KelvinPageHeader(
  * at rest to 1 once the title has landed; [collapsed] is true from then on.
  */
 @Stable
-class KelvinReach internal constructor() {
+class KelvinReach internal constructor(landed: Boolean = false) {
     /** 0 at rest, 1 once the title has landed in the top bar. */
-    var progress by androidx.compose.runtime.mutableFloatStateOf(0f)
+    var progress by androidx.compose.runtime.mutableFloatStateOf(if (landed) 1f else 0f)
         internal set
 
     /** The title has landed in the top bar (or the opening has left a lazy list). */
@@ -149,8 +149,19 @@ class KelvinReach internal constructor() {
     internal var openingPx by androidx.compose.runtime.mutableFloatStateOf(0f)
 }
 
+/**
+ * The reach state of a page. Whether the title had landed is kept across a recreation (a theme
+ * change, a rotation, a return from another screen): a page that comes back already scrolled has
+ * no opening on screen to say where the title is, so the bar would otherwise draw the masthead
+ * over the list. An opening that is on screen sets the real position as soon as it is placed.
+ */
 @Composable
-fun rememberKelvinReach(): KelvinReach = remember { KelvinReach() }
+fun rememberKelvinReach(): KelvinReach = androidx.compose.runtime.saveable.rememberSaveable(saver = KelvinReachSaver) { KelvinReach() }
+
+private val KelvinReachSaver = androidx.compose.runtime.saveable.Saver<KelvinReach, Boolean>(
+    save = { it.collapsed },
+    restore = { KelvinReach(landed = it) },
+)
 
 /** The masthead's weight at rest and once it has landed in the bar. */
 private const val MastheadBlack = 900
@@ -206,6 +217,11 @@ fun KelvinReachHeader(
  * [KelvinReachHeader] at rest, shrinking, slimming to 600 and sliding to the top-start corner as
  * the page scrolls, where it lands at `title` size on the veil, which fades in under it. [actions] (up to two circles)
  * stay at the top-end throughout.
+ *
+ * [pinned] is what the page holds under the title once the list has carried its own copy away
+ * (filter pills, tabs): pass it only while it should show. It sits inside this bar's veil, so the
+ * veil reaches down past it and the pills stay sharp on top; a second header laid under this
+ * one would have this bar's veil blurring over it.
  */
 @Composable
 fun KelvinReachBar(
@@ -213,6 +229,7 @@ fun KelvinReachBar(
     reach: KelvinReach,
     backdrop: KelvinBackdrop,
     modifier: Modifier = Modifier,
+    pinned: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val density = LocalDensity.current
@@ -231,6 +248,7 @@ fun KelvinReachBar(
     }
     val family = Kelvin.type.displayAt(weight)
     KelvinVeiledHeader(backdrop, modifier.fillMaxWidth(), veilAlpha = { smoothstep(0.55f, 1f, reach.progress) }) {
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().height(ReachBarHeight)) {
             val width = constraints.maxWidth.toFloat()
             val ink = LocalVeilInk.current.takeOrElse { Kelvin.colors.ink }
@@ -264,6 +282,8 @@ fun KelvinReachBar(
                 softWrap = false,
             )
             Row(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) { actions() }
+        }
+        pinned?.invoke()
         }
     }
 }
@@ -560,7 +580,7 @@ fun KelvinDock(
                                 // Placed, not stacked: as the droplet arrives the icon glides up and the
                                 // name fades in beneath it, so nothing reflows and nothing jumps.
                                 Box(Modifier.align(Alignment.Center).offset(y = (-8).dp * smoothstep(0.6f, 1f, near))) {
-                                    KIcon(item.icon, null, size = 24.dp, color = tint)
+                                    KIcon(item.icon, null, size = 24.dp, color = tint, style = IconStyle.of(near > 0.5f))
                                     if (item.badge) Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-1).dp).size(8.dp).clip(CircleShape).background(c.accent))
                                 }
                                 // The name shows only while the droplet mostly covers its tab, and only in
@@ -583,7 +603,7 @@ fun KelvinDock(
                                 verticalArrangement = Arrangement.Center,
                             ) {
                                 Box {
-                                    KIcon(item.icon, null, size = if (mode == DockLabels.Never) 26.dp else 24.dp, color = tint)
+                                    KIcon(item.icon, null, size = if (mode == DockLabels.Never) 26.dp else 24.dp, color = tint, style = IconStyle.of(near > 0.5f))
                                     if (item.badge) Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-1).dp).size(8.dp).clip(CircleShape).background(c.accent))
                                 }
                                 // Active: only the tab under the droplet is named, its name fading in as
@@ -685,7 +705,7 @@ fun KelvinActionOrb(
                 Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press).then(press.gestures),
             ),
         contentAlignment = Alignment.Center,
-    ) { KIcon(icon, contentDescription, size = 26.dp, color = c.accent.iconInk()) }
+    ) { KIcon(icon, contentDescription, size = 26.dp, color = c.accent.iconInk(), style = IconStyle.Filled) }
 }
 
 /**
@@ -757,7 +777,7 @@ fun KelvinTabs(
                 .width(with(density) { w.value.toDp() })
                 .height(pillHeight)
                 .graphicsLayer { scaleX = 1f + speed; scaleY = 1f - speed * 0.4f }
-                .kelvinPill(selected = true, backdrop, CapsuleShape),
+                .kelvinPill(selected = true, backdrop, KelvinShapes.pill),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             tabs.forEachIndexed { i, tab ->
@@ -775,13 +795,13 @@ fun KelvinTabs(
                         .height(pillHeight)
                         .onGloballyPositioned { bounds[i] = it.positionInParent().x to it.size.width.toFloat(); if (i == tabs.lastIndex) placed = true }
                         .semantics(mergeDescendants = true) { this.selected = on; contentDescription = spoken }
-                        .kelvinPull({ onSelect(i) }, role = Role.Tab, shape = CapsuleShape, wash = false)
-                        .then(if (!on) Modifier.kelvinPill(selected = false, backdrop, CapsuleShape) else Modifier)
+                        .kelvinPull({ onSelect(i) }, role = Role.Tab, shape = KelvinShapes.pill, wash = false)
+                        .then(if (!on) Modifier.kelvinPill(selected = false, backdrop, KelvinShapes.pill) else Modifier)
                         .padding(start = if (tab.icon != null) 11.dp else 14.dp, end = if (tab.count != null && tab.alert) 7.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (tab.icon != null) KIcon(tab.icon, null, size = 16.dp, color = ink)
+                    if (tab.icon != null) KIcon(tab.icon, null, size = 16.dp, color = ink, style = IconStyle.of(cover > 0.5f))
                     KText(
                         tab.label,
                         style = Kelvin.type.label.copy(fontWeight = if (cover > 0.5f) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
@@ -822,6 +842,8 @@ fun KelvinSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Uni
     val scope = rememberCoroutineScope()
     val pick by rememberUpdatedState(onSelect)
     val current by rememberUpdatedState(selected)
+    // The thumb sits concentrically in the track: the track's corner less its 3dp padding.
+    val thumb = KelvinShapes.scale.let { ContinuousShape(it.mdRadius - 3.dp, it.smoothing) }
     BoxWithConstraints(modifier.fillMaxWidth().height(KelvinSizes.segmented.withTextScale(Kelvin.type.label.lineHeight)).clip(KelvinShapes.md).background(c.sunken).padding(3.dp)) {
         val slot: Dp = maxWidth / options.size
         val slotPx = constraints.maxWidth.toFloat() / options.size
@@ -856,13 +878,13 @@ fun KelvinSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Uni
                 .graphicsLayer { scaleX = 1f + speed; scaleY = 1f - speed * 0.3f }
                 // Seated in a clipped well: no glow, which the track would cut into a hard band.
                 // A quiet thumb: a white stone on the grey track (a step lighter in dark).
-                .lift(ContinuousShape(13.dp)),
+                .lift(thumb),
         )
         Row(Modifier.fillMaxSize().then(dragInput)) {
             options.forEachIndexed { i, o ->
                 Box(
                     Modifier.weight(1f).fillMaxHeight().semantics { this.selected = i == selected }
-                        .kelvinPress({ if (i != selected) haptics.tick(); onSelect(i) }, role = Role.Tab, shape = ContinuousShape(13.dp)),
+                        .kelvinPress({ if (i != selected) haptics.tick(); onSelect(i) }, role = Role.Tab, shape = thumb),
                     contentAlignment = Alignment.Center,
                 ) {
                     // The label under the thumb is ink and semibold; the others are ink-2. Both
@@ -901,7 +923,7 @@ fun KelvinSearchField(
             Row(
                 // A sunken well inside groups; a glass capsule when it floats over content.
                 Modifier.fillMaxSize()
-                    .then(if (backdrop != null) Modifier.glass(backdrop, CapsuleShape) else Modifier.background(c.sunken, CapsuleShape))
+                    .then(if (backdrop != null) Modifier.glass(backdrop, KelvinShapes.control) else Modifier.background(c.sunken, KelvinShapes.control))
                     .padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

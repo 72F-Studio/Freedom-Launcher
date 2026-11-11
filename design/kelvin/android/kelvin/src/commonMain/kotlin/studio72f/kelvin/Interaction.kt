@@ -168,6 +168,7 @@ fun <T> KelvinReorderList(
                         },
                     )
                 }
+                val liftShape = KelvinShapes.md
                 Box(
                     Modifier
                         .onSizeChanged { heights[i] = it.height }
@@ -177,7 +178,7 @@ fun <T> KelvinReorderList(
                             val s = 1f + 0.03f * lift
                             scaleX = s; scaleY = s
                             shadowElevation = 12.dp.toPx() * lift
-                            shape = KelvinShapes.md
+                            shape = liftShape
                             clip = lift > 0.01f
                         }
                         .semantics {

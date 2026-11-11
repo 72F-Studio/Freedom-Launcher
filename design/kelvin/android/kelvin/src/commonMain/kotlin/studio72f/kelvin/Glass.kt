@@ -358,10 +358,10 @@ fun Modifier.lift(shape: Shape): Modifier = composed {
     this.then(if (dark || flat) Modifier else Modifier.shadow(2.dp, shape, ambientColor = c.glassEdge, spotColor = c.glassEdge))
         .then(Modifier.drawBehind {
             drawOutline(shape.createOutline(size, layoutDirection, this), c.lift)
-            // Light mode only (in dark the fill is already a step lighter than the page). Flat: a
-            // hairline holds the edge where the shadow did. Otherwise a fine edge as on a white
-            // button: a white pill on a white page was a shadow with no shape.
-            if (dark) Unit else if (flat) drawInsetEdge(shape, c.hairline, 1.dp.toPx()) else drawInsetEdge(shape, c.glassEdge, 0.5.dp.toPx())
+            // Light mode only (in dark the fill is already a step lighter than the page). A fine
+            // edge as on a white button: a white pill on a white page was a shadow with no shape.
+            // Flat draws none: it is strokeless, and the thumb stands on its track by its fill.
+            if (!dark && !flat) drawInsetEdge(shape, c.glassEdge, 0.5.dp.toPx())
         })
 }
 

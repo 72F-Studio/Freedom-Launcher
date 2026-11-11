@@ -168,8 +168,8 @@ fun KelvinRecipientPill(
     Row(
         modifier
             .heightIn(min = 36.dp.withTextScale(Kelvin.type.label.lineHeight))
-            .then(if (onEdit != null) Modifier.kelvinPull(onEdit, onClickLabel = editLabel, shape = CapsuleShape, wash = false) else Modifier)
-            .background(c.sunken, CapsuleShape)
+            .then(if (onEdit != null) Modifier.kelvinPull(onEdit, onClickLabel = editLabel, shape = KelvinShapes.pill, wash = false) else Modifier)
+            .background(c.sunken, KelvinShapes.pill)
             .padding(start = 4.dp, end = if (onRemove != null) 2.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

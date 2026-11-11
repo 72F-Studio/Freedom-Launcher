@@ -240,7 +240,7 @@ fun KelvinChip(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (on) KIcon(KelvinIcons.Check, null, size = 16.dp, color = ink)
-        else if (icon != null) KIcon(icon, null, size = 16.dp, color = ink)
+        else if (icon != null) KIcon(icon, null, size = 16.dp, color = ink, style = IconStyle.of(on))
         KText(text, style = Kelvin.type.label.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), color = ink, maxLines = 1)
         if (onRemove != null) Box(
             Modifier.size(28.dp).kelvinPull(onRemove, onClickLabel = removeLabel, shape = CircleShape)

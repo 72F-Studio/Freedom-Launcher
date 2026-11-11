@@ -85,11 +85,16 @@ fun KelvinButton(
     backdrop: KelvinBackdrop? = null,
 ) {
     val c = Kelvin.colors
+    // Flat has no bevel or glow to carry a soft tint, and the soft fill is nearly the group grey's
+    // lightness, so there Tinted is the accent's pastel: a step deeper, its words held to 4.5:1.
+    val tinted = if (Kelvin.finish == KelvinFinish.Flat) pastelOf(c.accent).let { it.fill to it.ink } else c.accentSoft to c.onAccentSoft
     val (bg, fg) = when (kind) {
         ButtonKind.Primary -> c.accent to c.onAccent
-        ButtonKind.Tinted -> c.accentSoft to c.onAccentSoft
-        // White on a soft shadow in light mode, like the glass buttons; a grey step in dark.
-        ButtonKind.Secondary -> (if (Kelvin.dark) c.sunken else c.lift) to c.ink
+        ButtonKind.Tinted -> tinted
+        // White on a soft shadow in light mode, like the glass buttons; a grey step in dark. Flat has
+        // no shadow or outline to hold a white button, so there it is a grey that stands by its fill
+        // (the pebble makes a page-white fill the sunken grey in light).
+        ButtonKind.Secondary -> (if (!Kelvin.dark) c.lift else if (Kelvin.finish == KelvinFinish.Flat) c.raised else c.sunken) to c.ink
         ButtonKind.Text -> Color.Transparent to c.accent.legibleOn(c.group)
         // Destructive: solid true red with white text, never a soft wash. It is a warning and
         // must read as one at a glance, apart from the accent.
@@ -105,24 +110,25 @@ fun KelvinButton(
     val stained = kind != ButtonKind.Glass && kind != ButtonKind.Text && kind != ButtonKind.Primary && backdrop != null
     // Every button but Text is a pebble: glass ones domed glass, the rest solid domed stones.
     val surface = if (kind == ButtonKind.Glass) {
-        Modifier.glass(backdrop, CapsuleShape, thaw = thaw, motion = press.layerBlock, pebble = press).then(press.gestures)
+        Modifier.glass(backdrop, KelvinShapes.control, thaw = thaw, motion = press.layerBlock, pebble = press).then(press.gestures)
     } else if (stained) {
-        Modifier.glass(backdrop, CapsuleShape, GlassContent.Colored, tint = bg, motion = press.layerBlock, pebble = press).then(press.gestures)
+        Modifier.glass(backdrop, KelvinShapes.control, GlassContent.Colored, tint = bg, motion = press.layerBlock, pebble = press).then(press.gestures)
     } else if (kind == ButtonKind.Text) {
-        Modifier.clip(CapsuleShape)
+        Modifier.clip(KelvinShapes.control)
     } else {
-        Modifier.pebbleMotion(press).pebble(CapsuleShape, bg, press)
+        Modifier.pebbleMotion(press).pebble(KelvinShapes.control, bg, press)
     }
     Row(
         modifier
             .height(if (large) KelvinSizes.buttonLarge else KelvinSizes.button)
-            .then(if (kind != ButtonKind.Text) Modifier.kelvinClick(onClick, enabled) else Modifier.kelvinPull(onClick, enabled, shape = CapsuleShape))
+            .then(if (kind != ButtonKind.Text) Modifier.kelvinClick(onClick, enabled) else Modifier.kelvinPull(onClick, enabled, shape = KelvinShapes.control))
             .then(surface)
             .padding(horizontal = if (kind == ButtonKind.Text) KelvinSizes.textButtonPadding else KelvinSizes.buttonPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) KIcon(icon, null, size = 18.dp, color = fg)
+        // A call to action (a solid primary or danger button) carries a filled glyph; quieter buttons a line.
+        if (icon != null) KIcon(icon, null, size = 18.dp, color = fg, style = IconStyle.of(kind == ButtonKind.Primary || kind == ButtonKind.Danger))
         KText(text, style = if (large) Kelvin.type.action.copy(fontSize = Kelvin.type.rowTitle.fontSize) else Kelvin.type.action, color = fg, maxLines = 1)
     }
 }
@@ -164,7 +170,7 @@ fun KelvinIconButton(
                 else Modifier.pebbleMotion(press).pebble(CircleShape, c.accent, press)
         }
         Box(Modifier.size(40.dp).then(disc), contentAlignment = Alignment.Center) {
-            KIcon(icon, contentDescription, size = if (kind == IconButtonKind.Plain) 22.dp else 24.dp, color = if (kind == IconButtonKind.Accent) c.accent.iconInk() else c.ink)
+            KIcon(icon, contentDescription, size = if (kind == IconButtonKind.Plain) 22.dp else 24.dp, color = if (kind == IconButtonKind.Accent) c.accent.iconInk() else c.ink, style = IconStyle.of(kind == IconButtonKind.Accent))
         }
     }
 }
@@ -573,8 +579,8 @@ fun KelvinControlCapsule(
             modifier
                 .height(56.dp)
                 .then(
-                    if (backdrop != null) Modifier.glass(backdrop, CapsuleShape, GlassContent.Colored, tint = c.raised, isPebble = true, motion = press.layerBlock, pebble = press).then(press.gestures)
-                    else Modifier.pebbleMotion(press).pebble(CapsuleShape, c.raised, press),
+                    if (backdrop != null) Modifier.glass(backdrop, KelvinShapes.control, GlassContent.Colored, tint = c.raised, isPebble = true, motion = press.layerBlock, pebble = press).then(press.gestures)
+                    else Modifier.pebbleMotion(press).pebble(KelvinShapes.control, c.raised, press),
                 )
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

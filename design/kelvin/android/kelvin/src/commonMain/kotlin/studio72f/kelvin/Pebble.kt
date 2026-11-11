@@ -124,7 +124,8 @@ internal fun pebbleRim(minSide: Float, density: Float): Float = minOf(minSide * 
  * A pale or neutral fill (white, grey, a soft tint) has a plain face: the bevel's light has nothing
  * to show against on a near-white stone, where it read as a puffy, smudged edge. It is a clean fill
  * with a fine edge on the same whisper of shadow. Under [KelvinFinish.Flat] every fill is plain,
- * with no shadow at all: a neutral one takes a hairline, and a press dims it in place.
+ * with no shadow and no outline: a neutral one as light as the page takes the sunken grey, so it
+ * stands by its fill on the page and in a group, and a press dims it in place.
  */
 fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow: Boolean = true): Modifier = composed {
     val dark = Kelvin.dark
@@ -138,7 +139,16 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
     val vividness = remember(color) { smoothstep(0.05f, 0.12f, color.chroma()) }
     // Chroma pushed to the edge of sRGB at the same lightness: brightening a light accent such as
     // Glacier would wash out the white label.
-    val fill = remember(color, vividness) { if (vividness >= 1f) color.vivid(lift = 0f) else color }
+    // Flat is strokeless: a neutral stone that would vanish on a light page is the sunken grey.
+    val neutral = glow && color.chroma() < 0.02f
+    val sunk = colors.sunken
+    val fill = remember(color, vividness, flat, dark, sunk) {
+        when {
+            flat && neutral && !dark && color.luminance() > sunk.luminance() -> sunk
+            vividness >= 1f -> color.vivid(lift = 0f)
+            else -> color
+        }
+    }
     // One shader per pebble for its whole life: parsing the AGSL source is the expensive part, so
     // it is never rebuilt when the pebble resizes or its colour changes; only uniforms update.
     // Only a coloured stone is lit in the bevel; pale and neutral ones, and every Flat one, are plain.
@@ -147,8 +157,7 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
     // A grey or white fill needs an edge to stand on a page of nearly its own tone. Knobs (no
     // glow) sit on a track that already shows them.
     val edge = when {
-        !glow || color.chroma() >= 0.02f -> null
-        flat -> colors.hairline
+        !neutral || flat -> null
         plain -> colors.glassEdge
         else -> null
     }
@@ -172,7 +181,7 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
         onDrawBehind {
             if (plain) {
                 drawOutline(outline, color)
-                if (edge != null) drawInsetEdge(shape, edge, (if (flat) 1.dp else 0.5.dp).toPx())
+                if (edge != null) drawInsetEdge(shape, edge, 0.5.dp.toPx())
                 press?.run { if (flat) drawPressDim(outline, colors.ink) else drawPressLight(outline, lift) }
                 return@onDrawBehind
             }
@@ -190,13 +199,20 @@ fun Modifier.pebble(shape: Shape, color: Color, press: GlassPress? = null, glow:
                     strength = if (dark) 0.25f + 0.3f * vividness else 1f,
                     rim = if (matte) 0f else if (dark) 0.2f + 0.3f * vividness else 0.8f,
                     heat = heat,
-                    heatAmount = (if (dark) 0.28f else 0.12f) * (if (glow) 1f else 0f),
+                    heatAmount = heatThread(dark) * (if (glow) 1f else 0f),
                 )
             }
             press?.run { drawPressLight(outline, lift) }
         }
     }
 }
+
+/**
+ * How much of the accent's temperature shows along a control's bottom rim: a hint that finishes
+ * the stone, never the first thing seen on it. Dark takes more than light because the thread is
+ * the only warm thing on a dark control, but not so much that a row of buttons reads as lit.
+ */
+internal fun heatThread(dark: Boolean): Float = if (dark) 0.16f else 0.09f
 
 /** The press physics of [press] applied to this element, for pebbles without glass. */
 fun Modifier.pebbleMotion(press: GlassPress): Modifier = graphicsLayer(press.layerBlock).then(press.gestures)

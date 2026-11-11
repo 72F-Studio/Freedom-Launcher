@@ -61,7 +61,7 @@ fun KelvinPlanMark(plan: String, modifier: Modifier = Modifier, compact: Boolean
         return
     }
     Row(
-        modifier.background(c.accentSoft, CapsuleShape).padding(start = 6.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
+        modifier.background(c.accentSoft, KelvinShapes.pill).padding(start = 6.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
             .semantics(mergeDescendants = true) { contentDescription = plan },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -235,7 +235,7 @@ private fun brandSurface(accent: Color): Brush = Brush.linearGradient(
 @Composable
 private fun BrandChip(text: String, icon: ImageVector, fill: Color, ink: Color) {
     Row(
-        Modifier.background(fill, CapsuleShape).padding(start = 6.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+        Modifier.background(fill, KelvinShapes.pill).padding(start = 6.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
@@ -249,7 +249,7 @@ private fun BrandChip(text: String, icon: ImageVector, fill: Color, ink: Color) 
 @Composable
 private fun BrandTextAction(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.heightIn(min = KelvinSizes.touch).kelvinPress(onClick, shape = CapsuleShape, role = Role.Button)
+        Modifier.heightIn(min = KelvinSizes.touch).kelvinPress(onClick, shape = KelvinShapes.control, role = Role.Button)
             .padding(horizontal = KelvinSizes.textButtonPadding),
         contentAlignment = Alignment.Center,
     ) { KText(text, style = Kelvin.type.action, color = BrandInk, maxLines = 1) }

@@ -40,6 +40,11 @@ kotlin {
             resources.srcDir("src/androidMain/res")
             resources.include("font/*_?00.ttf", "raw/*.txt")
         }
+        // Draws Kelvin without a screen, to compare variants side by side (CornersRenderTest).
+        named("desktopTest").dependencies {
+            implementation(kotlin("test"))
+            implementation(compose.desktop.currentOs)
+        }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(project.dependencies.platform(libs.androidx.compose.bom))
@@ -51,4 +56,9 @@ kotlin {
             implementation(libs.vitro)
         }
     }
+}
+
+// `-Dkelvin.screenshots=<dir>` saves the off-screen renders there (CornersRenderTest).
+tasks.withType<Test>().configureEach {
+    System.getProperty("kelvin.screenshots")?.let { systemProperty("kelvin.screenshots", it) }
 }

@@ -118,14 +118,17 @@ fun KelvinGroup(
     val fill = Kelvin.colors.group
     val line = Kelvin.colors.ink.copy(alpha = if (Kelvin.dark) 0.08f else 0.06f)
     val dividers = remember { GroupDividers() }
+    val wellRadius = KelvinShapes.scale.lgRadius
+    val smoothing = KelvinShapes.scale.smoothing
+    val wellShape = KelvinShapes.lg
     CompositionLocalProvider(
         LocalInKelvinGroup provides true,
-        LocalGroupInnerRadius provides if (evenGap) WellRadius - WellInset - contentPadding else null,
+        LocalGroupInnerRadius provides if (evenGap) wellRadius - WellInset - contentPadding else null,
     ) {
         Layout(
             content = { GroupScope.content() },
             modifier = modifier.padding(horizontal = gutter).fillMaxWidth().drawBehind {
-                drawOutline(WellShape.createOutline(size, layoutDirection, this), fill)
+                drawOutline(wellShape.createOutline(size, layoutDirection, this), fill)
                 val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
                 val end = 16.dp.toPx()
                 for (i in 0 until dividers.count) {
@@ -159,7 +162,7 @@ fun KelvinGroup(
                         dividers.add(y.toFloat(), dividerInset.toPx() + if (evenGap) side else 0)
                     }
                     // Only the first and last rows meet the well's corners; a press stays inside them.
-                    val shape = SegmentShape(if (n == 0) WellRadius - WellInset else 0.dp, if (n == shown.lastIndex) WellRadius - WellInset else 0.dp)
+                    val shape = SegmentShape(if (n == 0) wellRadius - WellInset else 0.dp, if (n == shown.lastIndex) wellRadius - WellInset else 0.dp, smoothing)
                     val tile = p.height + 2 * pad
                     if (pad == 0) p.placeWithLayer(0, y) { this.shape = shape; clip = true } else p.place(side, y + pad)
                     y += tile
@@ -173,9 +176,7 @@ fun KelvinGroup(
 /** The corner radius that sits concentrically inside a group's well; null outside an [evenGap] group. */
 internal val LocalGroupInnerRadius = androidx.compose.runtime.compositionLocalOf<androidx.compose.ui.unit.Dp?> { null }
 
-// One continuous well per group, as on HyperOS 4.
-private val WellRadius = 24.dp
-private val WellShape = ContinuousShape(WellRadius)
+// One continuous well per group, as on HyperOS 4, at the scale's large corner.
 private val WellInset = 4.dp
 
 /** True inside a [KelvinGroup], which draws the dividers between its children itself. */
@@ -278,7 +279,7 @@ fun KelvinTile(
     val local = rememberKelvinBackdrop()
     Column(modifier.kelvinPress(onClick, shape = KelvinShapes.tile)) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
-            val shape = if (badge != null) NotchedShape(22.dp, 44.dp) else KelvinShapes.tile
+            val shape = if (badge != null) NotchedShape(KelvinShapes.scale.tileRadius, 44.dp) else KelvinShapes.tile
             Box(Modifier.fillMaxSize().clip(shape).kelvinBackdrop(local), content = cover)
             if (badge != null) {
                 Box(
@@ -473,7 +474,7 @@ fun KelvinMessageRow(
                 // Times follow the figure grammar: an accent colon when unread, a quiet one when read.
                 val timeStyle = Kelvin.type.figure.copy(fontSize = Kelvin.type.summary.fontSize, fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium)
                 if (time.any { it.isDigit() }) KelvinFigure(time, style = timeStyle, color = if (unread) c.ink else c.ink2, mark = if (unread) c.figureAccent else c.ink3, unit = c.ink2, rolling = false)
-                else KText(time, style = timeStyle, color = if (unread) c.accent else c.ink2)
+                else KText(time, style = timeStyle, color = if (unread) c.ink else c.ink2)
                 // Trailing: the dot sits after the time.
                 if (unread && mark == UnreadMark.Trailing) Box(Modifier.padding(start = 6.dp).size(8.dp).clip(CircleShape).background(c.accent))
             }

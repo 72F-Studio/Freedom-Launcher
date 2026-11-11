@@ -226,7 +226,7 @@ actual fun Modifier.glass(
         set("finish", floatArrayOf(if (dark) 0.55f else 1f))
         set("grain", floatArrayOf(if (dark) 0.014f else 0.018f))
         set("heat", floatArrayOf(colors.glassHeat.red, colors.glassHeat.green, colors.glassHeat.blue))
-        set("heatAmt", floatArrayOf(if (dark) 0.28f else 0.12f))
+        set("heatAmt", floatArrayOf(heatThread(dark)))
     }
     val shadowSpec = when {
         // Light through stained glass lands on the page in the glass's colour: a soft

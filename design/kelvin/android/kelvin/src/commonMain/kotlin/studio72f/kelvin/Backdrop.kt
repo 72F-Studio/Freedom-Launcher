@@ -120,8 +120,8 @@ internal fun PastelNotice(
             }
             if (actionText != null && onAction != null) {
                 Box(
-                    Modifier.padding(top = 12.dp).heightIn(min = 44.dp).background(button, CapsuleShape)
-                        .kelvinPress(onAction, shape = CapsuleShape).padding(horizontal = 20.dp),
+                    Modifier.padding(top = 12.dp).heightIn(min = 44.dp).background(button, KelvinShapes.control)
+                        .kelvinPress(onAction, shape = KelvinShapes.control).padding(horizontal = 20.dp),
                     Alignment.Center,
                 ) {
                     KText(actionText, style = Kelvin.type.action.copy(fontWeight = FontWeight.SemiBold), color = c.onAccent)

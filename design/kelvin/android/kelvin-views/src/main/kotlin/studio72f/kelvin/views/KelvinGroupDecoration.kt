@@ -29,11 +29,13 @@ class KelvinGroupDecoration(
     textStartDp: Int = 16,
     /** The margin either side of the well: 16dp, or the app's own. */
     gutterDp: Int = 16,
+    /** The well's corner: [SOFT_RADIUS_DP] (Kelvin's own), or [FIRM_RADIUS_DP] where the app's theme uses firm corners. */
+    radiusDp: Int = SOFT_RADIUS_DP,
 ) : RecyclerView.ItemDecoration() {
 
     private val density = context.resources.displayMetrics.density
     private val gutter = gutterDp * density
-    private val radius = RADIUS_DP * density
+    private val radius = radiusDp * density
     private val runGap = RUN_GAP_DP * density
     private val textStart = textStartDp * density
     private val dividerEnd = DIVIDER_END_DP * density
@@ -113,14 +115,17 @@ class KelvinGroupDecoration(
         canvas.drawLine(start, y, end, y, dividerPaint)
     }
 
-    private companion object {
-        const val RADIUS_DP = 28
-        const val RUN_GAP_DP = 8
-        const val DIVIDER_END_DP = 16
-        const val ALPHA_LIGHT = 0.06f
-        const val ALPHA_DARK = 0.08f
-        const val FULL = 255
-        const val HALF = 0.5
-        val DEFAULT_GROUP = Color.rgb(0xF3, 0xF4, 0xF6)
+    companion object {
+        /** The well's corner with Kelvin's soft corners. */
+        const val SOFT_RADIUS_DP = 28
+        /** The well's corner with firm corners, the Compose group's large corner. */
+        const val FIRM_RADIUS_DP = 16
+        private const val RUN_GAP_DP = 8
+        private const val DIVIDER_END_DP = 16
+        private const val ALPHA_LIGHT = 0.06f
+        private const val ALPHA_DARK = 0.08f
+        private const val FULL = 255
+        private const val HALF = 0.5
+        private val DEFAULT_GROUP = Color.rgb(0xF3, 0xF4, 0xF6)
     }
 }

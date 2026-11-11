@@ -88,6 +88,7 @@ object Kelvin {
  * [icons] draws glyphs filled (the default) or as Tabler's 1.5 outline.
  * [doodles] picks the set of empty-state scenes: casual, semi-professional or corporate.
  * [finish] is how controls are finished: Kelvin's pebbles, or [KelvinFinish.Flat] for work apps.
+ * [corners] is how round everything is: Kelvin's [KelvinCorners.Soft], or [KelvinCorners.Firm] for work apps.
  */
 @Composable
 fun KelvinTheme(
@@ -98,9 +99,10 @@ fun KelvinTheme(
     refraction: Float = RefractionLevel.Default,
     reduceMotion: Boolean = false,
     fonts: KelvinFonts = KelvinFonts.Kelvin,
-    icons: IconStyle = IconStyle.Filled,
+    icons: IconStyle = IconStyle.Outline,
     doodles: DoodleSet = DoodleSet.Casual,
     finish: KelvinFinish = KelvinFinish.Pebble,
+    corners: KelvinCorners = KelvinCorners.Soft,
     adjust: (KelvinColors) -> KelvinColors = { it },
     content: @Composable () -> Unit,
 ) {
@@ -126,6 +128,7 @@ fun KelvinTheme(
         LocalIconStyle provides icons,
         LocalDoodleSet provides doodles,
         LocalKelvinFinish provides finish,
+        LocalKelvinShapes provides KelvinShapeScale.of(corners),
         LocalTextSelectionColors provides selection,
         content = content,
     )

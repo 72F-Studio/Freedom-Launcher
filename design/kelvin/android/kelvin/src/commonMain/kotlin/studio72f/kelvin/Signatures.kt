@@ -64,7 +64,8 @@ import kotlin.math.roundToInt
  * back toward the top-start, and over it, offset toward the bottom-end, a pane of frosted glass
  * tinted by what it covers, with a light top edge and the white glyph. The back shape shows
  * sharp where the glass does not cover it, so the tile reads as two materials, not a flat fill.
- * Replaces the flat settings tile at [size] (32dp in rows).
+ * Replaces the flat settings tile at [size] (32dp in rows). A glyph on a coloured tile is always filled:
+ * the solid shape sits with the tile's colour.
  */
 @Composable
 fun KelvinGlassTile(icon: ImageVector, color: Color, modifier: Modifier = Modifier, size: Dp = KelvinSizes.tile, glyph: Color = Color.White, backAlpha: Float = 1f, frontAlpha: Float = 0.92f) {
@@ -102,7 +103,7 @@ fun KelvinGlassTile(icon: ImageVector, color: Color, modifier: Modifier = Modifi
         contentAlignment = Alignment.BottomEnd,
     ) {
         Box(Modifier.size(size * 0.8f), contentAlignment = Alignment.Center) {
-            KIcon(icon, null, size = size * 0.48f, color = glyph)
+            KIcon(icon, null, size = size * 0.48f, color = glyph, style = IconStyle.Filled)
         }
     }
 }
@@ -191,7 +192,7 @@ fun KelvinBarChart(
                         Modifier
                             .align(Alignment.TopEnd)
                             .offset(y = height * (1f - average.coerceIn(0f, 1f)) - 9.dp)
-                            .background(c.group, CapsuleShape)
+                            .background(c.group, KelvinShapes.pill)
                             .padding(horizontal = 6.dp),
                         Kelvin.type.caption.copy(fontWeight = FontWeight.SemiBold), c.ink2, maxLines = 1,
                     )
