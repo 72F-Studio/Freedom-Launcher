@@ -7,7 +7,7 @@ What 1.1 adds is in the README's Power features section. This is how to put it i
 1. **Play Console: accessibility declaration.** Eigen now ships an AccessibilityService. Fill in App content → Accessibility API with the text in `docs/store/PLAY_LISTING.md` (Accessibility service section) and record the in-app disclosure (Settings → Gestures → Turn on) for the review video. Expect review to take longer than usual.
 2. **Price.** Plus is ₹349 today (fallback in `EigenState.plusPrice`). With private apps and automation in it, a launch at the equivalent of US$4.99–5.99 (₹449–499) fits the Nova Prime / Smart Launcher Pro range. Change it in Play Console; the app shows Play's price. Consider a launch week at today's price.
 3. **Real phones.** Run `./scripts/perf.sh` on a Pixel and a Samsung and keep `build/perf/report.md`. Test the gesture service, the biometric prompt (Android 9 PIN fallback included), Tasker's run-task permission, and contacts search on hardware: these were built against the APIs and only partly exercised on the emulator.
-4. **Version.** Bump `versionName` to 1.1.0 and `versionCode` in the usual release commit.
+4. **Version.** Done: 1.1.0 (versionCode 7).
 
 ## Where enthusiasts are
 
