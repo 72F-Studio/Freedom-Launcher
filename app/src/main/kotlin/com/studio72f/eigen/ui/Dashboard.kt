@@ -250,6 +250,19 @@ fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
     }
     KelvinSheet(state.textureSheet, { state.textureSheet = false }, "Textures", "Close", backdrop) {
         KText("Drawn in your colour. Dim them and set them as your phone's wallpaper like any photo.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)
+        KelvinGroup(gutter = 0.dp) {
+            KelvinRow("Follow the time of day", summary = "Cool in the morning, amber at dusk, deep at night; a little different each day",
+                trailing = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlusMark(state)
+                        studio72f.kelvin.KelvinSwitch(state.livingTexture != null, { on ->
+                            if (!state.plus) state.plusSheet = "A texture that follows the day"
+                            else { state.livingTexture = if (on) "pending" else null; if (!on) host.setLivingTexture(null) }
+                        })
+                    }
+                })
+        }
+        if (state.livingTexture == "pending") KText("Now pick a texture.", style = Kelvin.type.summary, color = Kelvin.colors.accent)
         Textures.ALL.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (t in row) Column(
@@ -260,6 +273,7 @@ fun TextureSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                         scope.launch {
                             val full = withContext(Dispatchers.Default) { Textures.render(t, screen.width, screen.height, state.accent) }
                             host.useWallpaper(full); busy = null; state.textureSheet = false
+                            host.setLivingTexture(if (state.livingTexture != null) t.id else null)
                         }
                     }, shape = ContinuousShape(20.dp), label = t.name),
                     horizontalAlignment = Alignment.CenterHorizontally,

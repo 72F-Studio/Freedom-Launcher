@@ -184,4 +184,6 @@
     <string name="support_72f_title">Support Eigen</string>
     <string name="support_72f_intro">Optional tips help keep Eigen private and self-funded. Tips offer no additional benefits.</string>
     <string name="support_72f_thanks">Thank you for using and supporting Eigen.</string>
+    <string name="accessibility_description">Lets your home screen gestures lock the phone, open notifications or quick settings, and show recent apps. Eigen Launcher reads nothing on your screen and watches no apps: it only performs the action you set for a gesture.</string>
+    <string name="accessibility_summary">Gesture actions for Eigen Launcher</string>
 </resources>

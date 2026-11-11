@@ -62,15 +62,17 @@ object EigenAssistant {
      * Answers [query]. [conversational] keeps recent turns as context (the Assistant tab); the search bar asks
      * one-off questions capped at two sentences. [onPartial] receives the answer so far while Nano writes it.
      */
-    suspend fun ask(context: Context, query: String, conversational: Boolean, onPartial: (String) -> Unit = {}): Answer =
+    suspend fun ask(context: Context, query: String, conversational: Boolean, act: Boolean = true, onPartial: (String) -> Unit = {}): Answer =
         withContext(Dispatchers.Default) {
             val clean = query.trim()
             if (clean.isEmpty()) return@withContext Answer("Type a question or a command.", null, failed = true)
-            quickAnswer(context.applicationContext, clean)?.let { remember(conversational, clean, it); return@withContext Answer(it, SOURCE_QUICK) }
-            if (!ready()) return@withContext Answer(unavailable(), null, failed = true)
+            quickAnswer(context.applicationContext, clean, act)?.let { remember(conversational, clean, it); return@withContext Answer(it, SOURCE_QUICK) }
+            val digest = if (Actions.isCatchUp(clean)) Actions.messages(clean) else null
+            if (digest != null && digest.isEmpty()) return@withContext Answer(Actions.nothingToSummarise(clean), SOURCE_QUICK)
+            if (!ready()) return@withContext if (digest != null) Answer(Actions.plainDigest(digest), SOURCE_QUICK) else Answer(unavailable(), null, failed = true)
             val sb = StringBuilder()
             try {
-                engine.generateResponseStream(prompt(clean, conversational)).collect { chunk ->
+                engine.generateResponseStream(if (digest != null) Actions.summaryPrompt(SYSTEM, clean, digest) else prompt(clean, conversational)).collect { chunk ->
                     if (chunk.isEmpty()) return@collect
                     sb.append(chunk)
                     val sofar = sb.toString()
@@ -118,9 +120,12 @@ object EigenAssistant {
         "Gemini Nano isn't available on this phone, so only quick answers work here: open an app, ask the time or battery, or do a sum."
 
     /** Commands that need no model. Returns null when the query needs Nano. */
-    fun quickAnswer(context: Context, query: String): String? {
+    fun quickAnswer(context: Context, query: String, act: Boolean = true): String? {
         val lower = query.lowercase(Locale.ROOT).trim()
-        if (lower.startsWith("open ") || lower.startsWith("launch ")) return launchApp(context, lower.replaceFirst(Regex("^(open|launch)\\s+"), "").trim())
+        // Search asks as you type: anything that does something waits for a tap.
+        if (lower.startsWith("open ") || lower.startsWith("launch ")) return if (act) launchApp(context, lower.replaceFirst(Regex("^(open|launch)\\s+"), "").trim()) else "Tap to open it."
+        Actions.handle(context, query, dryRun = !act)?.let { return it }
+        com.studio72f.eigen.QuickMath.answer(query)?.let { return it }
         if (lower == "battery" || "battery level" in lower || "battery status" in lower || "my battery" in lower) {
             val bm = context.getSystemService(BatteryManager::class.java) ?: return null
             val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)

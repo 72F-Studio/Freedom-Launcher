@@ -67,7 +67,42 @@ interface EigenHost {
     fun restorePlus()
     /** Starts the Play flow for a tip (consumed, unlocks nothing). */
     fun tip(productId: String)
+
+    // Power features
+    /** Runs whatever a home gesture is set to ([Gestures.ALL] ids). */
+    fun gesture(id: String)
+    fun setGesture(gesture: String, action: String)
+    /** A list of choices in Eigen's sheet; [pick] gets the chosen index. */
+    fun choose(title: String, options: List<String>, pick: (Int) -> Unit)
+    fun openAccessibilitySettings()
+    fun setSearchSource(id: String, on: Boolean)
+    fun requestContacts()
+    fun startShortcut(hit: ShortcutHit)
+    /** Unlocks with the phone's screen lock, then shows the private apps. */
+    fun openPrivateApps()
+    fun setPrivate(app: MainActivity.App, on: Boolean)
+    fun setIconShape(shape: String)
+    /** [drawable] null restores the app's own icon; [pack] is the icon pack's package. */
+    fun setIconOverride(app: MainActivity.App, pack: String?, drawable: String?)
+    fun iconPacks(): List<Pair<String, String>>
+    fun exportSetup()
+    fun importSetup()
+    fun applySetup(preview: SetupPreview)
+    fun setPref(key: String, on: Boolean)
+    fun context(): android.content.Context
+    /** Sets a redrawn living texture without the "wallpaper set" message. */
+    fun useLivingWallpaper(bitmap: android.graphics.Bitmap)
+    /** Turns the living texture on for [id], or off with null. */
+    fun setLivingTexture(id: String?)
+    fun iconPackName(): String
+    fun chooseIconPack()
 }
+
+/** A shortcut found by search: [pkg]'s shortcut [id] for [user]. */
+data class ShortcutHit(val pkg: String, val id: String, val label: String, val appName: String, val user: android.os.UserHandle, val appId: String)
+
+/** What importing a setup will change, shown before anything is applied. */
+data class SetupPreview(val name: String, val changes: List<String>, val json: String)
 
 /**
  * Everything the Compose UI shows, set by MainActivity (Java) and read as Compose state. UI-only state that the
@@ -180,6 +215,44 @@ class EigenState {
     /** The first-run tour's page, or -1 when it is not showing. */
     var tourPage by mutableIntStateOf(-1)
     var settings by mutableStateOf(emptyList<SettingsSection>())
+    // Power features
+    /** The failure shown in the problem sheet, or null. */
+    var problem by mutableStateOf<studio72f.kelvin.KelvinProblem?>(null)
+    /** Gesture id → action id; missing gestures use their default. */
+    var gestures by mutableStateOf(emptyMap<String, String>())
+    /** The action that needs the accessibility service, while its disclosure is showing. */
+    var accessibilityAsk by mutableStateOf<String?>(null)
+    var accessibilityOn by mutableStateOf(false)
+    /** null: closed; otherwise the power settings page showing ("gestures", "search", "icons", "private", "automation", "setups"). */
+    var powerPage by mutableStateOf<String?>(null)
+    /** What search looks through besides apps: contacts, shortcuts, settings, maths, web. */
+    var searchSources by mutableStateOf(setOf("shortcuts", "settings", "maths", "web"))
+    var contactsAllowed by mutableStateOf(false)
+    var shortcutIndex by mutableStateOf(emptyList<ShortcutHit>())
+    /** The line under the clock: next event, alarm, what's playing or a low battery. */
+    var glance by mutableStateOf(true)
+    var batteryLevel by mutableIntStateOf(100)
+    var charging by mutableStateOf(false)
+    var alarmAt by mutableLongStateOf(0L)
+    var nextEventAt by mutableLongStateOf(0L)
+    var nextEventTitle by mutableStateOf<String?>(null)
+    /** Apps kept behind the screen lock: out of drawers and search. */
+    var privateIds by mutableStateOf(emptySet<String>())
+    var privateOpen by mutableStateOf(false)
+    /** The private apps themselves, filled only after the screen lock said yes and emptied when home leaves the screen. */
+    var privateApps by mutableStateOf(emptyList<MainActivity.App>())
+    var themedIcons by mutableStateOf(false)
+    var iconShape by mutableStateOf("system")
+    /** The app whose icon is being picked from an icon pack, and the pack. */
+    var iconPickerApp by mutableStateOf<MainActivity.App?>(null)
+    var iconPickerPack by mutableStateOf<String?>(null)
+    var setupPreview by mutableStateOf<SetupPreview?>(null)
+    /** Automation apps may send Eigen commands; Eigen tells them when the context changes. */
+    var automationIn by mutableStateOf(false)
+    var automationOut by mutableStateOf(false)
+    /** The texture that follows the time of day, or null. */
+    var livingTexture by mutableStateOf<String?>(null)
+
     /** Set to put the cursor in the Assistant's composer (opening it from search or the menu); cleared once used. */
     var composerFocus by mutableStateOf(false)
 
@@ -201,12 +274,18 @@ class EigenState {
     }
 
     /** The Home button: back to a closed, centred home. */
-    fun goHome() { plusSheet = null; contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawers = emptySet(); appDrawerOpen = false; pillMenu = null; dashboardApp = null; composerFocus = false; showPage(PAGE_HOME) }
+    fun goHome() { problem = null; powerPage = null; privateOpen = false; iconPickerApp = null; setupPreview = null; accessibilityAsk = null; plusSheet = null; contextsPage = null; settingsOpen = false; searching = false; query = ""; openDrawers = emptySet(); appDrawerOpen = false; pillMenu = null; dashboardApp = null; composerFocus = false; showPage(PAGE_HOME) }
 
     /** Back, innermost first. Returns false when there was nothing to close. */
     fun handleBack(): Boolean = when {
         tourPage > 0 -> { tourPage--; true }
+        problem != null -> { problem = null; true }
+        accessibilityAsk != null -> { accessibilityAsk = null; true }
+        setupPreview != null -> { setupPreview = null; true }
+        iconPickerApp != null -> { iconPickerApp = null; true }
+        privateOpen -> { privateOpen = false; true }
         plusSheet != null -> { plusSheet = null; true }
+        powerPage != null -> { powerPage = null; true }
         pillMenu != null -> { pillMenu = null; true }
         clockSheet -> { clockSheet = false; true }
         textureSheet -> { textureSheet = false; true }

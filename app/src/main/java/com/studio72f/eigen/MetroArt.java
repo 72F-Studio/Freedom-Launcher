@@ -26,7 +26,7 @@ final class MetroArt {
         private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
         void setGlyphSize(float size){glyphSize=size;invalidate();}
         void setMark(String name, int color) { this.name=name; this.color=color; invalidate(); }
-        @Override protected void onDraw(Canvas canvas) {
+        @android.annotation.SuppressLint("ThreadConstraint") @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if(ring) {
                 Paint p=ringPaint;p.setColor(alpha(color,.5f));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(1));

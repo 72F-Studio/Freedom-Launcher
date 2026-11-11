@@ -59,6 +59,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    // Installs the baseline profile (src/main/baseline-prof.txt) on Play and sideloaded installs, so home's first
+    // frames run precompiled instead of interpreted.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     // On-device AI: Gemini Nano through Android AICore, via ML Kit's GenAI Prompt API (the engine Tofu uses).
     // AICore downloads and runs the model itself; prompts and answers never leave the phone.

@@ -53,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -159,6 +160,7 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         fun onRelease(velocity: Float) {
             val p = pull
             when {
+                p > downThreshold && Gestures.actionFor(state, "swipe_down") != "drawers" -> host.gesture("swipe_down")
                 p > downThreshold -> {
                     // Drawers open one after another, top to bottom, and close in reverse.
                     val names = state.drawers.map { it.name }
@@ -204,7 +206,7 @@ fun HomePage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         // Home's content runs the full height and scrolls under the handle, dock and search capsule, which float on top.
         var barHeight by remember { mutableFloatStateOf(0f) }
         val bottomInset = with(density) { barHeight.toDp() }
-        Box(Modifier.fillMaxSize().imePadding()) {
+        Box(Modifier.fillMaxSize().imePadding().twoFingerSwipes({ host.gesture("two_down") }, { host.gesture("two_up") })) {
             val gentle = Kelvin.motion.gentle<Float>()
             AnimatedContent(
                 state.searching, Modifier.fillMaxSize().statusBarsPadding().graphicsLayer { alpha = 1f - drawer.value },
@@ -260,13 +262,13 @@ private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull
     BoxWithConstraints(
         Modifier.fillMaxSize()
             .onGloballyPositioned { origin = it.positionInRoot() }
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { at -> state.pillMenu = homeMenu(state, host, origin.x + at.x, origin.y + at.y) }) }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { host.gesture("double_tap") }, onLongPress = { at -> state.pillMenu = homeMenu(state, host, origin.x + at.x, origin.y + at.y) }) }
             .then(modifier),
     ) {
         // A rubber-band pull with a quiet hint of what releasing will do.
         val shift = if (pull > 0f) KelvinMotion.rubberBand(pull, threshold * 2f) else 0f
         if (pull > 0f) KText(
-            if (allOpen) "Release to close all" else "Release to open all",
+            Gestures.actionFor(state, "swipe_down").let { a -> if (a != "drawers") "Release for " + Gestures.actionName(state, a).lowercase() else if (allOpen) "Release to close all" else "Release to open all" },
             Modifier.align(Alignment.TopCenter).padding(top = 12.dp).graphicsLayer { alpha = (pull / threshold).coerceIn(0f, 1f) },
             Kelvin.type.label, Kelvin.colors.ink2,
         )
@@ -292,6 +294,7 @@ private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull
                     onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Launcher settings" to host::openSettings)) },
                 )
             }
+            if (state.glance) item(key = "glance") { Glance(state, host) }
             item(key = "gap") { Spacer(Modifier.height(with(density) { centreGap.toDp() })) }
             var cardIndex = 0
             for (drawer in drawers) {
@@ -687,7 +690,7 @@ private fun SearchCapsule(state: EigenState, host: EigenHost, backdrop: KelvinBa
     Row(
         modifier.fillMaxWidth().height(56.dp)
             .then(if (state.frost) Modifier.frostSurface(state, CapsuleShape, milk = 0.13f) else Modifier.glass(backdrop, CapsuleShape, GlassContent.Text, elevated = true))
-            .then(if (!state.searching) Modifier.eigenPress({ state.searching = true }, { state.openAssistant(null) }, CapsuleShape, "Search") else Modifier)
+            .then(if (!state.searching) Modifier.eigenPress({ state.searching = true }, { host.gesture("capsule_hold") }, CapsuleShape, "Search") else Modifier)
             .padding(start = 22.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -733,21 +736,56 @@ private fun naturalLanguage(q: String) = q.endsWith("?") || q.trim().split(Regex
 private fun submitSearch(state: EigenState, host: EigenHost) {
     val first = results(state).firstOrNull()
     if (first != null) { host.launch(first); state.searching = false; state.query = "" }
-    else if (state.query.isNotBlank()) state.openAssistant(state.query.trim())
+    else if (state.query.isNotBlank() && com.studio72f.eigen.QuickMath.answer(state.query) == null) state.openAssistant(state.query.trim())
 }
 
 @Composable
 private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop, bottomInset: androidx.compose.ui.unit.Dp) {
     val c = Kelvin.colors
+    val context = LocalContext.current
     val q = state.query.trim()
     val found = remember(q, state.allApps) { results(state) }
+    val sources = state.searchSources
+    // Shortcuts are indexed once per search session, off the main thread.
+    LaunchedEffect(state.searching) {
+        if (state.searching && "shortcuts" in sources) state.shortcutIndex = withContext(Dispatchers.IO) { SearchProviders.indexShortcuts(context, state.allApps) }
+    }
+    val contacts by androidx.compose.runtime.produceState(emptyList<SearchProviders.Hit>(), q, sources, state.contactsAllowed) {
+        value = if ("contacts" !in sources || !state.contactsAllowed) emptyList() else withContext(Dispatchers.IO) {
+            try { SearchProviders.contacts(context, q) } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Problems.show(state, context, Problems.SRC_CONTACTS, "search:contacts", "Couldn't search contacts",
+                        "Your apps still show. Try again, or turn contacts off in Settings → Search.",
+                        "Android's contacts provider failed to answer the query.", e)
+                }
+                emptyList()
+            }
+        }
+    }
+    val hits = remember(q, found, contacts, state.shortcutIndex, sources) {
+        buildList {
+            if ("maths" in sources) addAll(SearchProviders.answer(q))
+            if ("shortcuts" in sources) addAll(SearchProviders.shortcuts(state, q))
+            addAll(contacts)
+            if ("settings" in sources) addAll(SearchProviders.settings(q))
+        }
+    }
     Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = bottomInset), verticalArrangement = Arrangement.Bottom) {
         if (q.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                KText("Type an app's name, or ask a question.\nAnswers come from the model on this phone.", style = Kelvin.type.body, color = c.ink2, align = TextAlign.Center)
+                KText("Apps, shortcuts, contacts, settings and sums.\nOr ask a question: the model on this phone answers.", style = Kelvin.type.body, color = c.ink2, align = TextAlign.Center)
             }
         } else {
+            // Nearest the thumb first: a sum's answer, then apps, then everything else rising above them.
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), reverseLayout = true) {
+                hits.filterIsInstance<SearchProviders.Hit.Answer>().forEach { a ->
+                    item(key = a.key) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).glass(backdrop, ContinuousShape(24.dp), GlassContent.Text).padding(horizontal = 18.dp, vertical = 14.dp)) {
+                            KText(a.text, style = Kelvin.type.rowTitle.copy(fontSize = 22.sp, fontWeight = FontWeight.SemiBold), maxLines = 2)
+                            KText("Worked out on this phone", style = Kelvin.type.caption, color = c.ink2)
+                        }
+                    }
+                }
                 itemsIndexed(found, key = { _, a -> a.id }) { i, app ->
                     Row(
                         Modifier.fillMaxWidth().clip(ContinuousShape(18.dp))
@@ -760,8 +798,46 @@ private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBa
                         KText(app.title(), style = Kelvin.type.rowTitle.copy(fontSize = 18.sp, fontWeight = if (i == 0) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
                     }
                 }
+                items(hits.filter { it !is SearchProviders.Hit.Answer }, key = { it.key }) { hit ->
+                    when (hit) {
+                        is SearchProviders.Hit.Shortcut -> HitRow(hit.hit.label, "Shortcut · " + hit.hit.appName, state.allApps.firstOrNull { it.id == hit.hit.appId }) { host.startShortcut(hit.hit) }
+                        is SearchProviders.Hit.Contact -> HitRow(hit.name, "Contact", null, KelvinIcons.User) {
+                            SearchProviders.open(context, state, android.content.Intent(android.content.Intent.ACTION_VIEW, hit.lookup), "contacts")
+                        }
+                        is SearchProviders.Hit.Setting -> HitRow(hit.page.name, "Android settings", null, KelvinIcons.Settings) {
+                            SearchProviders.open(context, state, android.content.Intent(hit.page.action), "that setting")
+                        }
+                        else -> Unit
+                    }
+                }
+                if ("web" in sources && found.isEmpty() && !naturalLanguage(q)) items(SearchProviders.handoffs(q), key = { it.key }) { h ->
+                    h as SearchProviders.Hit.Handoff
+                    HitRow(h.label, "“$q” · opens another app", null, KelvinIcons.Link) { SearchProviders.open(context, state, h.intent, h.label.lowercase()) }
+                }
             }
-            if (naturalLanguage(q) || found.isEmpty()) AskCard(state, q, backdrop)
+            // A sum already answered above needs no second card.
+            val answered = hits.any { it is SearchProviders.Hit.Answer }
+            if (!answered && (naturalLanguage(q) || (found.isEmpty() && hits.isEmpty()))) AskCard(state, q, backdrop)
+        }
+    }
+}
+
+/** One search result that isn't an app: its app's icon or a glyph, a title and what it is. */
+@Composable
+private fun HitRow(title: String, kind: String, app: MainActivity.App?, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+    val c = Kelvin.colors
+    Row(
+        Modifier.fillMaxWidth().clip(ContinuousShape(18.dp)).eigenPress(onClick, shape = ContinuousShape(18.dp), label = title).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (app != null) AppIcon(app, 40.dp, false)
+        else Box(Modifier.size(40.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+            if (icon != null) KIcon(icon, null, size = 20.dp, color = c.ink)
+        }
+        Spacer(Modifier.size(16.dp))
+        Column(Modifier.weight(1f)) {
+            KText(title, style = Kelvin.type.rowTitle.copy(fontSize = 17.sp), maxLines = 1)
+            KText(kind, style = Kelvin.type.caption, color = c.ink2, maxLines = 1)
         }
     }
 }
@@ -779,19 +855,19 @@ private fun AskCard(state: EigenState, q: String, backdrop: KelvinBackdrop) {
     var answer by remember { mutableStateOf<String?>(null) }
     var source by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    fun ask(question: String) {
+    fun ask(question: String, act: Boolean) {
         asked = question; busy = true; answer = null; source = null
         scope.launch {
-            val a = EigenAssistant.ask(context, question, conversational = false) { if (asked == question) answer = it }
+            val a = EigenAssistant.ask(context, question, conversational = false, act = act) { if (asked == question) answer = it }
             if (asked == question) { answer = a.text; source = a.source; busy = false }
         }
     }
-    LaunchedEffect(q) { if (naturalLanguage(q) && q != asked) { delay(900); ask(q) } }
+    LaunchedEffect(q) { if (naturalLanguage(q) && q != asked) { delay(900); ask(q, act = false) } }
     val showing = asked == q
     Column(
         Modifier.fillMaxWidth().padding(vertical = 6.dp)
             .glass(backdrop, ContinuousShape(24.dp), GlassContent.Text)
-            .eigenPress({ if (showing && !busy) state.openAssistant(q) else ask(q) }, shape = ContinuousShape(24.dp), label = "Ask Eigen")
+            .eigenPress({ if (showing && !busy) state.openAssistant(q) else ask(q, act = true) }, shape = ContinuousShape(24.dp), label = "Ask Eigen")
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -868,4 +944,35 @@ private fun Modifier.frostPress(shape: androidx.compose.ui.graphics.Shape): Modi
         }
     }.graphicsLayer { val p = press.value; scaleX = 1f + 0.02f * p; scaleY = 1f - 0.035f * p }
         .drawWithContent { drawContent(); if (press.value > 0f) drawOutline(shape.createOutline(size, layoutDirection, this), Color.White.copy(alpha = 0.12f * press.value)) }
+}
+
+/**
+ * One quiet line under the clock with the thing that matters next: an event within two hours, what's playing, an
+ * alarm within twelve, or a low battery. Nothing at all when none of these is true.
+ */
+@Composable
+private fun Glance(state: EigenState, host: EigenHost) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(state.resumeCount) { while (true) { now = System.currentTimeMillis(); delay(30_000) } }
+    val is24 = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
+    val locale = LocalConfiguration.current.locales[0]
+    val line: Pair<String, () -> Unit>? = when {
+        state.nextEventTitle != null && state.nextEventAt - now in -15 * 60_000L..2 * 3_600_000L -> {
+            val mins = ((state.nextEventAt - now) / 60_000L).toInt()
+            (if (mins <= 0) "Now" else if (mins < 60) "In $mins min" else "In ${mins / 60} h ${mins % 60} min") + " · " + state.nextEventTitle to host::openCalendar
+        }
+        state.mediaPlaying && state.mediaTitle != null -> "Playing · " + state.mediaTitle + (state.mediaArtist?.let { " · $it" } ?: "") to { state.showPage(EigenState.PAGE_WIDGETS) }
+        state.alarmAt > now && state.alarmAt - now < 12 * 3_600_000L ->
+            "Alarm " + java.text.SimpleDateFormat(if (is24) "HH:mm" else "h:mm a", locale).format(java.util.Date(state.alarmAt)) to host::openAlarms
+        state.batteryLevel <= 20 && !state.charging -> "Battery ${state.batteryLevel}%" to { }
+        else -> null
+    }
+    androidx.compose.animation.AnimatedVisibility(line != null, enter = fadeIn(Kelvin.motion.gentle()), exit = fadeOut(Kelvin.motion.gentle())) {
+        val shown = remember { mutableStateOf(line) }
+        if (line != null) shown.value = line
+        shown.value?.let { (text, open) ->
+            KText(text, Modifier.padding(top = 10.dp).clip(CapsuleShape).eigenPress(open, shape = CapsuleShape, label = text).padding(horizontal = 14.dp, vertical = 6.dp),
+                Kelvin.type.label.copy(fontSize = 15.sp), Kelvin.colors.ink.copy(alpha = 0.82f), maxLines = 1)
+        }
+    }
 }

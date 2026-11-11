@@ -1,0 +1,12 @@
+# Startup and home: precompile Eigen's own code and Kelvin's on install. Hand-written wildcard rules; replace with a
+# generated profile (scripts/perf.sh documents how) once a Macrobenchmark module exists.
+HSPLcom/studio72f/eigen/MainActivity;->**(**)**
+HSPLcom/studio72f/eigen/MainActivity$*;->**(**)**
+HSPLcom/studio72f/eigen/ui/**;->**(**)**
+HSPLcom/studio72f/eigen/ContextRules**;->**(**)**
+HSPLcom/studio72f/eigen/ContextStore;->**(**)**
+HSPLcom/studio72f/eigen/CategoryRules;->**(**)**
+HSPLcom/studio72f/eigen/QuickMath**;->**(**)**
+HSPLstudio72f/kelvin/**;->**(**)**
+Lcom/studio72f/eigen/**;
+Lstudio72f/kelvin/**;

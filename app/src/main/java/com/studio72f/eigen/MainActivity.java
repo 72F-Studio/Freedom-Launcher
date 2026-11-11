@@ -146,8 +146,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             String[] all = com.studio72f.eigen.ui.EigenWidgets.IDS, labels = com.studio72f.eigen.ui.EigenWidgets.NAMES;
             for (int i = 0; i < all.length; i++) if (!eigen.getWidgetOrder().contains(all[i])) { ids.add(all[i]); names.add(labels[i] + (!eigen.getPlus() && com.studio72f.eigen.ui.Plus.widget(all[i]) ? " · Plus" : " · Eigen")); }
             names.add("App widget · from your apps");
+            names.add("Stack widgets · swipe between them");
             menu("Add a widget", names.toArray(new String[0]), n -> {
                 if (n == ids.size()) { if (activeContext != null) addAppWidget(activeContext); return; }
+                if (n == ids.size() + 1) { stackWidgets(); return; }
                 if (!eigen.getPlus() && com.studio72f.eigen.ui.Plus.widget(ids.get(n))) { eigen.setPlusSheet(labels[Arrays.asList(all).indexOf(ids.get(n))]); return; }
                 ArrayList<String> order = new ArrayList<>(eigen.getWidgetOrder()); order.add(ids.get(n)); setWidgetOrder(order);
             });
@@ -209,6 +211,65 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void buyPlus() { EigenBilling.getInstance(MainActivity.this).launchPlus(MainActivity.this); }
         @Override public void restorePlus() { EigenBilling.getInstance(MainActivity.this).restorePurchases(); toast("Checking Google Play…"); }
         @Override public void tip(String productId) { EigenBilling.getInstance(MainActivity.this).launchDonation(MainActivity.this, productId); }
+
+        // Power features
+        @Override public void gesture(String id) { com.studio72f.eigen.ui.Gestures.INSTANCE.perform(MainActivity.this, eigen, this, id); }
+        @Override public void setGesture(String gesture, String action) {
+            try { JSONObject g = new JSONObject(prefs.getString("gestures", "{}")); g.put(gesture, action); prefs.edit().putString("gestures", g.toString()).apply(); } catch (JSONException ignored) { }
+            pushPower();
+            boolean system = false; for (com.studio72f.eigen.ui.Gestures.Action a : com.studio72f.eigen.ui.Gestures.INSTANCE.getACTIONS()) if (a.getId().equals(action)) system = a.getSystem();
+            if (system && !EigenAccessibility.enabled(MainActivity.this)) eigen.setAccessibilityAsk(com.studio72f.eigen.ui.Gestures.INSTANCE.actionName(eigen, action));
+        }
+        @Override public void choose(String title, java.util.List<String> options, kotlin.jvm.functions.Function1<? super Integer, kotlin.Unit> pick) {
+            menu(title, options.toArray(new String[0]), i -> pick.invoke(i));
+        }
+        @Override public void openAccessibilitySettings() { safeStart(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+        @Override public void setSearchSource(String id, boolean on) {
+            HashSet<String> set = new HashSet<>(eigen.getSearchSources()); if (on) set.add(id); else set.remove(id);
+            prefs.edit().putStringSet("search_sources", set).apply(); pushPower();
+        }
+        @Override public void requestContacts() { requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, 50); }
+        @Override public void startShortcut(com.studio72f.eigen.ui.ShortcutHit hit) {
+            try { launcher.startShortcut(hit.getPkg(), hit.getId(), null, null, hit.getUser()); eigen.setSearching(false); eigen.setQuery(""); returningFromApp = true; }
+            catch (RuntimeException e) {
+                com.studio72f.eigen.ui.Problems.show(eigen, MainActivity.this, com.studio72f.eigen.ui.Problems.SRC_SHORTCUT, "search:start-shortcut", "That shortcut didn't open",
+                    "The app may have removed it, or its profile is paused. Open the app and try from there.", "Android refused to start the shortcut for its app.", e);
+            }
+        }
+        @Override public void openPrivateApps() {
+            if (!eigen.getPlus()) { eigen.setPlusSheet("Private apps"); return; }
+            com.studio72f.eigen.ui.PrivateLock.unlock(MainActivity.this, eigen, MainActivity.this::showPrivateApps);
+        }
+        @Override public void setPrivate(App app, boolean on) {
+            if (on && !eigen.getPlus()) { eigen.setPlusSheet("Private apps"); return; }
+            HashSet<String> set = new HashSet<>(prefs.getStringSet("private_apps", new HashSet<>()));
+            if (on) { set.add(app.id); favorites.remove(app.id); saveState(); ArrayList<String> dock = new ArrayList<>(eigen.getDockIds()); if (dock.remove(app.id)) prefs.edit().putString("dock", String.join(",", dock)).apply(); }
+            else set.remove(app.id);
+            prefs.edit().putStringSet("private_apps", set).apply(); pushPower(); pushLayoutPrefs(); refreshList(false);
+            if (eigen.getPrivateOpen()) showPrivateApps();
+            toast(on ? app.name + " is private now" : app.name + " is back in its drawer");
+        }
+        @Override public void setIconShape(String shape) { prefs.edit().putString("icon_shape", shape).apply(); eigen.setIconShape(shape); loadApps(); }
+        @Override public void setIconOverride(App app, String pack, String drawable) {
+            try { JSONObject o = new JSONObject(prefs.getString("icon_overrides", "{}")); if (pack == null || drawable == null) o.remove(app.id); else o.put(app.id, pack + "|" + drawable); prefs.edit().putString("icon_overrides", o.toString()).apply(); } catch (JSONException ignored) { }
+            loadApps();
+        }
+        @Override public java.util.List<kotlin.Pair<String, String>> iconPacks() {
+            ArrayList<kotlin.Pair<String, String>> out = new ArrayList<>(); for (IconPacks.Pack p : IconPacks.installed(MainActivity.this)) out.add(new kotlin.Pair<>(p.packageName, p.label)); return out;
+        }
+        @Override public void exportSetup() { pickDocument(60, true, "application/json", "my-setup.eigen"); }
+        @Override public void importSetup() { pickDocument(61, false, "*/*", null); }
+        @Override public void applySetup(com.studio72f.eigen.ui.SetupPreview preview) { MainActivity.this.applySetup(preview); }
+        @Override public void setPref(String key, boolean on) { prefs.edit().putBoolean(key, on).apply(); pushPower(); if (key.equals("themed_icons")) loadApps(); }
+        @Override public Context context() { return MainActivity.this; }
+        @Override public void useLivingWallpaper(Bitmap image) { useWallpaperBitmap(image, true); }
+        @Override public void setLivingTexture(String id) { com.studio72f.eigen.ui.LivingTexture.INSTANCE.enable(prefs, id); pushPower(); if (id != null) com.studio72f.eigen.ui.LivingTexture.INSTANCE.refreshIfDue(MainActivity.this, eigen, this, prefs); }
+        @Override public String iconPackName() {
+            String p = prefs.getString("iconPack", ""); if (p.isEmpty()) return "None";
+            for (IconPacks.Pack pack : IconPacks.installed(MainActivity.this)) if (pack.packageName.equals(p)) return pack.label;
+            return "None";
+        }
+        @Override public void chooseIconPack() { MainActivity.this.chooseIconPack(); }
     };
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
@@ -237,7 +298,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!foreground) return;
-            bindMedia(); evaluateContext(); updateClock(); updateAlarm(); if (System.currentTimeMillis() - agendaLoaded > 300000) updateAgenda();
+            bindMedia(); evaluateContext(); updateClock(); pushBattery(); updateAlarm(); if (System.currentTimeMillis() - agendaLoaded > 300000) updateAgenda();
             // Wake at the next minute boundary (or in 10 s) so the clock never lags a minute change.
             long now = System.currentTimeMillis(); handler.postDelayed(this, Math.min(10000, 60000 - now % 60000 + 50));
         }
@@ -281,11 +342,18 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); eigen.setReturnPulse(eigen.getReturnPulse() + 1); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); }
-    @Override protected void onPause() { foreground = false; unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
+    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); eigen.setReturnPulse(eigen.getReturnPulse() + 1); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); pushPower(); applyAutomationCommands(); com.studio72f.eigen.ui.LivingTexture.INSTANCE.refreshIfDue(this, eigen, host, prefs); }
+    @Override protected void onPause() { foreground = false; eigen.setPrivateOpen(false); eigen.setPrivateApps(new ArrayList<>()); unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", eigen.getTourPage()); super.onSaveInstanceState(out); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); if (activeContext != null && !activeContext.category.isEmpty()) eigen.openOnly(activeContext.category); buildUi(); }
+    @Override protected void onNewIntent(Intent intent) {
+        // Home pressed while home is already up and settled: that's the "home again" gesture, not a reset.
+        boolean settled = foreground && eigen.getPage() == com.studio72f.eigen.ui.EigenState.PAGE_HOME && !eigen.getSearching() && !eigen.getAppDrawerOpen() && eigen.getOpenDrawers().isEmpty()
+            && !eigen.getSettingsOpen() && eigen.getPowerPage() == null && eigen.getContextsPage() == null && eigen.getPlusSheet() == null && eigen.getProblem() == null && openDialogs.isEmpty() && eigen.getTourPage() < 0;
+        if (settled && !"none".equals(com.studio72f.eigen.ui.Gestures.INSTANCE.actionFor(eigen, "home_again"))) { super.onNewIntent(intent); setIntent(intent); host.gesture("home_again"); return; }
+        onNewIntentReset(intent);
+    }
+    private void onNewIntentReset(Intent intent) { super.onNewIntent(intent); setIntent(intent); dismissDialogs(); if (sheet != null) sheet.dismiss(); searching = false; query = ""; activeContext = resolveContext(); appliedLayout = layoutKey(activeContext); category = startCategory(activeContext); scrollPositions.clear(); eigen.goHome(); if (activeContext != null && !activeContext.category.isEmpty()) eigen.openOnly(activeContext.category); buildUi(); }
     /** Android 13+ (and required from SDK 36): Back arrives through OnBackInvokedCallback, not onBackPressed. */
     // Android 9–12 still deliver Back here; Android 13+ uses the OnBackInvokedCallback registered in onCreate.
     @android.annotation.SuppressLint({"GestureBackNavigation","MissingSuperCall"}) @Override public void onBackPressed() { handleBack(); } // Back is routed by handleBack, never the default finish
@@ -322,6 +390,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             String selectedPackage=prefs.getString("iconPack","");
             if(!selectedPackage.isEmpty())try{selectedPack=new IconPacks(this,selectedPackage);}catch(Exception ignored){}
             iconPack=selectedPack;
+            final String shape=prefs.getString("icon_shape","system");final boolean themed=prefs.getBoolean("themed_icons",false);final int tint=accent;
+            JSONObject overrides;try{overrides=new JSONObject(prefs.getString("icon_overrides","{}"));}catch(JSONException e){overrides=new JSONObject();}
+            HashMap<String,IconPacks> overridePacks=new HashMap<>();
             UserManager users = getSystemService(UserManager.class);
             for (UserHandle user : users.getUserProfiles()) {
                 try {
@@ -337,6 +408,14 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                             if(asset!=null){Bitmap bitmap=android.graphics.ImageDecoder.decodeBitmap(ImageDecoder.createSource(asset),(decoder,size,source)->{float scale=Math.min(1f,256f/Math.max(size.getSize().getWidth(),size.getSize().getHeight()));decoder.setTargetSize(Math.max(1,Math.round(size.getSize().getWidth()*scale)),Math.max(1,Math.round(size.getSize().getHeight()*scale)));});a.icon=new android.graphics.drawable.BitmapDrawable(getResources(),bitmap);}
                             else if(selectedPack!=null){Drawable replacement=selectedPack.icon(a.component);if(replacement!=null)a.icon=replacement;}
                         } catch(Exception ignored){}
+                        String chosen=overrides.optString(a.id,"");
+                        if(chosen.contains("|")){
+                            String packName=chosen.substring(0,chosen.indexOf('|'));
+                            IconPacks pack=overridePacks.get(packName);
+                            if(pack==null&&!overridePacks.containsKey(packName)){try{pack=new IconPacks(this,packName);}catch(Exception e){pack=null;}overridePacks.put(packName,pack);}
+                            Drawable d=pack==null?null:pack.byName(chosen.substring(chosen.indexOf('|')+1));if(d!=null)a.icon=d;
+                        }
+                        try{a.icon=com.studio72f.eigen.ui.IconShaper.apply(getResources(),a.icon,shape,themed,tint);}catch(RuntimeException ignored){}
                         loaded.add(a);
                     }
                 } catch (SecurityException | IllegalStateException ignored) { }
@@ -432,7 +511,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setDim(Math.min(.92f,prefs.getInt("wallpaperDim",75)/100f+(float)Legibility.extraDim(legibility)));
         eigen.setBlur(theme.blur);
         eigen.setNotificationAccess(mediaAccess());
-        pushPlus(); pushLayoutPrefs(); applyMonochrome();
+        pushPlus(); pushLayoutPrefs(); pushPower(); applyMonochrome();
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
     /**
@@ -475,9 +554,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     /** Drawers for home (in the person's category order) and every app for search (hidden apps stay searchable). */
     private void pushApps(){
         ArrayList<com.studio72f.eigen.ui.Drawer> drawers=new ArrayList<>();
+        Set<String> secret=prefs.getStringSet("private_apps",Collections.emptySet());
         for(String c:categories){if(c.equals("all apps"))continue; // all apps live in the swipe-up drawer
-            List<App> in=appsIn(c);if(!in.isEmpty())drawers.add(new com.studio72f.eigen.ui.Drawer(c,in));}
-        eigen.setDrawers(drawers);eigen.setAllApps(new ArrayList<>(apps));
+            List<App> in=new ArrayList<>(appsIn(c));in.removeIf(a->secret.contains(a.id));if(!in.isEmpty())drawers.add(new com.studio72f.eigen.ui.Drawer(c,in));}
+        ArrayList<App> searchable=new ArrayList<>(apps);searchable.removeIf(a->secret.contains(a.id));
+        eigen.setDrawers(drawers);eigen.setAllApps(searchable);
     }
     private void updateClock() {
         if (date != null) {
@@ -638,7 +719,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             }
             return super.onTouchEvent(e);
         }
-        @Override protected synchronized void onDraw(Canvas c) {
+        @android.annotation.SuppressLint("ThreadConstraint") @Override protected synchronized void onDraw(Canvas c) {
             if(categories.isEmpty())return;
             if(shown<0)shown=getProgress();
             float left=getPaddingLeft(),right=getWidth()-getPaddingRight(),y=getHeight()/2f;
@@ -877,6 +958,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         }
         options.add(str(R.string.move_to_category));actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu(str(R.string.move_to),destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
         options.add(str(R.string.rename_x, (app.name.equals(app.label)?"":" · "+app.label)));actions.add(()->renameApp(app));
+        options.add("Change icon");actions.add(()->{
+            List<IconPacks.Pack> packs=IconPacks.installed(this);
+            if(packs.isEmpty()){com.studio72f.eigen.ui.Problems.show(eigen,this,com.studio72f.eigen.ui.Problems.ICN_PICK,"icons:no-pack","No icon packs installed","Install any ADW, Nova or Apex compatible icon pack from Play, then pick an icon from it here.","Eigen picks icons from installed icon packs and found none on this phone.",null);return;}
+            ArrayList<String> names=new ArrayList<>();for(IconPacks.Pack pk:packs)names.add(pk.label);names.add("The app's own icon");
+            menu("Icon for "+app.name,names.toArray(new String[0]),n->{if(n==packs.size()){host.setIconOverride(app,null,null);return;}eigen.setIconPickerPack(packs.get(n).packageName);eigen.setIconPickerApp(app);});
+        });
+        options.add(prefs.getStringSet("private_apps",Collections.emptySet()).contains(app.id)?"Stop keeping private":"Make private · screen lock");actions.add(()->host.setPrivate(app,!prefs.getStringSet("private_apps",Collections.emptySet()).contains(app.id)));
         options.add(isHidden?str(R.string.show_in_lists):str(R.string.hide_from_lists_still_in_search));actions.add(()->{if(isHidden)hidden.remove(app.id);else{hidden.add(app.id);favorites.remove(app.id);}saveState();refreshList(false);toast(isHidden?str(R.string.x_is_back_in_its_category, app.name):str(R.string.x_hidden_find_it_in_search, app.name));});
         options.add(str(R.string.app_info));actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast(str(R.string.app_info_unavailable));}});
         options.add(str(R.string.uninstall));actions.add(()->{if(app.work){toast(str(R.string.use_app_info_to_manage_work_apps));return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));});
@@ -1091,8 +1179,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==47||request==48){int id=prefs.getInt("pendingWidget",-1);if(id<0)return;if(result!=RESULT_OK){cancelWidget();return;}if(request==47)configureWidget(id);else placeWidget(id);return;}
+        if(request==com.studio72f.eigen.ui.PrivateLock.CONFIRM_REQUEST){if(result==RESULT_OK)showPrivateApps();return;}
         if(result!=RESULT_OK||data==null||data.getData()==null)return;
         Uri uri=data.getData();if(request==44){importWallpaper(uri);return;}
+        if(request==60||request==61){setupFile(request,uri);return;}
         if(request!=41&&request!=42&&request!=45&&request!=46)return;
         final ThemeEngine currentTheme=theme;
         worker.execute(()->{
@@ -1210,7 +1300,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         });
     }
     /** Saves a generated wallpaper (an Eigen texture) as the launcher's photo, like an import. */
-    private void useWallpaperBitmap(Bitmap image){
+    private void useWallpaperBitmap(Bitmap image){useWallpaperBitmap(image,false);}
+    private void useWallpaperBitmap(Bitmap image,boolean quiet){
         final int request=++wallpaperGeneration;
         worker.execute(()->{
             try{
@@ -1219,11 +1310,12 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 FileOutputStream output=saved.startWrite();
                 try{if(!image.compress(Bitmap.CompressFormat.JPEG,94,output))throw new IOException("Couldn't save image");saved.finishWrite(output);}catch(IOException e){saved.failWrite(output);throw e;}
                 prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
-                handler.post(()->{if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast(str(R.string.wallpaper_set));}});
+                handler.post(()->{if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();if(!quiet)toast(str(R.string.wallpaper_set));}});
             }catch(Exception e){handler.post(()->message(str(R.string.couldn_t_open_wallpaper),"The texture couldn't be saved. Try again."));}
         });
     }
     private void importWallpaper(Uri uri) {
+        com.studio72f.eigen.ui.LivingTexture.INSTANCE.enable(prefs, null);
         final int request=++wallpaperGeneration;
         toast(str(R.string.preparing_wallpaper));
         worker.execute(() -> {
@@ -1355,7 +1447,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void pushWidgetOrder(){
         ArrayList<String> order=new ArrayList<>(Arrays.asList(prefs.getString("widget_order",com.studio72f.eigen.ui.EigenWidgets.DEFAULT).split(",")));
         order.removeIf(id->id.isEmpty()||(id.startsWith("widget:")&&!eigen.getHostedWidgets().containsKey(id)));
-        for(String id:eigen.getHostedWidgets().keySet())if(!order.contains(id))order.add(id);
+        HashSet<String> stacked=new HashSet<>();for(String id:order)if(id.startsWith("stack:"))stacked.addAll(com.studio72f.eigen.ui.Stacks.INSTANCE.members(id));
+        for(String id:eigen.getHostedWidgets().keySet())if(!order.contains(id)&&!stacked.contains(id))order.add(id);
         eigen.setWidgetOrder(order);
     }
     private LinearLayout.LayoutParams slotParams(){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(14));return p;}
@@ -1389,7 +1482,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void updateAlarm(){
         if(alarmText==null)return;
         AlarmManager.AlarmClockInfo next=getSystemService(AlarmManager.class).getNextAlarmClock();
-        if(next==null){alarmText.setVisibility(View.GONE);eigen.setAlarm(null);return;}
+        if(next==null){alarmText.setVisibility(View.GONE);eigen.setAlarm(null);eigen.setAlarmAt(0L);return;}eigen.setAlarmAt(next.getTriggerTime());
         String pattern=android.text.format.DateFormat.is24HourFormat(this)?"EEE HH:mm":"EEE h:mm a";
         alarmText.setVisibility(View.VISIBLE);alarmText.setText(str(R.string.alarm_x, new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(next.getTriggerTime())).toUpperCase(Locale.getDefault())));
         alarmText.setContentDescription(str(R.string.next_alarm_x_tap_to_open_alarms, alarmText.getText()));
@@ -1411,15 +1504,18 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 while(c!=null&&c.moveToNext()&&lines<3){
                     if(c.getLong(3)<now)continue;
                     String title=c.getString(0);if(title==null||title.trim().isEmpty())title="busy";
+                    if(lines==0&&c.getInt(2)!=1){final long at=c.getLong(1);final String name=title.trim();handler.post(()->{eigen.setNextEventAt(at);eigen.setNextEventTitle(name);});}
                     if(lines++>0)out.append('\n');
                     out.append(c.getInt(2)==1?"today":time.format(new Date(c.getLong(1)))).append("   ").append(title.trim());
                 }
             }catch(RuntimeException ignored){}
+            if(out.length()==0)handler.post(()->{eigen.setNextEventAt(0L);eigen.setNextEventTitle(null);});
             String result=out.length()==0?"nothing in the next 24 hours":out.toString();
             handler.post(()->{if(target==agendaText){target.setTextColor(out.length()==0?secondaryInk():fg);target.setText(result);eigen.setAgenda(out.length()==0?"Nothing in the next 24 hours":result);}});
         });
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
+        if(request==50){pushPower();if(!eigen.getContactsAllowed()){HashSet<String> set=new HashSet<>(eigen.getSearchSources());set.remove("contacts");prefs.edit().putStringSet("search_sources",set).apply();pushPower();}}
         super.onRequestPermissionsResult(request,permissions,results);
         if(request==49){agendaLoaded=0;updateAgenda();if(sheet!=null)sheet.refresh();}
     }
@@ -1440,6 +1536,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(key.equals(appliedLayout)){activeContext=next;return;}
         boolean switched=previous==null||!previous.id.equals(next.id);
         activeContext=next;appliedLayout=key;
+        if(switched&&previous!=null)contextStarted(previous,next);
         // Only follow the new context if you're still where the old one put you.
         if(switched&&!searching&&category.equals(startCategory(previous))){scrollPositions.remove(startCategory(next));category=startCategory(next);}
         if(root!=null)buildUi();
@@ -1578,6 +1675,99 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
 
         
     }
+    /** Picks two widgets already on the page and puts them in one stack, where the first one was. */
+    private void stackWidgets(){
+        ArrayList<String> loose=new ArrayList<>();for(String id:eigen.getWidgetOrder())if(!id.startsWith("stack:"))loose.add(id);
+        if(loose.size()<2){toast("Add at least two widgets first, then stack them.");return;}
+        String[] names=new String[loose.size()];for(int i=0;i<names.length;i++)names[i]=widgetName(loose.get(i));
+        menu("Stack which widget?",names,a->{
+            ArrayList<String> rest=new ArrayList<>(loose);String first=rest.remove(a);
+            String[] others=new String[rest.size()];for(int i=0;i<others.length;i++)others[i]=widgetName(rest.get(i));
+            menu("With which?",others,b->{
+                ArrayList<String> order=new ArrayList<>(eigen.getWidgetOrder());int at=order.indexOf(first);String second=rest.get(b);
+                order.remove(first);order.remove(second);order.add(Math.max(0,Math.min(at,order.size())),com.studio72f.eigen.ui.Stacks.of(Arrays.asList(first,second)));
+                host.setWidgetOrder(order);
+            });
+        });
+    }
+    private String widgetName(String id){
+        if(id.startsWith("widget:")){try{AppWidgetProviderInfo info=widgetManager.getAppWidgetInfo(Integer.parseInt(id.substring(7)));if(info!=null)return info.loadLabel(getPackageManager());}catch(RuntimeException ignored){}return "App widget";}
+        int i=Arrays.asList(com.studio72f.eigen.ui.EigenWidgets.IDS).indexOf(id);return i>=0?com.studio72f.eigen.ui.EigenWidgets.NAMES[i]:id;
+    }
+    /** The power features' settings, copied into the Compose state. */
+    private void pushPower(){
+        HashMap<String,String> g=new HashMap<>();
+        try{JSONObject o=new JSONObject(prefs.getString("gestures","{}"));Iterator<String> k=o.keys();while(k.hasNext()){String id=k.next();g.put(id,o.getString(id));}}catch(JSONException ignored){}
+        eigen.setGestures(g);
+        eigen.setSearchSources(new HashSet<>(prefs.getStringSet("search_sources",new HashSet<>(Arrays.asList("shortcuts","settings","maths","web")))));
+        eigen.setContactsAllowed(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED);
+        eigen.setGlance(prefs.getBoolean("glance",true));
+        eigen.setPrivateIds(new HashSet<>(prefs.getStringSet("private_apps",new HashSet<>())));
+        eigen.setIconShape(prefs.getString("icon_shape","system"));
+        eigen.setThemedIcons(prefs.getBoolean("themed_icons",false));
+        eigen.setAutomationIn(prefs.getBoolean("automation_in",false));
+        eigen.setAutomationOut(prefs.getBoolean("automation_out",false));
+        eigen.setLivingTexture(prefs.getString("living_texture",null));
+        eigen.setAccessibilityOn(EigenAccessibility.enabled(this));
+        pushBattery();
+    }
+    private void pushBattery(){
+        Intent battery=registerReceiver(null,new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        eigen.setBatteryLevel(ContextStore.battery(this));
+        eigen.setCharging(battery!=null&&battery.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED,0)!=0);
+    }
+    /** After the screen lock said yes: the private apps, until home leaves the screen. */
+    private void showPrivateApps(){
+        Set<String> ids=prefs.getStringSet("private_apps",Collections.emptySet());ArrayList<App> list=new ArrayList<>();
+        for(App a:apps)if(ids.contains(a.id))list.add(a);
+        eigen.setPrivateApps(list);eigen.setPrivateOpen(true);
+    }
+    /** A context just took over: its Plus actions, and the announcement for automation apps. */
+    private void contextStarted(ContextRules.Rule previous,ContextRules.Rule next){
+        boolean plus=eigen.getPlus();
+        if(plus&&next.accent>=0&&next.accent<EigenPalette.ACCENTS.length&&EigenPalette.ACCENTS[next.accent]!=accent)handler.post(()->applyColour(next.accent));
+        if(plus&&!next.tasker.isEmpty())com.studio72f.eigen.Automation.INSTANCE.runTasker(this,eigen,next.tasker);
+        if(plus&&prefs.getBoolean("automation_out",false))com.studio72f.eigen.Automation.INSTANCE.announce(this,next.name,previous.name);
+    }
+    /** Commands automation apps left while home was away (see Automation). */
+    private void applyAutomationCommands(){
+        int colour=prefs.getInt(Automation.PENDING_COLOUR,-1);
+        if(colour>=0){prefs.edit().remove(Automation.PENDING_COLOUR).apply();if(colour<EigenPalette.ACCENTS.length&&EigenPalette.ACCENTS[colour]!=accent)applyColour(colour);}
+        String error=prefs.getString(Automation.PENDING_ERROR,null);
+        if(error!=null){prefs.edit().remove(Automation.PENDING_ERROR).apply();
+            com.studio72f.eigen.ui.Problems.show(eigen,this,com.studio72f.eigen.ui.Problems.AUT_COMMAND,"automation:command","Command ignored",
+                "An app sent Eigen a command it couldn't follow. Check the action and extras in your automation app against Settings → Automation.",
+                "The command named a context or colour Eigen doesn't have, or was missing an extra.",null);}
+        evaluateContext();
+    }
+    private void setupFile(int request,Uri uri){
+        worker.execute(()->{
+            if(request==60){
+                try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Destination unavailable");SetupShare.export(prefs,"My Eigen",out);handler.post(()->toast("Setup saved"));}
+                catch(Exception e){handler.post(()->com.studio72f.eigen.ui.Problems.show(eigen,this,com.studio72f.eigen.ui.Problems.SET_EXPORT,"setup:export","Your setup wasn't saved","Choose another folder, or check there's free space, then export again.","Android couldn't write the file where you chose.",e));}
+                return;
+            }
+            JSONObject root;
+            try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("File unavailable");root=SetupShare.read(in);}
+            catch(SetupShare.Invalid e){handler.post(()->com.studio72f.eigen.ui.Problems.show(eigen,this,e.getNewer()?com.studio72f.eigen.ui.Problems.SET_NEWER:com.studio72f.eigen.ui.Problems.SET_INVALID,"setup:validate",
+                e.getNewer()?"Needs a newer Eigen":"That isn't an Eigen setup",
+                e.getNewer()?"Update Eigen from Play, then import it again.":"Choose a .eigen file exported from Eigen. Nothing has changed.",
+                e.getNewer()?"The file was made by a later version of Eigen, in a format this one can't read safely.":"The file is damaged, isn't a setup, or holds values outside what Eigen allows.",e));return;}
+            catch(Exception e){handler.post(()->com.studio72f.eigen.ui.Problems.show(eigen,this,com.studio72f.eigen.ui.Problems.SET_READ,"setup:open","File couldn't be opened","Make sure it's downloaded to the phone, then try again.","Android couldn't read the file you picked.",e));return;}
+            HashSet<String> installed=new HashSet<>();for(App a:apps)installed.add(a.component.flattenToString());
+            List<String> changes=SetupShare.describe(root,installed);String name=root.optString("name","setup");
+            handler.post(()->eigen.setSetupPreview(new com.studio72f.eigen.ui.SetupPreview(name.isEmpty()?"setup":name,changes,root.toString())));
+        });
+    }
+    private void applySetup(com.studio72f.eigen.ui.SetupPreview preview){
+        try{
+            HashMap<String,List<String>> ids=new HashMap<>();for(App a:apps)ids.computeIfAbsent(a.component.flattenToString(),k->new ArrayList<>()).add(a.id);
+            SetupShare.apply(new JSONObject(preview.getJson()),prefs,ids,eigen.getPlus(),com.studio72f.eigen.ui.Plus.FREE_CONTEXTS);
+            readState();activeContext=resolveContext();appliedLayout="";
+            eigen.setClockStyle(prefs.getString("clock_face","ratio"));
+            buildUi();loadApps();toast(preview.getName()+" applied");
+        }catch(Exception e){com.studio72f.eigen.ui.Problems.show(eigen,this,com.studio72f.eigen.ui.Problems.SET_INVALID,"setup:apply","Setup couldn't be applied","Nothing was half-changed: try again, or import a fresh copy of the file.","Saving the imported settings failed partway; Eigen kept your previous ones.",e);}
+    }
     private void openSettings(){if(searching){searching=false;query="";hideKeyboard();buildUi();}eigen.setSettings(settingsModel());eigen.setSettingsOpen(true);}
     /** Opens Eigen's Play listing, or the web page when no store app can handle it. */
     private void rateApp(){
@@ -1608,8 +1798,16 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Drawers","Create, hide, merge and rename",null,"folder","blue",null,this::categorySettings),
             row("Drawer order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size()))),null,"sort","blue",null,()->sheet.open(this::orderPage)),
             row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),
+            row("At a glance","Next event, alarm or what's playing under the clock",null,"clock","violet",prefs.getBoolean("glance",true),()->{prefs.edit().putBoolean("glance",!prefs.getBoolean("glance",true)).apply();pushPower();eigen.setSettings(settingsModel());}),
             row("Unread mark","On a closed drawer with notifications",new String[]{"Dash","Dot","Colour","Off"}[Math.max(0,Arrays.asList("dash","dot","colour","off").indexOf(prefs.getString("dot_style","dash")))],"bell","orange",null,()->menu("Unread mark",new String[]{"Dash · after the name","Dot · after the name","Colour · the name turns orange","Off"},n->{prefs.edit().putString("dot_style",new String[]{"dash","dot","colour","off"}[n]).apply();pushState();})),
             row("Notification dots",mediaAccess()?null:"Needs notification access",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Power",Arrays.asList(
+            row("Gestures","Double-tap, swipes and the Home button",null,"hand","violet",null,()->eigen.setPowerPage("gestures")),
+            row("Search","Shortcuts, contacts, settings and sums",null,"search","blue",null,()->eigen.setPowerPage("search")),
+            row("Icons","Shapes, themed icons and per-app icons",com.studio72f.eigen.ui.IconShaper.INSTANCE.getNAMES().get(Math.max(0,com.studio72f.eigen.ui.IconShaper.INSTANCE.getSHAPES().indexOf(prefs.getString("icon_shape","system")))).split(" ")[0],"apps","teal",null,()->eigen.setPowerPage("icons")),
+            row("Private apps","Behind your screen lock",eigen.getPlus()?null:"Plus","lock","orange",null,()->eigen.setPowerPage("private")),
+            row("Automation","Tasker, MacroDroid and friends",eigen.getPlus()?null:"Plus","adjust","green",null,()->eigen.setPowerPage("automation")),
+            row("Share your setup","Export or import a .eigen file",null,"share","grey",null,()->eigen.setPowerPage("setups")))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Your day",Arrays.asList(
             row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->eigen.setContextsPage("")),
             row("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),null,"sparkles","orange",null,this::assistantSettings))));

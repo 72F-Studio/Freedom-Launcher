@@ -19,6 +19,20 @@ Eigen is a new app (`com.studio72f.eigen`). It does not install over the 72F Lau
 - **App dashboard.** Time today hour by hour (with usage access), storage, version, and how the app's card looks on home.
 - **Swipe right** for Conversations and the Assistant. **Swipe left** for the widgets page.
 
+## Power features
+
+Settings → Power. Everything here runs on the phone; codes for every failure are in [docs/ERROR_CODES.md](docs/ERROR_CODES.md).
+
+- **Gestures.** Double-tap, swipe down, two-finger swipes up and down, Home while already home, and holding the search capsule, each set to any of 15 actions (lock, notifications, quick settings, recents, flashlight, camera, private apps, all apps…) or, with Plus, any app. Lock, notifications, quick settings and recents go through an optional accessibility service (`EigenAccessibility`) that declares no event types and cannot read the screen; a disclosure sheet explains it before Android's settings open.
+- **Search.** Besides apps: app shortcuts (as the default home app), contacts (asked for when turned on), 32 Android settings pages, sums and unit conversions (`QuickMath`, JVM-tested), and hand-offs to web, Maps and Play when nothing matches. Each source can be switched off.
+- **Icons.** Circle, squircle, rounded, square or teardrop for adaptive icons; themed icons from each app's monochrome layer in your colour (Android 13+); and any icon from any installed pack for one app (hold → More → Change icon).
+- **Private apps** (Plus). Hold → More → Make private: out of drawers, dock and search, opened with the phone's own screen lock through Android's biometric prompt. Locked again whenever home leaves the screen.
+- **At a glance.** One line under the clock: an event within two hours, what's playing, an alarm within twelve, or a low battery.
+- **Widget stacks.** Add widget → Stack widgets. Swipe sideways inside a stack; it turns to Now playing or your agenda when they matter. Drop a stack on Remove to take it apart.
+- **Share your setup.** Export a `.eigen` file with look, gestures, drawers and contexts (never photos, notes, widgets or private apps) and import one with a preview of what changes.
+- **Assistant actions.** "Timer 10 min", "wake me at 6:30", "play lofi on spotify", "directions to the airport", "call Asha" (dialled, never placed), "flashlight on", "catch me up" (Gemini Nano summarises Conversations on the phone). Search never runs an action while you type; it waits for a tap.
+- **Living textures** (Plus). Wallpaper → Textures → Follow the time of day.
+
 ## Widgets page
 
 Eigen's own widgets (Now playing, Next alarm, Agenda, Day, Battery, Screen time, Focus timer, World clocks, Calculator, Notes) and any widget from your apps. They stack from the bottom, by the thumb. Hold one to drag it into a new place or onto Remove. App widgets use Android's bind prompt and the provider's own setup screen. The agenda asks for calendar access only when added.
@@ -26,6 +40,10 @@ Eigen's own widgets (Now playing, Next alarm, Agenda, Day, Battery, Screen time,
 ## Contexts
 
 What the widgets page shows, and which drawer home opens on, follow what you're doing. A context is a rule (days, a time window, headphones, charging, Do Not Disturb, media playing) and a result (a drawer and an ordered list of widgets). The first matching context wins; **everyday** is the fallback. Contexts are checked only while home is on screen; nothing runs in the background. Hold a context for an hour, three hours or until morning. See [the design notes](docs/CONTEXTS.md).
+
+**Plus triggers and actions.** Battery at or below a level, on Wi-Fi (on or off only; the network's name would need location), in a meeting (calendar), or a Bluetooth audio device by name (from the audio system, no Bluetooth permission). When a context starts it can change the colour or run a Tasker task.
+
+**Automation** (Plus, off by default). Settings → Automation lets apps send `com.studio72f.eigen.action.HOLD_CONTEXT` (extras `context`, `minutes`), `RELEASE_CONTEXT` and `SET_COLOUR` (`colour`), and have Eigen broadcast `com.studio72f.eigen.event.CONTEXT_CHANGED` (`context`, `previous`). The receiver only records the request; home applies it the next time it's on screen.
 
 **Smartspacer** (Android 10+): add its item to a context to show At a Glance targets and complications. Install [Smartspacer](https://github.com/KieronQuinn/Smartspacer) separately; without it the item shows an install hint.
 
@@ -47,7 +65,10 @@ Photos come through Android's document picker (no photo-library permission), are
 
 Eigen is a complete launcher for free. **Eigen Plus** is a one-time Play purchase (`eigen_plus`, non-consumable) that adds:
 
-- unlimited contexts (free: everyday plus one);
+- unlimited contexts (free: everyday plus one), with battery, Wi-Fi, meeting and Bluetooth triggers, and colour and Tasker actions;
+- private apps behind the screen lock;
+- automation: commands in, context changes out, and gestures that open any app;
+- living textures that follow the time of day;
 - the Outline, Kesar split and Binary clocks;
 - every texture (free: Ember and Silk);
 - Stained and Lit cards, and wide cards;
@@ -58,7 +79,7 @@ Plus clocks and card styles can be tried on before buying. Gates sit where somet
 
 ## Privacy
 
-Eigen requests no internet permission. ML Kit brings Google's telemetry uploader, which asks for it; the manifest removes the permission, so those uploads fail on the phone. Play Billing talks to the Play Store app on the phone. Every other permission is optional and asked for when a feature needs it: notification access (Conversations, dots, Now playing), calendar (Agenda), usage access (screen time) and Smartspacer.
+Eigen requests no internet permission. ML Kit brings Google's telemetry uploader, which asks for it; the manifest removes the permission, so those uploads fail on the phone. Play Billing talks to the Play Store app on the phone. Every other permission is optional and asked for when a feature needs it: notification access (Conversations, dots, Now playing), calendar (Agenda, "in a meeting"), usage access (screen time), contacts (search and "call …"), the gesture accessibility service, Tasker's run-tasks permission and Smartspacer. Normal permissions added in 1.1: biometric prompt, network state (whether on Wi-Fi) and set alarm (assistant timers).
 
 ## Backup and restore
 
@@ -79,6 +100,8 @@ On an emulator (both clear or change Eigen's data, so never point them at a phon
 
 - `./scripts/engine-test.sh` installs the build, a test icon pack and the instrumentation checks: themes, backups, restore, glass and icon packs on real Android APIs.
 - `./scripts/eigen-smoke.py` drives the UI: the tour, both side pages, the clock sheet, widgets, contexts, the app dashboard and every Plus gate, including try-on and an upgrade from a pre-Plus install. Run it against a debug or `qa` build (R8, but debuggable).
+
+Performance: `ANDROID_SERIAL=<device> ./scripts/perf.sh` installs the R8 `qa` build, applies the baseline profile (`app/src/main/baseline-prof.txt`, installed on phones by ProfileInstaller) and writes cold-start and frame-time numbers to `build/perf/report.md`.
 
 Release APK (R8-shrunk), signed and checksummed into `dist/`:
 

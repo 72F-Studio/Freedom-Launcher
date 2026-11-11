@@ -182,6 +182,26 @@ private fun ContextEditor(state: EigenState, host: ContextsHost, r: ContextRules
                     Condition("Do not disturb", r.dnd) { edit { r.dnd = it } }
                     Condition("Media playing", r.playing) { edit { r.playing = it } }
                 }
+                Section("And with Plus")
+                // Plus triggers: free installs see them and are offered Plus on touching one.
+                fun plus(change: () -> Unit) { if (state.plus) edit(change) else state.plusSheet = "Smarter triggers" }
+                KelvinGroup {
+                    Condition("On Wi-Fi", r.wifi) { v -> plus { r.wifi = v } }
+                    Condition("In a meeting", r.busy) { v -> plus { r.busy = v } }
+                }
+                Spacer(Modifier.height(8.dp))
+                KelvinGroup(contentPadding = 16.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        KText("Battery at or below", style = Kelvin.type.label)
+                        val levels = listOf(0, 50, 30, 20, 15, 10)
+                        Pills(levels.map { if (it == 0) "Any" else "$it%" }, { i -> r.battery == levels[i] }) { i -> plus { r.battery = levels[i] } }
+                        var device by remember(r.id) { mutableStateOf(r.bluetooth) }
+                        KelvinTextField(device, { v -> if (!state.plus) state.plusSheet = "Smarter triggers" else { device = v.take(40); edit { r.bluetooth = device.trim() } } },
+                            "Bluetooth device", help = "Part of its name, like Pixel Buds or car. Empty for any.")
+                    }
+                }
+                KText("In a meeting reads your calendar, so it needs calendar access. Wi-Fi is on or off only: reading the network's name would need your location.",
+                    Modifier.padding(horizontal = 32.dp, vertical = 8.dp), Kelvin.type.summary, Kelvin.colors.ink2)
             }
             Section("Then")
             KelvinGroup(contentPadding = 16.dp) {
@@ -189,6 +209,12 @@ private fun ContextEditor(state: EigenState, host: ContextsHost, r: ContextRules
                     KText("Open this drawer on home", style = Kelvin.type.label)
                     val targets = listOf("") + host.drawers()
                     Pills(targets.map { if (it.isEmpty()) "None" else sentence(it) }, { i -> r.category == targets[i] }) { i -> edit { r.category = targets[i] } }
+                    KText("Change the colour", style = Kelvin.type.label)
+                    val colours = listOf("Keep") + EigenPalette.ACCENT_NAMES.toList()
+                    Pills(colours, { i -> r.accent == i - 1 }) { i -> if (state.plus) edit { r.accent = i - 1 } else state.plusSheet = "Changing colour with a context" }
+                    var task by remember(r.id) { mutableStateOf(r.tasker) }
+                    KelvinTextField(task, { v -> if (!state.plus) state.plusSheet = "Running Tasker tasks" else { task = v.take(60); edit { r.tasker = task.trim() } } },
+                        "Run a Tasker task", help = "The task's exact name in Tasker. Empty for none.")
                 }
             }
             Section("On the widgets page")

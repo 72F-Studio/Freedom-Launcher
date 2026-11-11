@@ -37,7 +37,8 @@ final class ContextStore {
             for (ContextRules.Rule r : rules) {
                 JSONObject o = new JSONObject().put("id", r.id).put("name", r.name).put("enabled", r.enabled).put("fallback", r.fallback)
                     .put("days", r.days).put("start", r.start).put("end", r.end).put("headphones", r.headphones).put("charging", r.charging)
-                    .put("dnd", r.dnd).put("playing", r.playing).put("category", r.category).put("header", r.header).put("widgets", new JSONArray(r.widgets));
+                    .put("dnd", r.dnd).put("playing", r.playing).put("category", r.category).put("header", r.header).put("widgets", new JSONArray(r.widgets))
+                    .put("battery", r.battery).put("wifi", r.wifi).put("busy", r.busy).put("bluetooth", r.bluetooth).put("accent", r.accent).put("tasker", r.tasker);
                 out.put(o);
             }
         } catch (JSONException e) { throw new IllegalStateException(e); }
@@ -61,6 +62,10 @@ final class ContextStore {
             r.headphones = range(o, "headphones", 0, 0, 2); r.charging = range(o, "charging", 0, 0, 2);
             r.dnd = range(o, "dnd", 0, 0, 2); r.playing = range(o, "playing", 0, 0, 2);
             r.header = o.optInt("header", -1);
+            r.battery = range(o, "battery", 0, 0, 100); r.wifi = range(o, "wifi", 0, 0, 2); r.busy = range(o, "busy", 0, 0, 2);
+            r.accent = range(o, "accent", -1, -1, 15);
+            r.bluetooth = o.optString("bluetooth", ""); r.tasker = o.optString("tasker", "");
+            if (r.bluetooth.length() > 40 || r.tasker.length() > 60) throw new IOException("Invalid context automation");
             if (!Arrays.asList(-1, 0, 10, 20, 30, 40).contains(r.header)) throw new IOException("Invalid context header");
             r.category = o.optString("category", "");
             if (r.category.length() > 24) throw new IOException("Invalid context category");
@@ -97,7 +102,47 @@ final class ContextStore {
         int day = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7; // Calendar.MONDAY (2) -> 0
         ContextRules.Signals s = new ContextRules.Signals(day, now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE));
         s.headphones = headphones(c); s.charging = charging(c); s.dnd = dnd(c); s.playing = playing;
+        s.battery = battery(c); s.wifi = wifi(c); s.busy = busy(c); s.bluetooth = bluetoothNames(c);
         return s;
+    }
+
+    static int battery(Context c) {
+        BatteryManager bm = c.getSystemService(BatteryManager.class);
+        return bm == null ? 100 : bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+    }
+
+    /** On Wi-Fi now. Needs only ACCESS_NETWORK_STATE; the network's name would need location, so it isn't read. */
+    static boolean wifi(Context c) {
+        android.net.ConnectivityManager cm = c.getSystemService(android.net.ConnectivityManager.class);
+        if (cm == null) return false;
+        android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        return caps != null && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI);
+    }
+
+    /** Names of connected Bluetooth audio devices, from the audio system: no Bluetooth permission needed. */
+    static List<String> bluetoothNames(Context c) {
+        ArrayList<String> out = new ArrayList<>();
+        AudioManager audio = c.getSystemService(AudioManager.class);
+        if (audio == null) return out;
+        for (AudioDeviceInfo d : audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            int t = d.getType();
+            boolean bt = t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || Build.VERSION.SDK_INT >= 31 && (t == AudioDeviceInfo.TYPE_BLE_HEADSET || t == AudioDeviceInfo.TYPE_BLE_SPEAKER);
+            if (bt && d.getProductName() != null) out.add(d.getProductName().toString().toLowerCase(Locale.ROOT));
+        }
+        return out;
+    }
+
+    /** A calendar event (not all-day, not marked free) is happening now. False without calendar access. */
+    static boolean busy(Context c) {
+        if (c.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return false;
+        long now = System.currentTimeMillis();
+        android.net.Uri.Builder range = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon();
+        ContentUris.appendId(range, now - 1); ContentUris.appendId(range, now + 1);
+        try (android.database.Cursor cur = c.getContentResolver().query(range.build(), new String[]{android.provider.CalendarContract.Instances.ALL_DAY, android.provider.CalendarContract.Instances.AVAILABILITY},
+            android.provider.CalendarContract.Instances.VISIBLE + "=1", null, null)) {
+            while (cur != null && cur.moveToNext()) if (cur.getInt(0) == 0 && cur.getInt(1) != android.provider.CalendarContract.Instances.AVAILABILITY_FREE) return true;
+        } catch (RuntimeException ignored) { }
+        return false;
     }
 
     static boolean headphones(Context c) {

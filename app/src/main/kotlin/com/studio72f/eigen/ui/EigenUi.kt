@@ -89,9 +89,15 @@ fun EigenApp(state: EigenState, host: EigenHost) {
             DashboardOverlay(state, host)
             ClockSheet(state, host, backdrop)
             TextureSheet(state, host, backdrop)
-            PlusSheet(state, host, backdrop)
             SettingsOverlay(state, host)
+            PowerOverlay(state, host)
             com.studio72f.eigen.ContextsOverlay(state, host.contexts())
+            PrivateAppsSheet(state, host, backdrop)
+            IconPickerSheet(state, host, backdrop)
+            SetupPreviewSheet(state, host, backdrop)
+            AccessibilitySheet(state, host, backdrop)
+            PlusSheet(state, host, backdrop)
+            ProblemSheet(state, backdrop)
             TourOverlay(state, host)
         }
     }

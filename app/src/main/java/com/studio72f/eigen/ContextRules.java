@@ -10,7 +10,8 @@ public final class ContextRules {
     static final int WEEKDAYS = 0b0011111, WEEKEND = 0b1100000;
     // Display words. English defaults keep this class testable off-device; the app replaces them from resources.
     static String everyDay = "every day", weekdays = "weekdays", weekends = "weekends", fallbackText = "when nothing else matches",
-        always = "always", headphonesWord = "headphones", chargingWord = "charging", dndWord = "do not disturb", playingWord = "media playing", notFormat = "no %s";
+        always = "always", headphonesWord = "headphones", chargingWord = "charging", dndWord = "do not disturb", playingWord = "media playing", notFormat = "no %s",
+        wifiWord = "wi-fi", busyWord = "in a meeting", batteryFormat = "battery at %d%% or less";
     static String[] dayNames = DAYS.clone();
     static void localize(String[] words, String[] days) {
         everyDay = words[0]; weekdays = words[1]; weekends = words[2]; fallbackText = words[3]; always = words[4];
@@ -22,6 +23,12 @@ public final class ContextRules {
         String id, name, category = "";
         boolean enabled = true, fallback;
         int days, start, end, headphones, charging, dnd, playing, header = -1;
+        /** Plus triggers: battery at or below this percent (0 = any), Wi-Fi and a calendar event now (ANY/YES/NO), a Bluetooth audio device whose name contains this. */
+        int battery, wifi, busy;
+        String bluetooth = "";
+        /** Plus actions when the context starts: an accent (index into the palette, -1 = keep) and a Tasker task to run. */
+        int accent = -1;
+        String tasker = "";
         final ArrayList<String> widgets = new ArrayList<>();
         Rule(String id, String name) { this.id = id; this.name = name; }
         boolean allDay() { return start == end; }
@@ -29,7 +36,10 @@ public final class ContextRules {
 
     static final class Signals {
         int day, minute; // day: 0 = Monday
-        boolean headphones, charging, dnd, playing;
+        boolean headphones, charging, dnd, playing, wifi, busy;
+        int battery = 100;
+        /** Connected Bluetooth audio devices' names, lower case. */
+        List<String> bluetooth = new ArrayList<>();
         Signals(int day, int minute) { this.day = day; this.minute = minute; }
     }
 
@@ -37,7 +47,15 @@ public final class ContextRules {
         if (r.fallback) return true;
         if (!r.enabled) return false;
         if (!inWindow(r, s)) return false;
-        return flag(r.headphones, s.headphones) && flag(r.charging, s.charging) && flag(r.dnd, s.dnd) && flag(r.playing, s.playing);
+        return flag(r.headphones, s.headphones) && flag(r.charging, s.charging) && flag(r.dnd, s.dnd) && flag(r.playing, s.playing)
+            && flag(r.wifi, s.wifi) && flag(r.busy, s.busy) && (r.battery == 0 || s.battery <= r.battery) && bluetooth(r.bluetooth, s.bluetooth);
+    }
+
+    private static boolean bluetooth(String want, List<String> connected) {
+        if (want == null || want.trim().isEmpty()) return true;
+        String w = want.trim().toLowerCase(Locale.ROOT);
+        for (String name : connected) if (name.contains(w)) return true;
+        return false;
     }
 
     private static boolean day(Rule r, int day) { return r.days == 0 || (r.days & (1 << day)) != 0; }
@@ -95,6 +113,10 @@ public final class ContextRules {
         condition(parts, r.charging, chargingWord);
         condition(parts, r.dnd, dndWord);
         condition(parts, r.playing, playingWord);
+        condition(parts, r.wifi, wifiWord);
+        condition(parts, r.busy, busyWord);
+        if (r.battery > 0) parts.add(String.format(Locale.ROOT, batteryFormat, r.battery));
+        if (r.bluetooth != null && !r.bluetooth.trim().isEmpty()) parts.add(r.bluetooth.trim());
         return parts.isEmpty() ? always : String.join(" · ", parts);
     }
 

@@ -36,6 +36,24 @@ public class ContextRulesTest {
         check("weekdays 06:00–10:00", ContextRules.describe(morning));
         check("headphones", ContextRules.describe(phones));
         check("22:00–06:00", ContextRules.describe(ContextRules.template("night", "x")));
+        // Plus triggers: battery threshold, Wi-Fi, a meeting now and a named Bluetooth device.
+        ContextRules.Rule low = ContextRules.template("blank", "low");
+        low.battery = 20;
+        ContextRules.Signals b = at(1, 9 * 60);
+        b.battery = 50; check(false, ContextRules.matches(low, b));
+        b.battery = 20; check(true, ContextRules.matches(low, b));
+        ContextRules.Rule car = ContextRules.template("blank", "car");
+        car.bluetooth = "Pixel Buds";
+        check(false, ContextRules.matches(car, b));
+        b.bluetooth.add("my pixel buds pro");
+        check(true, ContextRules.matches(car, b));
+        ContextRules.Rule meeting = ContextRules.template("blank", "meet");
+        meeting.busy = ContextRules.YES; meeting.wifi = ContextRules.NO;
+        check(false, ContextRules.matches(meeting, b));
+        b.busy = true; check(true, ContextRules.matches(meeting, b));
+        b.wifi = true; check(false, ContextRules.matches(meeting, b));
+        check("no wi-fi · in a meeting", ContextRules.describe(meeting));
+        check("battery at 20% or less", ContextRules.describe(low));
         System.out.println(passed + " context rule tests passed");
     }
     static ContextRules.Signals at(int day, int minute) { return new ContextRules.Signals(day, minute); }

@@ -30,7 +30,9 @@ import studio72f.kelvin.KelvinTiles
 import studio72f.kelvin.tablerIcon
 
 /**
- * What Eigen Plus adds. The free launcher is complete: these are only the extras. Gates sit where a thing is
+ * What Eigen Plus adds. The free launcher is complete: these are only the extras. Besides the ids below, Plus gates
+ * private apps, automation (commands, announcements, Tasker), gestures that open an app, the context triggers and
+ * actions beyond time and the original four, and the living texture; each is checked where it is chosen. Gates sit where a thing is
  * chosen, never where it is shown, so anything already set up keeps working.
  */
 object Plus {
@@ -87,8 +89,10 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         restoreText = "Restore purchase",
         onRestore = host::restorePlus,
         benefits = listOf(
-            studio72f.kelvin.PlanBenefit(Layers, "Every context", "Morning, work, night, headphones: as many as you like", KelvinTiles.Green),
-            studio72f.kelvin.PlanBenefit(Clock, "Every clock and texture", "Outline, Kesar split and Binary; all the textures", KelvinTiles.Violet),
+            studio72f.kelvin.PlanBenefit(Layers, "Contexts that automate", "As many as you like, triggered by battery, Wi-Fi, a meeting or your car; change colour or run Tasker", KelvinTiles.Green),
+            studio72f.kelvin.PlanBenefit(KelvinIcons.Lock, "Private apps", "Out of drawers and search, behind your fingerprint or PIN", KelvinTiles.Orange),
+            studio72f.kelvin.PlanBenefit(KelvinIcons.Adjustments, "Automation", "Tasker and MacroDroid can hold contexts and hear when they change; gestures open any app", KelvinTiles.Teal),
+            studio72f.kelvin.PlanBenefit(Clock, "Every clock and texture", "Outline, Kesar split and Binary; every texture, and textures that follow the day", KelvinTiles.Violet),
             studio72f.kelvin.PlanBenefit(KelvinIcons.Sparkles, "Card styles", "Stained and Lit cards, and wide cards", KelvinTiles.Orange),
             studio72f.kelvin.PlanBenefit(Widgets, "More widgets", "Screen time, Focus timer, World clocks, Calculator, Notes", KelvinTiles.Blue),
             studio72f.kelvin.PlanBenefit(Message, "Conversations", "Every chat app in one timeline, beside home", KelvinTiles.Teal),

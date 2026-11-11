@@ -134,7 +134,7 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
                 KelvinButton("Add widget", host::addWidget, kind = ButtonKind.Tinted, icon = KelvinIcons.Plus)
             }
             // While a widget is held, the top of the page becomes the place to drop it to remove it.
-            RemoveTarget(dragging != null, overRemove, Modifier.matchParentSize())
+            RemoveTarget(dragging != null, overRemove, Modifier.matchParentSize(), stack = dragging?.startsWith("stack:") == true)
         }
         if (shown.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
@@ -177,7 +177,12 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
                             },
                             onEnd = {
                                 val id0 = dragging
-                                if (overRemove && id0 != null) { working = working - id0; host.removeWidget(id0) } else host.setWidgetOrder(working)
+                                if (overRemove && id0 != null && id0.startsWith("stack:")) {
+                                    // A stack dropped on Remove comes apart: its widgets go back on the page in its place.
+                                    val at = working.indexOf(id0)
+                                    working = working.toMutableList().apply { removeAt(at); addAll(at, Stacks.members(id0)) }
+                                    host.setWidgetOrder(working)
+                                } else if (overRemove && id0 != null) { working = working - id0; host.removeWidget(id0) } else host.setWidgetOrder(working)
                                 dragging = null; dragOffset = 0f; overRemove = false
                             },
                         ),
@@ -188,19 +193,20 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
 }
 
 @Composable
-private fun RemoveTarget(visible: Boolean, over: Boolean, modifier: Modifier) {
+private fun RemoveTarget(visible: Boolean, over: Boolean, modifier: Modifier, stack: Boolean = false) {
     val c = Kelvin.colors
     AnimatedVisibility(visible, modifier, enter = fadeIn() + slideInVertically { -it / 2 }, exit = fadeOut() + slideOutVertically { -it / 2 }) {
         val fill by animateColorAsState(if (over) c.critical else c.criticalSoft, Kelvin.motion.gentle(), label = "remove")
         Row(Modifier.fillMaxSize().clip(CapsuleShape).background(fill), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             KIcon(KelvinIcons.Trash, null, size = 22.dp, color = if (over) c.onAccent else c.critical)
-            KText(if (over) "Let go to remove" else "Drop here to remove", Modifier.padding(start = 10.dp), Kelvin.type.label, if (over) c.onAccent else c.critical)
+            KText(if (stack) (if (over) "Let go to unstack" else "Drop here to unstack") else if (over) "Let go to remove" else "Drop here to remove", Modifier.padding(start = 10.dp), Kelvin.type.label, if (over) c.onAccent else c.critical)
         }
     }
 }
 
 @Composable
 private fun Widget(state: EigenState, host: EigenHost, id: String) {
+    if (id.startsWith("stack:")) { WidgetStack(state, host, Stacks.members(id)); return }
     when (id) {
         "media" -> NowPlaying(state, host)
         "alarm" -> AlarmCard(state, host)
@@ -506,5 +512,44 @@ private fun HostedWidget(state: EigenState, view: View) {
             modifier = Modifier.fillMaxWidth().height(200.dp).clip(CardShape),
             update = { it.setPadding(0, 0, 0, 0) },
         )
+    }
+}
+
+/** Widget stacks: several widgets in one place, "stack:a+b+c" in the page's order. */
+object Stacks {
+    fun members(id: String): List<String> = id.removePrefix("stack:").split('+').filter { it.isNotEmpty() }
+    @JvmStatic fun of(members: List<String>): String = "stack:" + members.joinToString("+")
+}
+
+/**
+ * Widgets sharing one place: swipe sideways between them. It turns by itself to what matters (what's playing, or
+ * your agenda when an event is close), and stays where you leave it otherwise.
+ */
+@Composable
+private fun WidgetStack(state: EigenState, host: EigenHost, members: List<String>) {
+    if (members.isEmpty()) return
+    val pager = androidx.compose.foundation.pager.rememberPagerState { members.size }
+    val soon = state.nextEventTitle != null && state.nextEventAt - System.currentTimeMillis() in 0L..2 * 3_600_000L
+    val wanted = when {
+        state.mediaPlaying && "media" in members -> members.indexOf("media")
+        soon && "agenda" in members -> members.indexOf("agenda")
+        else -> -1
+    }
+    val spatial = Kelvin.motion.spatial<Float>()
+    LaunchedEffect(wanted) { if (wanted >= 0 && pager.currentPage != wanted) pager.animateScrollToPage(wanted, animationSpec = spatial) }
+    Column {
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxWidth(), pageSpacing = 12.dp, verticalAlignment = Alignment.Bottom) { page ->
+            Box(Modifier.fillMaxWidth()) {
+                val id = members[page]
+                if (id == "media" && state.mediaTitle == null) Card { Label("Now playing"); KText("Nothing playing", style = Kelvin.type.body, color = Kelvin.colors.ink2) }
+                else Widget(state, host, id)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
+            repeat(members.size) { i ->
+                Box(Modifier.padding(horizontal = 3.dp).size(if (i == pager.currentPage) 7.dp else 5.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Kelvin.colors.ink.copy(alpha = if (i == pager.currentPage) 0.8f else 0.3f)))
+            }
+        }
     }
 }

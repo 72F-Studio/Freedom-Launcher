@@ -6,12 +6,25 @@
     <!-- Screen time on cards and app dashboards; granted by the person in Settings > Usage access. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="com.kieronquinn.app.smartspacer.permission.ACCESS_SMARTSPACER"/>
+    <!-- Search and the assistant: contacts by name, asked only when Contacts is turned on in Settings → Search. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- Private apps: the phone's own screen lock, checked by Android. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Contexts: "on Wi-Fi" (whether, never which network). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Assistant: "set a timer for 10 minutes" without opening the clock app. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM"/>
+    <!-- A context can run a Tasker task by name; Android asks the first time. -->
+    <uses-permission android:name="net.dinglisch.android.tasker.PERMISSION_RUN_TASKS"/>
     <!-- ML Kit brings Google's telemetry uploader, which asks for INTERNET. Eigen never goes online: the assistant runs
          in AICore and billing talks to the Play Store on the phone, so the permission is dropped and uploads just fail. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
     <queries>
         <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
         <package android:name="com.kieronquinn.app.smartspacer"/>
+        <package android:name="net.dinglisch.android.taskerm"/>
+        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="google.navigation"/></intent>
+        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="geo"/></intent>
         <intent><action android:name="org.adw.launcher.THEMES"/></intent>
         <intent><action android:name="com.novalauncher.THEME"/></intent>
         <intent><action android:name="com.anddoes.launcher.THEME"/></intent>
@@ -21,6 +34,20 @@
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <!-- Optional gesture service: global actions only (lock, notifications, quick settings, recents). It reads no
+             screen content; see res/xml/eigen_accessibility.xml and the disclosure in Settings → Gestures. -->
+        <service android:name=".EigenAccessibility" android:label="Eigen Launcher gestures" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="false">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/eigen_accessibility"/>
+        </service>
+        <!-- Commands from automation apps. It does nothing unless Settings → Automation → Accept commands is on. -->
+        <receiver android:name=".Automation$Receiver" android:exported="true" tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.studio72f.eigen.action.HOLD_CONTEXT"/>
+                <action android:name="com.studio72f.eigen.action.RELEASE_CONTEXT"/>
+                <action android:name="com.studio72f.eigen.action.SET_COLOUR"/>
+            </intent-filter>
+        </receiver>
         <service android:name=".MediaAccessService" android:label="Eigen conversations and notifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
         </service>
