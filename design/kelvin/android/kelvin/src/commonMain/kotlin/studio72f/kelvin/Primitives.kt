@@ -102,9 +102,19 @@ fun KIcon(
  * A Tabler icon (MIT, https://tabler.io/icons) from its unmodified path data on the 24 grid:
  * outline paths stroked at Kelvin's 1.5, or [filled] paths from Tabler's filled set. Apps use
  * this for glyphs [KelvinIcons] does not carry, so every icon on screen is one family.
+ *
+ * Give the glyph its Tabler [name]: [KIcon] uses it to draw the filled form under the filled icon style, so an
+ * app's own glyphs fill with Kelvin's. Set [keepOutline] for a glyph whose outline is its meaning (an empty
+ * bookmark beside a saved one): it then stays a line in every style, so state is never colour alone.
  */
-fun tablerIcon(name: String, vararg paths: String, filled: Boolean = false, stroke: Float = 1.5f): ImageVector {
-    val b = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+fun tablerIcon(
+    name: String,
+    vararg paths: String,
+    filled: Boolean = false,
+    stroke: Float = 1.5f,
+    keepOutline: Boolean = false,
+): ImageVector {
+    val b = ImageVector.Builder(if (keepOutline) name + KEEP_OUTLINE else name, 24.dp, 24.dp, 24f, 24f)
     for (d in paths) {
         val nodes = PathParser().parsePathString(d).toNodes()
         if (filled) b.addPath(pathData = nodes, fill = SolidColor(Color.Black))
@@ -118,6 +128,9 @@ fun tablerIcon(name: String, vararg paths: String, filled: Boolean = false, stro
     }
     return b.build()
 }
+
+/** Marks a glyph built with `keepOutline`: no filled form is looked up under this name. */
+private const val KEEP_OUTLINE = ":outline"
 
 /**
  * Tabler Icons outline paths (MIT, https://tabler.io/icons), drawn on the 24 grid at Kelvin's

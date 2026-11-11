@@ -72,7 +72,7 @@ if OUTLINE:
     sys.argv.remove("--outline")
 
 # Names whose meaning is an empty state: they stay outlines even where Tabler has a filled glyph.
-OUTLINE_STATES = {"Star", "BookmarkBorder", "RadioButtonUnchecked", "DeleteOutline"}
+OUTLINE_STATES = {"StarBorder", "BookmarkBorder", "FavoriteBorder", "RadioButtonUnchecked"}
 # Names whose meaning is a state Tabler shows as a filled glyph.
 FORCE_FILLED = {"BookmarkAdded", "StarFilled"}
 
@@ -193,7 +193,9 @@ def compose_scan(tabler, root, pkg, out, standalone):
         filled = (style == "Filled" or name in FORCE_FILLED)
         ps, f = glyph(tabler, MAP[name], filled)
         args = ", ".join('"%s"' % d for d in ps)
-        return f'        val {name}: ImageVector by lazy {{ tablerIcon("{MAP[name]}", {args}{", filled = true" if f else ""}) }}\n'
+        # KIcon fills a glyph by its Tabler name, so an empty state says it must stay a line.
+        keep = ", keepOutline = true" if name in OUTLINE_STATES and not f else ""
+        return f'        val {name}: ImageVector by lazy {{ tablerIcon("{MAP[name]}", {args}{", filled = true" if f else ""}{keep}) }}\n'
 
     body = ""
     for style in ["Outlined", "Filled", "Rounded", "Default", "TwoTone", "Sharp"]:

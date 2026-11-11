@@ -46,6 +46,9 @@ enum class KelvinString(internal val english: String) {
 @Composable
 internal expect fun kelvinString(string: KelvinString): String
 
+/** The system a failure happened on, for an error's technical detail: version and device, nothing personal. */
+internal expect fun kelvinSystemLine(): String
+
 /** Kelvin's two faces: Onest for display, Montserrat for text. */
 internal enum class KelvinFace { Display, Text }
 

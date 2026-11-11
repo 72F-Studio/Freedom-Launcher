@@ -31,9 +31,10 @@ val LocalKelvinOnBackdrop = staticCompositionLocalOf { false }
  * text are close in lightness to such a backdrop and disappear into it, so inside this:
  *
  * - a plain card is the raised surface, its label and figure in full ink;
- * - a card with a tone, and a notice that asks for something (accent), take a pastel of that colour, a
- *   step deeper than a soft fill, with text held to 4.5:1 on it; the
- *   notice's action is a real button;
+ * - a card with a tone stays that raised surface, its tone a soft light in the corner and the colour of
+ *   its label and marks;
+ * - a notice that asks for something (accent) takes a pastel of that colour, a step deeper than a soft
+ *   fill, with text held to 4.5:1 on it; the notice's action is a real button;
  * - secondary and tertiary text ([KelvinColors.ink2], [KelvinColors.ink3]) are darkened or
  *   lightened until they reach 4.5:1 on [strongest], the backdrop's most saturated colour, so
  *   captions written straight on the backdrop stay readable.

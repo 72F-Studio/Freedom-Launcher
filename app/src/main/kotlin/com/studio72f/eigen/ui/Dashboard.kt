@@ -135,7 +135,7 @@ private fun Dashboard(state: EigenState, host: EigenHost, app: MainActivity.App)
                 KelvinNotice("See your screen time", "Allow usage access to see how long you spend in each app, hour by hour. It stays on this phone.",
                     Modifier.padding(horizontal = 16.dp), actionText = "Allow usage access", onAction = host::requestUsageAccess)
             } else {
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                studio72f.kelvin.KelvinStatRow(Modifier.padding(horizontal = 16.dp), gap = 8.dp) {
                     KelvinStatCard("Time today", Usage.formatMinutes(today), Modifier.weight(1f), detail = "Most in one hour: ${Usage.formatMinutes(hourly.max())}")
                     KelvinStatCard("Storage", storage?.let(Usage::formatBytes) ?: "—", Modifier.weight(1f), detail = "App, data and cache")
                 }

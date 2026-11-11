@@ -31,6 +31,9 @@ import androidx.compose.ui.text.platform.Font
 @Composable
 internal actual fun kelvinString(string: KelvinString): String = string.english
 
+internal actual fun kelvinSystemLine(): String =
+    "System: ${System.getProperty("os.name")} ${System.getProperty("os.version")}, Java ${System.getProperty("java.version")}"
+
 // Desktop loads the bundled static weights from the library's own resources (font/ in the jar). The variable files
 // are Android's; here a weight between two statics takes the nearer one.
 private fun family(prefix: String, weights: List<Int>): FontFamily =

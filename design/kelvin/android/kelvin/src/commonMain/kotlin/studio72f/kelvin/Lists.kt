@@ -302,11 +302,47 @@ fun KelvinStatRow(
     modifier: Modifier = Modifier,
     gap: androidx.compose.ui.unit.Dp = 12.dp,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
-) = Row(
-    modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min),
-    horizontalArrangement = Arrangement.spacedBy(gap),
-    content = content,
-)
+) = CompositionLocalProvider(LocalEqualHeightRow provides true) {
+    Row(
+        modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        content = content,
+    )
+}
+
+/**
+ * True inside a [KelvinStatRow], where cards take the row's height so they line up at both edges. Outside one a card
+ * is as tall as its content: filling whatever height it is offered would take the whole screen in a plain column.
+ */
+internal val LocalEqualHeightRow = androidx.compose.runtime.compositionLocalOf { false }
+
+/** The row's height inside a [KelvinStatRow]; the content's own height anywhere else. */
+@Composable
+internal fun Modifier.rowHeight(): Modifier = if (LocalEqualHeightRow.current) fillMaxHeight() else this
+
+/**
+ * A tone on a card: a soft light of [color] in the card's top-end corner, fading out before the figure. The card
+ * keeps its own surface, so a toned card and a plain one beside it are the same material and the same weight.
+ */
+private fun Modifier.toneGlow(color: Color, shape: androidx.compose.ui.graphics.Shape, dark: Boolean): Modifier =
+    clip(shape).drawBehind {
+        val end = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) 0f else size.width
+        val peak = if (dark) 0.34f else 0.26f
+        // The light falls off as (1 - t)², sampled finely: a gradient with one bend in it shows that bend as a ring.
+        val stops = Array(GLOW_STEPS + 1) { i ->
+            val t = i / GLOW_STEPS.toFloat()
+            t to color.copy(alpha = peak * (1f - t) * (1f - t))
+        }
+        drawRect(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                *stops,
+                center = Offset(end, 0f),
+                radius = size.maxDimension * 1.05f,
+            ),
+        )
+    }
+
+private const val GLOW_STEPS = 12
 
 /**
  * A glanceable figure on a group card: label, big value (a [KelvinFigure]: light numbers, accent
@@ -314,9 +350,10 @@ fun KelvinStatRow(
  * row's height, label at the top and detail pinned to the bottom, so neighbouring cards line up
  * at both edges. A [hero] value is set larger, its numbers warming into the accent.
  *
- * Given a [tone], the card is filled with the tone's soft colour, its label becomes an eyebrow and
- * its value takes the tone's ink: for figures that are categories of their own (income and
- * spending, in and out), never just to decorate.
+ * Given a [tone], the card keeps the plain card's surface and its figure the page's ink; the tone is
+ * a soft light in the top corner and the colour of the small parts (the label, now an eyebrow, the
+ * currency mark and the unit). For figures that are categories of their own (income and spending,
+ * in and out) or that need the person (due soon), never just to decorate.
  */
 @Composable
 fun KelvinStatCard(
@@ -330,40 +367,33 @@ fun KelvinStatCard(
 ) {
     val c = Kelvin.colors
     val onBackdrop = LocalKelvinOnBackdrop.current
-    val t = tone?.colors()
-    // On a coloured backdrop a toned card takes a deeper pastel and a plain one is written in
-    // full ink; a soft fill and grey text would sink into the colour behind.
-    val pastel = if (onBackdrop && tone != null && tone != Tone.Neutral) pastelOf(tone.base()) else null
-    val ink = pastel?.ink ?: if (onBackdrop) c.ink else t?.ink
-    val quiet = when {
-        pastel != null -> c.ink.copy(alpha = 0.78f).compositeOver(pastel.fill)
-        onBackdrop -> c.ink2.legibleOn(backdropSurface())
-        else -> c.ink2
-    }
-    val surface = if (pastel != null) {
-        Modifier.background(pastel.fill, KelvinShapes.lg)
-    } else {
-        Modifier.cardSurface(t?.fill ?: c.group, KelvinShapes.lg)
-    }
+    // On a coloured backdrop a card is the raised surface and written in full ink; the group grey and
+    // grey text would sink into the colour behind.
+    val surface = if (onBackdrop) backdropSurface() else c.group
+    val toned = tone != null && tone != Tone.Neutral
+    val toneInk = if (toned) tone!!.base().legibleOn(surface) else null
+    val quiet = if (onBackdrop) c.ink2.legibleOn(surface) else c.ink2
+    val glow = if (toned) Modifier.toneGlow(tone!!.base(), KelvinShapes.lg, Kelvin.dark) else Modifier
     Column(
-        modifier.fillMaxHeight().then(surface).padding(16.dp),
+        modifier.rowHeight().background(surface, KelvinShapes.lg).then(glow).padding(16.dp),
+        // The label holds the top and the figure the foot, so figures line up across a row even when one label wraps.
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(if (t != null) 8.dp else 2.dp)) {
-            if (t != null) KelvinEyebrow(label, color = ink ?: t.ink)
-            else KText(label, style = Kelvin.type.section, color = if (onBackdrop) c.ink else c.ink2)
+        if (tone != null) KelvinEyebrow(label, color = toneInk ?: if (onBackdrop) c.ink else c.ink2)
+        else KText(label, style = Kelvin.type.section, color = if (onBackdrop) c.ink else c.ink2)
+        Column(Modifier.padding(top = if (tone != null) 8.dp else 2.dp)) {
             KelvinFigure(
                 value,
                 style = if (hero) Kelvin.type.hero else Kelvin.type.numeral,
-                color = ink ?: c.ink,
-                heat = hero && t == null,
-                mark = ink ?: c.figureAccent,
-                unit = (if (onBackdrop) ink else ink?.copy(alpha = 0.72f)) ?: c.figureAccent,
-                unitWord = (if (onBackdrop) ink else ink?.copy(alpha = 0.72f)) ?: c.ink2,
+                color = c.ink,
+                heat = hero && !toned,
+                mark = toneInk ?: c.figureAccent,
+                unit = toneInk ?: c.figureAccent,
+                unitWord = toneInk ?: c.ink2,
             )
             extra()
+            if (detail != null) KText(detail, Modifier.padding(top = 4.dp), Kelvin.type.summary, quiet)
         }
-        if (detail != null) KText(detail, Modifier.padding(top = 4.dp), Kelvin.type.summary, quiet)
     }
 }
 

@@ -220,10 +220,21 @@ private fun Catalog() {
                         java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(now),
                         Modifier.padding(horizontal = 24.dp),
                     )
-                } else {
+                } else Column {
                     KelvinStatRow(Modifier.padding(horizontal = 16.dp)) {
                         KelvinStatCard("Income", "₹48.2k", Modifier.weight(1f), detail = "12 transactions", tone = Tone.Positive)
                         KelvinStatCard("Spent", "₹31.9k", Modifier.weight(1f), detail = "38 transactions", tone = Tone.Critical)
+                    }
+                    KelvinStatRow(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                        KelvinStatCard("Needs you", "5", Modifier.weight(1f), detail = "17 unread", tone = Tone.Neutral)
+                        KelvinStatCard("Due soon", "₹3,519", Modifier.weight(1f), detail = "2 to pay", tone = Tone.Caution)
+                    }
+                    KelvinStatRow(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                        KelvinChoiceCard("Personal", KelvinIcons.Mail, KelvinTiles.Red, {}, Modifier.weight(1f), summary = "Home and family")
+                        KelvinChoiceCard("Work", KelvinIcons.Mail, KelvinTiles.Blue, {}, Modifier.weight(1f), summary = "Your company's account")
+                        KelvinChoiceCard("Other", {}, Modifier.weight(1f), summary = "Set up by hand") {
+                            KIcon(KelvinIcons.Mail, null, size = 40.dp, color = Kelvin.colors.ink2)
+                        }
                     }
                 }
                 }
@@ -529,7 +540,7 @@ private fun Catalog() {
                         KText("Picture search", style = Kelvin.type.rowTitle); KelvinPlanMark("Plus")
                     }
                 }
-                if (ownsPlan) KelvinPlanOwned("Plus is on", "Thank you for backing 72F.", manageText = "Manage", onManage = { ownsPlan = false })
+                if (ownsPlan) KelvinPlanOwned("Plus", "Thank you for backing 72F.", manageText = "Manage", onManage = { ownsPlan = false }, statusText = "Active")
                 KelvinPlanBenefits(benefits)
                 KelvinSectionHeader("Tips")
                 val tips = listOf(

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -243,13 +244,32 @@ private fun BrandChip(text: String, icon: ImageVector, fill: Color, ink: Color) 
     }
 }
 
+// Controls on the bright card keep its dark ink in both themes; the theme's own text and plain buttons would turn
+// light at night and vanish on it.
+@Composable
+private fun BrandTextAction(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.heightIn(min = KelvinSizes.touch).kelvinPress(onClick, shape = CapsuleShape, role = Role.Button)
+            .padding(horizontal = KelvinSizes.textButtonPadding),
+        contentAlignment = Alignment.Center,
+    ) { KText(text, style = Kelvin.type.action, color = BrandInk, maxLines = 1) }
+}
+
+@Composable
+private fun BrandDismiss(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(KelvinSizes.touch).kelvinPress(onClick, shape = CapsuleShape, role = Role.Button),
+        contentAlignment = Alignment.Center,
+    ) { KIcon(KelvinIcons.X, label, size = KelvinSizes.icon, color = BrandInk2) }
+}
+
 /**
  * A plan the person has: the rosette, "[plan] is on", a line of thanks or what it covers, and
  * [manageText] for a subscription (opens the store's subscriptions page). A state, not a sale.
  *
- * With [brand] the card wears the app's own look instead of the status green: a bright wash of the accent with dark
- * ink (the same in light and dark), and an accent tile, so owning the plan is as much the app's as being offered it.
- * Colour then only marks status, in the [statusText] chip beside the name ("Active").
+ * The card wears the app's own look ([brand], the default): a bright wash of the accent with dark ink (the same in
+ * light and dark), and an accent tile, so owning the plan is as much the app's as being offered it. Colour then only
+ * marks status, in the [statusText] chip beside the name ("Active"). Without [brand] it is the status green.
  */
 @Composable
 fun KelvinPlanOwned(
@@ -259,7 +279,7 @@ fun KelvinPlanOwned(
     manageText: String? = null,
     onManage: (() -> Unit)? = null,
     gutter: androidx.compose.ui.unit.Dp = 16.dp,
-    brand: Boolean = false,
+    brand: Boolean = true,
     statusText: String? = null,
 ) {
     val c = Kelvin.colors
@@ -282,15 +302,18 @@ fun KelvinPlanOwned(
             }
             KText(message, style = Kelvin.type.summary, color = if (brand) BrandInk2 else c.ink2)
         }
-        if (manageText != null && onManage != null) KelvinButton(manageText, onManage, kind = ButtonKind.Text)
+        if (manageText != null && onManage != null) {
+            if (brand) BrandTextAction(manageText, onManage) else KelvinButton(manageText, onManage, kind = ButtonKind.Text)
+        }
     }
 }
 
 /**
  * A card that offers a plan where it fits (on home, in Settings, under a feature): the plan's
  * mark, what one feature does, and an action that opens it or the plan. [onDismiss] adds an x that
- * hides it (the app decides for how long). Never a popup; never shown to someone who has the plan. With [brand] it
- * uses the same bright accent wash and dark ink as [KelvinPlanOwned], with a solid primary action.
+ * hides it (the app decides for how long). Never a popup; never shown to someone who has the plan. It uses the same
+ * bright accent wash and dark ink as [KelvinPlanOwned], with a solid primary action ([brand], the default); without
+ * [brand] it is a plain group card with a tinted action.
  */
 @Composable
 fun KelvinPlanCta(
@@ -304,7 +327,7 @@ fun KelvinPlanCta(
     dismissLabel: String = "",
     icon: ImageVector = KelvinIcons.Sparkles,
     gutter: androidx.compose.ui.unit.Dp = 16.dp,
-    brand: Boolean = false,
+    brand: Boolean = true,
 ) {
     val c = Kelvin.colors
     val ground = if (brand) Modifier.background(brandSurface(c.accent), KelvinShapes.lg) else Modifier.background(c.group, KelvinShapes.lg).horizon(0.6f, inset = true)
@@ -321,7 +344,10 @@ fun KelvinPlanCta(
             KText(message, style = Kelvin.type.summary, color = if (brand) BrandInk2 else c.ink2)
             KelvinButton(actionText, onAction, Modifier.padding(top = 6.dp), kind = if (brand) ButtonKind.Primary else ButtonKind.Tinted)
         }
-        if (onDismiss != null) KelvinIconButton(KelvinIcons.X, dismissLabel, onDismiss, Modifier.offset(y = (-12).dp), kind = IconButtonKind.Plain)
+        if (onDismiss != null) {
+            if (brand) BrandDismiss(dismissLabel, onDismiss, Modifier.offset(y = (-12).dp))
+            else KelvinIconButton(KelvinIcons.X, dismissLabel, onDismiss, Modifier.offset(y = (-12).dp), kind = IconButtonKind.Plain)
+        }
     }
 }
 
