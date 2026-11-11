@@ -14,7 +14,7 @@ android {
         minSdk = 28
         targetSdk = 37
         testInstrumentationRunner = "com.studio72f.eigen.EngineChecks"
-        versionCode = 5
+        versionCode = 6
         versionName = "1.0.1"
     }
     signingConfigs {
