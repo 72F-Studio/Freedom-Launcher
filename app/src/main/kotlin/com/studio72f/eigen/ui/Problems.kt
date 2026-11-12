@@ -46,6 +46,12 @@ object Problems {
     const val AST_SUMMARY = "EIG-AST-02"     // nothing to summarise, or the model failed
     // Textures (TEX)
     const val TEX_RENDER = "EIG-TEX-01"      // the living texture could not be redrawn
+    // On-device model (AI): Gemma when the phone has no Gemini Nano
+    const val AI_DOWNLOAD = "EIG-AI-01"      // the model download failed or was cut off (network, server)
+    const val AI_SPACE = "EIG-AI-02"         // not enough free storage for the model
+    const val AI_CHECKSUM = "EIG-AI-03"      // the downloaded file didn't match its checksum, so it was deleted
+    const val AI_TERMS = "EIG-AI-04"         // the Gemma terms weren't accepted yet
+    const val AI_MODEL = "EIG-AI-05"         // the model wouldn't run (AI Share AIS- code in the report)
 
     /** Builds a problem with a redacted report for [code] at [stage]. */
     @JvmStatic

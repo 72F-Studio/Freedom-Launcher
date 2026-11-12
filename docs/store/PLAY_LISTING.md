@@ -19,7 +19,7 @@ A calm, private launcher with gestures, power search, contexts and Tasker.
 ## Full description (max 4000)
 
 ```
-Eigen is a calm home screen for Android. Your apps live in drawers, your messages sit on the left, your widgets on the right, and an assistant runs on the phone. No ads, no analytics, no account, and no internet permission.
+Eigen is a calm home screen for Android. Your apps live in drawers, your messages sit on the left, your widgets on the right, and an assistant runs on the phone. No ads, no analytics, no account, and nothing you type leaves the phone.
 
 POWER WITHOUT CLUTTER
 • Gestures: double-tap to lock, swipe for notifications or quick settings, two-finger swipes, Home again
@@ -52,7 +52,7 @@ EIGEN PLUS
 Eigen is a complete launcher for free. Eigen Plus is a one-time purchase, no subscription, that adds unlimited contexts with smarter triggers, automation, private apps, more clocks and textures (including ones that follow the day), extra card styles, more widgets and Conversations. Try Plus clocks and card styles before you buy. You can also leave a tip in Settings; tips are separate and unlock nothing.
 
 PRIVATE
-Everything stays on your phone. Eigen has no internet permission, no ads and no analytics. Purchases and tips go through the Play Store app.
+Everything stays on your phone. No ads, no analytics. Eigen goes online only to download an assistant model you pick, when the phone has no Gemini Nano and no other 72F app already has one. Purchases and tips go through the Play Store app.
 
 ACCESSIBILITY SERVICE
 Eigen's optional gesture service uses Android's Accessibility API only to lock the screen, open notifications or quick settings, and show recent apps when you make a gesture you set. It doesn't read your screen, observe other apps or collect any data. It's off until you turn it on.

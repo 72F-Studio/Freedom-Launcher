@@ -13,17 +13,17 @@ What 1.1 adds is in the README's Power features section. This is how to put it i
 
 | Place | Post | Notes |
 | --- | --- | --- |
-| r/androidapps | "I made a launcher with no internet permission: gestures, Tasker contexts, on-device AI" | Lead with the privacy model and a 30 s screen recording of a context switching when headphones connect. |
+| r/androidapps | "I made a launcher where nothing you type leaves the phone: gestures, Tasker contexts, on-device AI" | Lead with the privacy model and a 30 s screen recording of a context switching when headphones connect. |
 | r/androidthemes, r/androidthemes Discord | A setup screenshot with its `.eigen` file attached | Setups are the growth loop: every shared setup is an ad. |
 | XDA forums, Apps & Games | A thread with the changelog, perf report and a beta link | Answer every reply for the first week. |
 | r/tasker | The automation section of the README, with a sample profile | Tasker users pay for integrations. |
-| Android Police / 9to5Google tips inbox | A two-paragraph pitch plus the press kit | "No internet permission" plus "Gemini Nano on device" is the hook. |
+| Android Police / 9to5Google tips inbox | A two-paragraph pitch plus the press kit | "Nothing leaves the phone" plus "Gemini Nano, or Gemma shared between 72F apps, on device" is the hook. |
 
 ## Reddit post draft
 
-> **Eigen Launcher 1.1: a calm launcher with power under the hood, and no internet permission**
+> **Eigen Launcher 1.1: a calm launcher with power under the hood, and nothing you type leaves the phone**
 >
-> I build Eigen alone. It's a drawer-based home screen (Ratio fans will feel at home) that never goes online: no ads, no analytics, no account, no INTERNET permission in the manifest.
+> I build Eigen alone. It's a drawer-based home screen (Ratio fans will feel at home) that keeps everything on the phone: no ads, no analytics, no account. It goes online only to download an assistant model you pick, on phones without Gemini Nano.
 >
 > New in 1.1: settable gestures (double-tap to lock and more), search for shortcuts, contacts, settings and unit conversions, icon shapes and themed icons, private apps behind your fingerprint, widget stacks, shareable setups, and contexts that react to battery, Wi-Fi, meetings or your car's Bluetooth and can run Tasker tasks. The assistant runs on Gemini Nano on your phone and can set timers or catch you up on messages.
 >

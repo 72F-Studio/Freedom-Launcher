@@ -12,4 +12,9 @@ includeBuild("design/kelvin/android") {
 }
 
 
+// 72F AI Share (shared/ai-share, synced from 72F-AiShare): one Gemma model per phone for every 72F app.
+includeBuild("shared/ai-share") {
+    dependencySubstitution { substitute(module("studio72f:ai-share")).using(project(":ai-share")) }
+}
+
 include(":iconpack-test")

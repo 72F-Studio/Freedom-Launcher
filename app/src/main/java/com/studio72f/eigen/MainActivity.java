@@ -1380,14 +1380,17 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             });
         });
     }
-    private void assistantSettings() {
+    /** Settings > Assistant: the model page (Gemini Nano, or Gemma through 72F AI Share). */
+    private void assistantSettings() { eigen.setPowerPage("assistant"); }
+
+    private void assistantMenuLegacy() {
         boolean ready = !com.studio72f.eigen.ai.EigenAssistant.statusLabel().startsWith("Quick");
         menu("Assistant", new String[]{ com.studio72f.eigen.ai.EigenAssistant.statusLabel(), "Start a new conversation", "How your data is handled" }, i -> {
             if (i == 0) message("On-device model", ready
                 ? "Eigen uses Gemini Nano through Android AICore. It runs on this phone's own chip, works offline, and nothing you type is sent anywhere."
                 : "This phone doesn't have Android AICore, so Eigen can't run a language model here. Quick answers still work: open an app, ask the time or battery, or do a sum.");
             else if (i == 1) { com.studio72f.eigen.ai.EigenAssistant.clearHistory(); eigen.getChat().clear(); toast("Started a new conversation"); }
-            else message("Your data", "The assistant and search answers run entirely on this phone. Eigen has no internet permission, keeps no chat log on disk, and sends nothing to any server.");
+            else message("Your data", "The assistant and search answers run entirely on this phone. Eigen keeps no chat log on disk and sends nothing you type to any server. It goes online only to download an assistant model you pick.");
         });
     }
 

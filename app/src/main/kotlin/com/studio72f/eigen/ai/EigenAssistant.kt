@@ -20,6 +20,8 @@ import java.util.Locale
  * Eigen's assistant, for the Assistant tab and the search bar. Everything stays on the phone:
  * 1. Quick answers (open an app, battery, time, sums) need no model and reply at once.
  * 2. Everything else goes to Gemini Nano through AICore ([MlKitEngine]), streamed as it is written.
+ * 3. On a phone without Gemini Nano, to Gemma through 72F AI Share: a model another 72F app already holds, or one
+ *    Eigen downloaded ([GemmaModels]). Either way it runs on this phone.
  */
 object EigenAssistant {
     enum class Status { Checking, Ready, Preparing, Unavailable }
@@ -28,6 +30,37 @@ object EigenAssistant {
 
     const val SOURCE_QUICK = "Quick answer · on this phone"
     const val SOURCE_NANO = "Gemini Nano · on this phone"
+
+    @Volatile private var appContext: android.content.Context? = null
+    /** Gemma through 72F AI Share when Gemini Nano isn't on this phone. */
+    @Volatile private var gemma: studio72f.aishare.SharedLlm? = null
+    @Volatile private var nanoMissing = false
+
+    /** From EigenApp, so status checks can look for Gemma without a screen's context. */
+    fun init(context: android.content.Context) { appContext = context.applicationContext }
+
+    private fun gemmaSource(llm: studio72f.aishare.SharedLlm): String {
+        val from = if (llm.local) "" else " · from " + appName(llm.providerPackage)
+        return "${llm.model.name}$from · on this phone"
+    }
+
+    private fun appName(pkg: String): String = runCatching {
+        val pm = appContext!!.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault("another 72F app")
+
+    /** The Gemma models to try, the person's pick first, then smallest first. */
+    private fun gemmaCandidates(context: android.content.Context): List<studio72f.aishare.SharedModel> =
+        (listOfNotNull(GemmaModels.chosen(context)) + GemmaModels.CHOICES.map { it.model }).distinct()
+
+    private suspend fun findGemma(context: android.content.Context): studio72f.aishare.SharedLlm? {
+        gemma?.let { return it }
+        for (m in gemmaCandidates(context)) studio72f.aishare.AiShare.find(context, m)?.let { gemma = it; return it }
+        return null
+    }
+
+    /** Drops the Gemma connection so the next question looks again (a download finished, a model was deleted). */
+    fun forgetGemma() { gemma?.close(); gemma = null; _status.value = Status.Checking }
 
     private const val SYSTEM = "You are Eigen, the assistant built into a phone's home screen. You run entirely on the phone. " +
         "Answer in plain sentences, briefly and warmly. No markdown, no emoji, no lists unless asked."
@@ -40,21 +73,25 @@ object EigenAssistant {
     val status: StateFlow<Status> = _status.asStateFlow()
 
     @JvmStatic fun statusLabel(): String = when (_status.value) {
-        Status.Ready -> "Gemini Nano · on this phone"
+        Status.Ready -> gemma?.let { gemmaSource(it) } ?: "Gemini Nano · on this phone"
         Status.Preparing -> "Gemini Nano · getting ready"
         Status.Checking -> "Checking the on-device model"
-        Status.Unavailable -> "Quick answers only · on this phone"
+        Status.Unavailable -> "Quick answers only · add a model in Settings"
     }
 
     @JvmStatic fun clearHistory() = synchronized(history) { history.clear() }
 
     /** Reads AICore's status without starting a session. Cheap; call when a screen that shows it appears. */
     suspend fun refreshStatus() {
-        if (engine.isInitialized()) { _status.value = Status.Ready; return }
+        if (engine.isInitialized() || gemma != null) { _status.value = Status.Ready; return }
         _status.value = when (withContext(Dispatchers.IO) { MlKitEngine.probeStatus() }) {
             FeatureStatus.AVAILABLE, FeatureStatus.DOWNLOADABLE -> Status.Ready
             FeatureStatus.DOWNLOADING -> Status.Preparing
-            else -> Status.Unavailable
+            else -> {
+                nanoMissing = true
+                val c = appContext
+                if (c != null && withContext(Dispatchers.IO) { findGemma(c) } != null) Status.Ready else Status.Unavailable
+            }
         }
     }
 
@@ -70,6 +107,7 @@ object EigenAssistant {
             val digest = if (Actions.isCatchUp(clean)) Actions.messages(clean) else null
             if (digest != null && digest.isEmpty()) return@withContext Answer(Actions.nothingToSummarise(clean), SOURCE_QUICK)
             if (!ready()) return@withContext if (digest != null) Answer(Actions.plainDigest(digest), SOURCE_QUICK) else Answer(unavailable(), null, failed = true)
+            gemma?.let { llm -> return@withContext askGemma(llm, if (digest != null) Actions.summaryPrompt(SYSTEM, clean, digest) else prompt(clean, conversational), conversational, clean, onPartial) }
             val sb = StringBuilder()
             try {
                 engine.generateResponseStream(if (digest != null) Actions.summaryPrompt(SYSTEM, clean, digest) else prompt(clean, conversational)).collect { chunk ->
@@ -91,11 +129,33 @@ object EigenAssistant {
             Answer(text, SOURCE_NANO)
         }
 
+    private suspend fun askGemma(llm: studio72f.aishare.SharedLlm, text: String, conversational: Boolean, query: String, onPartial: (String) -> Unit): Answer {
+        val sb = StringBuilder()
+        try {
+            llm.stream(studio72f.aishare.AiRequest(text)).collect { chunk ->
+                sb.append(chunk)
+                val sofar = sb.toString()
+                withContext(Dispatchers.Main) { onPartial(sofar) }
+            }
+        } catch (e: studio72f.aishare.AiShareException) {
+            android.util.Log.w("EigenAssistant", "Gemma failed: ${e.error.code}")
+            // The model went away (its app removed, deleted, or the app holding it closed): look again next time.
+            forgetGemma()
+            if (sb.isEmpty()) return Answer("${llm.model.name} couldn't answer just now (${e.error.code}). Try again in a moment.", null, failed = true)
+        }
+        val answer = sb.toString().trim()
+        if (answer.isEmpty()) return Answer("${llm.model.name} didn't return an answer. Try rephrasing.", null, failed = true)
+        remember(conversational, query, answer)
+        return Answer(answer, gemmaSource(llm))
+    }
+
     private suspend fun ready(): Boolean = initLock.withLock {
-        if (engine.isInitialized()) return true
-        val result = engine.initialize { downloading -> _status.value = if (downloading) Status.Preparing else Status.Checking }
+        if (engine.isInitialized() || gemma != null) return true
+        val result = if (nanoMissing) Result.failure(IllegalStateException("no AICore"))
+            else engine.initialize { downloading -> _status.value = if (downloading) Status.Preparing else Status.Checking }
         result.exceptionOrNull()?.let { android.util.Log.w("EigenAssistant", "Gemini Nano setup failed", it) }
-        val ok = result.isSuccess
+        // No Gemini Nano: Gemma from a 72F app on this phone, or Eigen's own download.
+        val ok = result.isSuccess || appContext?.let { findGemma(it) } != null
         _status.value = if (ok) Status.Ready else Status.Unavailable
         ok
     }
@@ -117,7 +177,7 @@ object EigenAssistant {
     }
 
     private fun unavailable() =
-        "Gemini Nano isn't available on this phone, so only quick answers work here: open an app, ask the time or battery, or do a sum."
+        "This phone has no Gemini Nano. Add a Gemma model in Settings > Assistant (or install a 72F app that has one) and Eigen can answer anything. Quick answers work now: open an app, ask the time or battery, or do a sum."
 
     /** Commands that need no model. Returns null when the query needs Nano. */
     fun quickAnswer(context: Context, query: String, act: Boolean = true): String? {

@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The other 72F apps, so this one can see whether they are installed and hold a model (package visibility). -->
+    <queries>
+        <package android:name="com.studio72f.tofu"/>
+        <package android:name="com.studio72f.remerit"/>
+        <package android:name="com.studio72f.hypermind"/>
+        <package android:name="com.studio72f.eigen"/>
+        <package android:name="com.studio72f.mail"/>
+        <package android:name="studio.seventytwo.gallery"/>
+        <package android:name="com.studio72f.tofu.move"/>
+    </queries>
+    <application>
+        <!-- Exported so other 72F apps can bind; every call checks the caller's signing key or Play install first. -->
+        <service
+            android:name="studio72f.aishare.AiShareService"
+            android:exported="true"
+            tools:ignore="ExportedService"
+            xmlns:tools="http://schemas.android.com/tools">
+            <intent-filter><action android:name="studio72f.aishare.SHARE"/></intent-filter>
+        </service>
+    </application>
+</manifest>

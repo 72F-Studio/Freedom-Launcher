@@ -234,10 +234,10 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
 
     Column(Modifier.fillMaxSize()) {
         KText(when (status) {
-            EigenAssistant.Status.Ready -> "Gemini Nano, running on this phone"
+            EigenAssistant.Status.Ready -> EigenAssistant.statusLabel()
             EigenAssistant.Status.Preparing -> "Gemini Nano is getting ready on this phone"
             EigenAssistant.Status.Checking -> "Checking the on-device model"
-            EigenAssistant.Status.Unavailable -> "Quick answers only: this phone has no on-device model"
+            EigenAssistant.Status.Unavailable -> "Quick answers only: add a model in Settings > Assistant"
         }, Modifier.padding(start = 4.dp, bottom = 8.dp), Kelvin.type.summary, c.ink2, maxLines = 1)
         if (state.chat.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

@@ -1,0 +1,7 @@
+Gemma is provided under and subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms
+
+This notice applies to downloaded Gemma 3 models, including quantized LiteRT-LM variants.
+Gemma 3 Terms of Use and the incorporated Prohibited Use Policy are supplied with Tofu.
+Gemma 4 E2B and E4B are separately licensed under Apache License 2.0.
+Models are developed by Google DeepMind. Gemma is a trademark of Google LLC.
+The app does not bundle Gemma weights in its APK; models are downloaded separately.

@@ -82,6 +82,7 @@ fun PowerOverlay(state: EigenState, host: EigenHost) {
                 "icons" -> "Icons" to "Shape and style for every app; hold an app to change just its icon."
                 "private" -> "Private apps" to "Kept out of drawers and search, behind your screen lock."
                 "automation" -> "Automation" to "Let Tasker, MacroDroid and similar apps work with your contexts."
+                "assistant" -> "Assistant" to "Which model answers you. It runs on this phone."
                 else -> "Share your setup" to "Your look, drawers and contexts in one file to keep or share."
             }
             KelvinDetailHeader(title, { state.powerPage = null }, "Back", summary = summary)
@@ -93,6 +94,7 @@ fun PowerOverlay(state: EigenState, host: EigenHost) {
                     "icons" -> IconsPage(state, host)
                     "private" -> PrivatePage(state, host)
                     "automation" -> AutomationPage(state, host)
+                    "assistant" -> AssistantPage(state, host)
                     else -> SetupsPage(state, host)
                 }
                 Spacer(Modifier.height(32.dp))
@@ -140,7 +142,7 @@ private fun SearchPage(state: EigenState, host: EigenHost) {
         SourceRow(state, host, "maths", "Sums and units", "12 × 4, 18% of 2400, 5 km in miles, 72 f to c")
         SourceRow(state, host, "web", "Web, Maps and Play", "Hands your words to those apps when nothing on the phone matches")
     }
-    Note("Search runs on the phone. Contacts are read only while you type and never stored. Web, Maps and Play are other apps: Eigen has no internet permission.")
+    Note("Search runs on the phone. Contacts are read only while you type and never stored. Web, Maps and Play are other apps; Eigen sends nothing you type anywhere.")
 }
 
 @Composable
@@ -230,7 +232,7 @@ fun AccessibilitySheet(state: EigenState, host: EigenHost, backdrop: KelvinBackd
         Spacer(Modifier.height(12.dp))
         KelvinGroup(gutter = 0.dp) {
             KelvinRow("What it does", summary = "Locks the screen, opens notifications or quick settings, or shows recent apps, when you make a gesture on home.", icon = KelvinIcons.Check, tile = KelvinTiles.Green)
-            KelvinRow("What it never does", summary = "Read your screen, watch other apps, record what you type, or send anything anywhere. Eigen has no internet permission.", icon = KelvinIcons.Shield, tile = KelvinTiles.Blue)
+            KelvinRow("What it never does", summary = "Read your screen, watch other apps, record what you type, or send anything anywhere. Eigen only goes online to download an assistant model you pick.", icon = KelvinIcons.Shield, tile = KelvinTiles.Blue)
         }
         Spacer(Modifier.height(12.dp))
         KText("In the next screen, choose Eigen Launcher and switch it on. You can turn it off there at any time.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)

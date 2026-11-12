@@ -24,5 +24,10 @@ Every failure Eigen shows has its own stable code, defined in `ui/Problems.kt`. 
 | EIG-AST-01 | assistant action | No app handles a timer, alarm, music, maps, call or search request. Said inline in the chat. |
 | EIG-AST-02 | assistant summary | Reserved for summary failures; today an empty timeline answers in words. |
 | EIG-TEX-01 | texture:living | Redrawing the living texture failed. |
+| EIG-AI-01 | model:download | Downloading a Gemma model failed or was cut off (network, server). What arrived is kept and the next try resumes. |
+| EIG-AI-02 | model:space | Not enough free storage for the chosen model. |
+| EIG-AI-03 | model:verify | The downloaded file didn't match its SHA-256, so it was deleted. |
+| EIG-AI-04 | model:terms | A download was started before the Gemma terms were accepted. |
+| EIG-AI-05 | model:run | The model wouldn't load or answer; the report carries the 72F AI Share code (AIS-01 to AIS-10). |
 
 Add a code here before using it, and never reuse one for a different stage.

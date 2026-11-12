@@ -14,7 +14,7 @@ android {
         minSdk = 28
         targetSdk = 37
         testInstrumentationRunner = "com.studio72f.eigen.EngineChecks"
-        versionCode = 7
+        versionCode = 8
         versionName = "1.1.0"
     }
     signingConfigs {
@@ -53,6 +53,8 @@ dependencies {
 
     // UI: Kelvin (72F design system) on Compose. Home, the side pages, search and the assistant are Compose.
     implementation("studio72f:kelvin")
+    // Gemma on phones without Gemini Nano, shared with the other 72F apps (LiteRT-LM comes with it).
+    implementation("studio72f:ai-share")
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")

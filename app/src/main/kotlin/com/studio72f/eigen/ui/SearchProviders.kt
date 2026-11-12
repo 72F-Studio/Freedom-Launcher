@@ -16,7 +16,7 @@ import com.studio72f.eigen.QuickMath
 /**
  * Everything search finds besides apps, all on the phone: contacts (with permission), app shortcuts, Android
  * settings pages and sums or unit conversions. Web, Maps and Play searches hand the words to the app that handles
- * them; Eigen itself never goes online.
+ * them; Eigen itself never sends a search anywhere.
  */
 object SearchProviders {
     data class SettingPage(val name: String, val action: String, val words: String)

@@ -16,9 +16,9 @@
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM"/>
     <!-- A context can run a Tasker task by name; Android asks the first time. -->
     <uses-permission android:name="net.dinglisch.android.tasker.PERMISSION_RUN_TASKS"/>
-    <!-- ML Kit brings Google's telemetry uploader, which asks for INTERNET. Eigen never goes online: the assistant runs
-         in AICore and billing talks to the Play Store on the phone, so the permission is dropped and uploads just fail. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
+    <!-- Internet, for one thing only: downloading a Gemma model when the phone has no Gemini Nano and no other 72F app
+         already holds one (Settings > Assistant). Prompts and answers never leave the phone. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <queries>
         <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
         <package android:name="com.kieronquinn.app.smartspacer"/>
@@ -29,7 +29,10 @@
         <intent><action android:name="com.novalauncher.THEME"/></intent>
         <intent><action android:name="com.anddoes.launcher.THEME"/></intent>
     </queries>
-    <application android:label="Eigen Launcher" android:theme="@style/MetroTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" tools:targetApi="33">
+    <application android:name=".EigenApp" android:label="Eigen Launcher" android:theme="@style/MetroTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" tools:targetApi="33">
+        <!-- ML Kit's telemetry (Google's datatransport) would upload usage logs now that Eigen has internet. Without its
+             backend registry the uploader has nowhere to send them, so nothing is uploaded. -->
+        <service android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery" tools:node="remove"/>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
