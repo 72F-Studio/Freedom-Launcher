@@ -487,10 +487,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(useSystemWallpaper)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         updateBackdrop();
-        // Edge to edge: Compose pads for the system bars itself.
-        if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
-        else getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        getWindow().setStatusBarColor(Color.TRANSPARENT); getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        // Edge to edge the Android 15 way (Compose pads for the system bars itself): transparent bars with light
+        // icons over the wallpaper, without the deprecated bar-colour and system-UI-flag calls.
+        androidx.activity.EdgeToEdge.enable(this,
+            androidx.activity.SystemBarStyle.dark(Color.TRANSPARENT), androidx.activity.SystemBarStyle.dark(Color.TRANSPARENT));
         buildWidgets();
         pushState(); pushApps();
         scene.addView(com.studio72f.eigen.ui.EigenUi.create(this, eigen, host), new FrameLayout.LayoutParams(-1,-1));

@@ -5,8 +5,6 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#39B9D4</item>
         <item name="android:windowBackground">#000000</item>
-        <item name="android:navigationBarColor">#000000</item>
-        <item name="android:statusBarColor">#000000</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>
     <style name="MetroTheme" parent="MetroBaseTheme"/>
