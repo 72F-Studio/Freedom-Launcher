@@ -7,6 +7,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -114,6 +117,23 @@ private fun Pages(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) 
         if (pager.currentPage != state.page) pager.scrollToPage(state.page)
         snapshotFlow { pager.settledPage }.collect { state.page = it }
     }
+    // A phone swipes between the three pages. A wide window on its side (a tablet in landscape) has room for all three
+    // at once: the conversations on the left, home in the middle at a phone's width, the widgets on the right. Between
+    // the two (an open fold, a tablet held upright) the pages still swipe, each kept to a width it reads well at,
+    // centred over the wallpaper, so app cards and widgets do not stretch across the screen.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    if (maxWidth >= ThreePaneWidth) {
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+            Box(Modifier.width(380.dp).fillMaxHeight()) { LeftPage(state, host, backdrop) }
+            Box(Modifier.weight(1f).fillMaxHeight()) { HomePage(state, host, backdrop) }
+            Box(Modifier.width(420.dp).fillMaxHeight()) { WidgetsPage(state, host, backdrop) }
+        }
+    } else {
+    val held: @Composable (androidx.compose.ui.unit.Dp, @Composable () -> Unit) -> Unit = { max, content ->
+        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+            Box(Modifier.fillMaxHeight().widthIn(max = max)) { content() }
+        }
+    }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { page ->
         // A page leaving recedes a little and fades; the one arriving grows into place.
         Box(Modifier.fillMaxSize().graphicsLayer {
@@ -122,13 +142,17 @@ private fun Pages(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) 
             scaleX = s; scaleY = s; alpha = 1f - 0.45f * off
         }) {
             when (page) {
-                EigenState.PAGE_LEFT -> LeftPage(state, host, backdrop)
-                EigenState.PAGE_HOME -> HomePage(state, host, backdrop)
-                else -> WidgetsPage(state, host, backdrop)
+                EigenState.PAGE_LEFT -> held(760.dp) { LeftPage(state, host, backdrop) }
+                EigenState.PAGE_HOME -> held(540.dp) { HomePage(state, host, backdrop) }
+                else -> held(640.dp) { WidgetsPage(state, host, backdrop) }
             }
         }
+    }    }
     }
 }
+
+/** From this width the three pages stand side by side instead of swiping. */
+private val ThreePaneWidth = 1000.dp
 
 /**
  * The wallpaper as Eigen shows it on home: sharp, with a touch of extra saturation, dimmed for legibility and a
