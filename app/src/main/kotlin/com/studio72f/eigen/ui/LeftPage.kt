@@ -200,6 +200,8 @@ private fun ConversationRow(state: EigenState, item: MediaAccessService.Conversa
 }
 
 private val SUGGESTIONS = listOf("How's my battery?", "Open camera", "Plan a calm evening", "What's 18% of 2400?")
+/** Suggestions only a language model can answer, hidden until one is ready. */
+private val NEEDS_MODEL = setOf("Plan a calm evening")
 
 @Composable
 private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
@@ -241,10 +243,11 @@ private fun Assistant(state: EigenState, backdrop: KelvinBackdrop) {
         }, Modifier.padding(start = 4.dp, bottom = 8.dp), Kelvin.type.summary, c.ink2, maxLines = 1)
         if (state.chat.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                KText("Ask anything", style = Kelvin.type.headline.copy(fontSize = 30.sp), align = TextAlign.Center)
-                KText("Answers come from the model on this phone. Nothing you type leaves it.", Modifier.padding(horizontal = 24.dp, vertical = 10.dp), Kelvin.type.body, c.ink2, align = TextAlign.Center)
+                KText(if (status == EigenAssistant.Status.Ready) "Ask anything" else "Ask a quick question", style = Kelvin.type.headline.copy(fontSize = 30.sp), align = TextAlign.Center)
+                KText(if (status == EigenAssistant.Status.Ready) "Answers come from the model on this phone. Nothing you type leaves it."
+                    else "Quick answers work now: open an app, check the battery or do a sum. Add a model in Settings, under Assistant, to ask anything else.", Modifier.padding(horizontal = 24.dp, vertical = 10.dp), Kelvin.type.body, c.ink2, align = TextAlign.Center)
                 CarouselRow(16.dp, Modifier.padding(vertical = 12.dp)) {
-                    for (s in SUGGESTIONS) KText(s, Modifier.height(48.dp).kelvinPill(false, backdrop).eigenPress({ send(s) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp), Kelvin.type.label, kelvinPillInk(false), maxLines = 1)
+                    for (s in SUGGESTIONS) if (status == EigenAssistant.Status.Ready || s !in NEEDS_MODEL) KText(s, Modifier.height(48.dp).kelvinPill(false, backdrop).eigenPress({ send(s) }, shape = CapsuleShape).padding(horizontal = 18.dp, vertical = 14.dp), Kelvin.type.label, kelvinPillInk(false), maxLines = 1)
                 }
             }
         } else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {

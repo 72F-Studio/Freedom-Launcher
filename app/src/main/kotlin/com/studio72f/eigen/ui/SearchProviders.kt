@@ -71,6 +71,25 @@ object SearchProviders {
             .sortedBy { if (CategoryRules.normalized(it.name).startsWith(n)) 0 else 1 }.take(3).map { Hit.Setting(it) }
     }
 
+    /** One of Eigen's own settings pages; [page] "" is Settings itself. */
+    class EigenPage(val title: String, val page: String, val words: String)
+
+    private val EIGEN_PAGES = listOf(
+        EigenPage("Eigen settings", "", "settings eigen launcher home preferences options setup"),
+        EigenPage("Wallpaper", "wallpaper", "wallpaper background photo picture texture blur brightness dim legibility"),
+        EigenPage("Drawers", "drawers", "drawers categories folders groups order sort merge rename"),
+        EigenPage("Gestures", "gestures", "gestures double tap swipe lock"),
+        EigenPage("Icons", "icons", "icons icon pack shape themed grey"),
+        EigenPage("Assistant", "assistant", "assistant model gemma gemini ai"),
+    )
+
+    /** Eigen's own settings for [q]: "settings" offers Eigen settings, "wallpaper" its Wallpaper page, and so on. */
+    fun eigenPages(q: String): List<EigenPage> {
+        val n = CategoryRules.normalized(q)
+        if (n.length < 3) return emptyList()
+        return EIGEN_PAGES.filter { p -> p.words.split(' ').any { it.startsWith(n) } || CategoryRules.normalized(p.title).startsWith(n) }.take(2)
+    }
+
     fun shortcuts(state: EigenState, q: String): List<Hit> {
         val n = CategoryRules.normalized(q)
         if (n.length < 2) return emptyList()

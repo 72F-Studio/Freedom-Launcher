@@ -84,7 +84,7 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         plans = listOf(studio72f.kelvin.PlanOption("plus", "Plus", price = state.plusPrice, period = "once")),
         selected = "plus",
         onSelect = {},
-        buyText = "Get Plus · ${state.plusPrice}",
+        buyText = state.plusPrice?.let { "Get Plus · $it" } ?: "Get Plus",
         onBuy = host::buyPlus,
         restoreText = "Restore purchase",
         onRestore = host::restorePlus,
@@ -108,7 +108,7 @@ fun PlusSheet(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
         KelvinGroup(gutter = 0.dp) {
             studio72f.kelvin.KelvinTipJar(
                 tiers = EigenBilling.TIERS.mapIndexed { i, tier ->
-                    studio72f.kelvin.TipTier(tier.id, tier.title, tier.description, state.tipPrices[tier.id], tier.fallbackPrice, glyphs[i % 4].first, glyphs[i % 4].second)
+                    studio72f.kelvin.TipTier(tier.id, tier.title, tier.description, state.tipPrices[tier.id], null, glyphs[i % 4].first, glyphs[i % 4].second)
                 },
                 onTip = host::tip,
                 note = "Tips unlock nothing. They keep Eigen independent.",

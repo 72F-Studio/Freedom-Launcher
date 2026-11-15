@@ -28,6 +28,8 @@ interface EigenHost {
     fun appMenu(app: MainActivity.App)
     fun homeMenu()
     fun openSettings()
+    /** Opens one settings page over Settings: "wallpaper", "drawers", "gestures", "icons", "search", "assistant". */
+    fun openSettingsPage(page: String)
     fun addWidget()
     fun openAlarms()
     fun media(action: Int)
@@ -96,6 +98,12 @@ interface EigenHost {
     fun setLivingTexture(id: String?)
     fun iconPackName(): String
     fun chooseIconPack()
+    /** App icons in shades of grey (the "icons" style "mono"), or in their own colours. */
+    fun setGreyIcons(on: Boolean)
+    /** A confirmation in Kelvin's dialog: the question as [title], the explanation in [body]. */
+    fun confirm(title: String, body: String, confirmLabel: String, cancelLabel: String, destructive: Boolean, onConfirm: () -> Unit)
+    /** Consent before something with terms: Accept, Not now, and a quiet link to read them. */
+    fun consent(title: String, body: String, acceptLabel: String, linkLabel: String, onAccept: () -> Unit, onLink: () -> Unit)
 }
 
 /** A shortcut found by search: [pkg]'s shortcut [id] for [user]. */
@@ -114,8 +122,8 @@ class EigenState {
 
     // Eigen Plus
     var plus by mutableStateOf(false)
-    /** Play's price for Plus once known, in the local currency. */
-    var plusPrice by mutableStateOf("₹349")
+    /** Play's price for Plus once known, in the local currency; null (no price shown) until Play answers. */
+    var plusPrice by mutableStateOf<String?>(null)
     /** Localized tip prices by Play product id; empty until Play answers. */
     var tipPrices by mutableStateOf<Map<String, String>>(emptyMap())
     /** null: closed; "": opened from Settings; otherwise what was tapped ("Binary"), named at the top. */
@@ -215,6 +223,8 @@ class EigenState {
     /** The first-run tour's page, or -1 when it is not showing. */
     var tourPage by mutableIntStateOf(-1)
     var settings by mutableStateOf(emptyList<SettingsSection>())
+    /** Rows for the settings pages the activity builds (Wallpaper, Drawers), shown under [powerPage]. */
+    var pageRows by mutableStateOf(emptyList<SettingsSection>())
     // Power features
     /** The failure shown in the problem sheet, or null. */
     var problem by mutableStateOf<studio72f.kelvin.KelvinProblem?>(null)

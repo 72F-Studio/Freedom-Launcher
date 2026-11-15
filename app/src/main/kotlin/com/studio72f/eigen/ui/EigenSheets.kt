@@ -24,6 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -93,6 +97,104 @@ object EigenSheets {
                 KelvinButton("OK", close, Modifier.fillMaxWidth())
             }
         }
+
+    /**
+     * A question with one primary answer and one way out, for confirmations and consent. [body] carries the
+     * explanation (never the title). [linkLabel], when set, adds a quiet text button such as "Read the terms".
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun dialog(
+        activity: ComponentActivity, state: EigenState, title: String, body: String,
+        confirmLabel: String, cancelLabel: String, destructive: Boolean, onConfirm: Runnable,
+        linkLabel: String? = null, onLink: Runnable? = null,
+    ): Dialog = window(activity, state) { close ->
+        Column(
+            Modifier.navigationBarsPadding().padding(12.dp).fillMaxWidth().pane(KelvinWindowGlass(), DialogShape).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            KText(sentence(title), style = Kelvin.type.headline)
+            KText(body, style = Kelvin.type.body, color = Kelvin.colors.ink2)
+            if (linkLabel != null && onLink != null) KelvinButton(linkLabel, { onLink.run() }, kind = ButtonKind.Text)
+            Spacer(Modifier.size(6.dp))
+            KelvinButton(confirmLabel, { close(); onConfirm.run() }, Modifier.fillMaxWidth(), kind = if (destructive) ButtonKind.Danger else ButtonKind.Primary)
+            KelvinButton(cancelLabel, close, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
+        }
+    }
+
+    /** Checks a typed name; returns why it can't be used, or null when it's fine. */
+    fun interface Check { fun problem(text: String): String? }
+    fun interface Text { fun accept(text: String) }
+
+    /**
+     * A name to type, in Kelvin's text field: [title] above, Save and Cancel below. [extraLabel] adds a quiet
+     * third choice (such as "Use the original name").
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun prompt(
+        activity: ComponentActivity, state: EigenState, title: String, label: String, initial: String, maxLength: Int,
+        check: Check, onSave: Text, extraLabel: String? = null, onExtra: Runnable? = null,
+    ): Dialog {
+        val d = window(activity, state) { close ->
+            var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(initial) }
+            var error by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+            val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+            fun save() {
+                val t = text.trim()
+                val p = check.problem(t)
+                if (p != null) error = p else { close(); onSave.accept(t) }
+            }
+            Column(
+                Modifier.navigationBarsPadding().imePaddingCompat().padding(12.dp).fillMaxWidth().pane(KelvinWindowGlass(), DialogShape).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                KText(sentence(title), style = Kelvin.type.headline)
+                studio72f.kelvin.KelvinTextField(text, { text = it.take(maxLength); error = null }, label, Modifier.fillMaxWidth().focusRequester(focus), error = error,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done))
+                if (extraLabel != null && onExtra != null) KelvinButton(extraLabel, { close(); onExtra.run() }, kind = ButtonKind.Text)
+                Spacer(Modifier.size(6.dp))
+                KelvinButton("Save", { save() }, Modifier.fillMaxWidth())
+                KelvinButton("Cancel", close, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
+            }
+        }
+        d.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        return d
+    }
+
+    fun interface Time { fun accept(minuteOfDay: Int) }
+
+    /** A time of day on Kelvin's wheels, in the phone's 12- or 24-hour style. */
+    @JvmStatic
+    fun time(activity: ComponentActivity, state: EigenState, title: String, minuteOfDay: Int, is24: Boolean, onSet: Time): Dialog =
+        window(activity, state) { close ->
+            val hours = if (is24) (0..23).map { "%02d".format(it) } else (1..12).map { it.toString() }
+            val minutes = (0..59).map { "%02d".format(it) }
+            val h0 = minuteOfDay / 60
+            var hour by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(if (is24) h0 else (h0 % 12).let { if (it == 0) 11 else it - 1 }) }
+            var minute by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(minuteOfDay % 60) }
+            var pm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(if (h0 >= 12) 1 else 0) }
+            Column(
+                Modifier.navigationBarsPadding().padding(12.dp).fillMaxWidth().pane(KelvinWindowGlass(), DialogShape).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                KText(sentence(title), style = Kelvin.type.headline)
+                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+                    studio72f.kelvin.KelvinWheelPicker(hours, hour, { hour = it }, "Hour", Modifier.weight(1f))
+                    studio72f.kelvin.KelvinWheelPicker(minutes, minute, { minute = it }, "Minute", Modifier.weight(1f))
+                    if (!is24) studio72f.kelvin.KelvinWheelPicker(listOf("AM", "PM"), pm, { pm = it }, "Morning or afternoon", Modifier.weight(1f), visible = 3)
+                }
+                Spacer(Modifier.size(6.dp))
+                KelvinButton("Set", {
+                    val h = if (is24) hour else ((hour + 1) % 12) + pm * 12
+                    close(); onSet.accept(h * 60 + minute)
+                }, Modifier.fillMaxWidth())
+                KelvinButton("Cancel", close, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
+            }
+        }
+
+    private fun Modifier.imePaddingCompat(): Modifier = this.then(Modifier.imePadding())
 
     /**
      * Kelvin's rule for windows: over a window the system has blurred, the panel is glass-tint at the Glass level's

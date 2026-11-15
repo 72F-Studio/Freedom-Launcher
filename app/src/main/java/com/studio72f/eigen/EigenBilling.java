@@ -41,7 +41,6 @@ public final class EigenBilling implements PurchasesUpdatedListener {
     public static final String DONATION_SUPPORTER = "eigen_donation_supporter";
 
     public static final String PLUS = "eigen_plus";
-    public static final String PLUS_FALLBACK_PRICE = "₹349";
     /** Prefs that remember Plus: bought (re-checked against Play on every connection) or kept from before Plus existed. */
     public static final String PREF_OWNED = "plus_owned", PREF_GRANDFATHERED = "plus_grandfathered";
 
@@ -55,24 +54,23 @@ public final class EigenBilling implements PurchasesUpdatedListener {
     public static final class DonationTier {
         public final String id;
         public final String title;
-        public final String fallbackPrice;
         public final String description;
         public final String emoji;
 
-        DonationTier(String id, String title, String fallbackPrice, String description, String emoji) {
+        DonationTier(String id, String title, String description, String emoji) {
             this.id = id;
             this.title = title;
-            this.fallbackPrice = fallbackPrice;
             this.description = description;
             this.emoji = emoji;
         }
     }
 
     public static final List<DonationTier> TIERS = List.of(
-        new DonationTier(DONATION_COFFEE, "Tip Coffee", "₹99", "Helps keep Eigen private and independent.", "☕"),
-        new DonationTier(DONATION_SNACK, "Tip Snack", "₹249", "Supports ongoing maintenance and updates.", "🥐"),
-        new DonationTier(DONATION_MEAL, "Tip Meal", "₹499", "Funds development of new features and tools.", "🍱"),
-        new DonationTier(DONATION_SUPPORTER, "Tip Supporter", "₹999", "Backs Eigen as a self-funded project.", "🌟")
+        // No prices here: each tier shows Play's own price, in the person's currency, once Play answers.
+        new DonationTier(DONATION_COFFEE, "A coffee", "Helps keep Eigen private and independent.", "☕"),
+        new DonationTier(DONATION_SNACK, "A snack", "Supports ongoing maintenance and updates.", "🥐"),
+        new DonationTier(DONATION_MEAL, "A meal", "Funds development of new features and tools.", "🍱"),
+        new DonationTier(DONATION_SUPPORTER, "A big thank-you", "Backs Eigen as a self-funded project.", "🌟")
     );
 
     public interface Listener {
@@ -80,6 +78,11 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         void onPurchaseCompleted(String productId);
         /** Plus was bought, restored or refunded. */
         default void onPlusChanged(boolean plus) { }
+        /**
+         * A purchase or tip couldn't start or ended in an error. [stage] is "connect", "details" or "flow";
+         * [response] is Play's response code (0 when there is none). Shown in Eigen's problem sheet.
+         */
+        default void onPurchaseProblem(String stage, String productId, int response) { }
     }
 
     /** Whether Plus is unlocked: bought, or kept by an install from before Plus existed. */
@@ -235,6 +238,7 @@ public final class EigenBilling implements PurchasesUpdatedListener {
         });
     }
 
+    /** Play's price for [productId] in the local currency, or [fallback] (null: show no price) until Play answers. */
     public String getFormattedPrice(String productId, String fallback) {
         ProductDetails details = productDetailsMap.get(productId);
         if (details != null && details.getOneTimePurchaseOfferDetails() != null) {
@@ -249,15 +253,15 @@ public final class EigenBilling implements PurchasesUpdatedListener {
 
     public void launchDonation(Activity activity, String productId) {
         if (billingClient == null || !billingClient.isReady()) {
-            Toast.makeText(activity, "Connecting to Google Play...", Toast.LENGTH_SHORT).show();
             startConnection();
+            for (Listener l : listeners) l.onPurchaseProblem("connect", productId, 0);
             return;
         }
 
         ProductDetails details = productDetailsMap.get(productId);
         if (details == null) {
-            Toast.makeText(activity, "Price unavailable right now. Please try again.", Toast.LENGTH_SHORT).show();
             queryProductDetails();
+            for (Listener l : listeners) l.onPurchaseProblem("details", productId, 0);
             return;
         }
 
@@ -278,6 +282,11 @@ public final class EigenBilling implements PurchasesUpdatedListener {
     public void onPurchasesUpdated(@NonNull BillingResult billingResult, @Nullable List<Purchase> purchases) {
         if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
             checkPurchases();
+            return;
+        }
+        int code = billingResult.getResponseCode();
+        if (code != BillingClient.BillingResponseCode.OK && code != BillingClient.BillingResponseCode.USER_CANCELED) {
+            mainHandler.post(() -> { for (Listener l : listeners) l.onPurchaseProblem("flow", "", code); });
             return;
         }
         if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {

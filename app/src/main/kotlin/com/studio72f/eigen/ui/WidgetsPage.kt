@@ -107,7 +107,8 @@ private val LocalEigenState = androidx.compose.runtime.staticCompositionLocalOf<
 
 /**
  * The widgets page on the right. Widgets stack from the bottom, by the thumb, and grow upward. Hold any of them, an
- * app's widget too, to lift it: drag up or down to reorder, or onto Remove at the top to take it off.
+ * app's widget too, to lift it: drag up or down to reorder, or onto Remove at the top to take it off. Holding still
+ * and letting go opens the same choices as a menu.
  */
 @Composable
 fun WidgetsPage(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) =
@@ -124,6 +125,9 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
     var dragging by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var overRemove by remember { mutableStateOf(false) }
+    // How far the held widget travelled: a hold without a drag opens its menu instead.
+    var travelled by remember { mutableFloatStateOf(0f) }
+    val stillReach = with(density) { 12.dp.toPx() }
     val removeReach = with(density) { 56.dp.toPx() }
     val shown = working.filter { id -> id != "media" || state.mediaTitle != null || dragging == id }
 
@@ -155,9 +159,10 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
                             if (held) { translationY = dragOffset; scaleX = 1.03f; scaleY = 1.03f; shadowElevation = 24.dp.toPx(); shape = CardShape; clip = false; alpha = if (overRemove) 0.6f else 1f }
                         }
                         .holdToDrag(
-                            onStart = { working = shown; dragging = id; dragOffset = 0f; haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                            onStart = { working = shown; dragging = id; dragOffset = 0f; travelled = 0f; haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
                             onDrag = { dy ->
                                 dragOffset += dy
+                                travelled += kotlin.math.abs(dy)
                                 val items = list.layoutInfo.visibleItemsInfo
                                 val me = items.firstOrNull { it.key == id }
                                 if (me != null) {
@@ -177,6 +182,25 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
                             },
                             onEnd = {
                                 val id0 = dragging
+                                if (id0 != null && travelled < stillReach && !overRemove) {
+                                    // Held still: the same choices as dragging, in a menu.
+                                    dragging = null; dragOffset = 0f
+                                    val at = working.indexOf(id0)
+                                    val options = buildList {
+                                        add(if (id0.startsWith("stack:")) "Unstack" else "Remove")
+                                        if (at > 0) add("Move up")
+                                        if (at in 0 until working.size - 1) add("Move down")
+                                    }
+                                    host.choose(widgetTitle(state, id0), options) { i ->
+                                        when (options[i]) {
+                                            "Unstack" -> host.setWidgetOrder(working.toMutableList().apply { removeAt(at); addAll(at, Stacks.members(id0)) })
+                                            "Remove" -> host.removeWidget(id0)
+                                            "Move up" -> host.setWidgetOrder(working.toMutableList().apply { add(at - 1, removeAt(at)) })
+                                            "Move down" -> host.setWidgetOrder(working.toMutableList().apply { add(at + 1, removeAt(at)) })
+                                        }
+                                    }
+                                    return@holdToDrag
+                                }
                                 if (overRemove && id0 != null && id0.startsWith("stack:")) {
                                     // A stack dropped on Remove comes apart: its widgets go back on the page in its place.
                                     val at = working.indexOf(id0)
@@ -190,6 +214,13 @@ private fun WidgetsContent(state: EigenState, host: EigenHost) {
             }
         }
     }
+}
+
+/** A widget's name for its hold menu. */
+private fun widgetTitle(state: EigenState, id: String): String = when {
+    id.startsWith("stack:") -> "Widget stack"
+    id.startsWith("widget:") -> "App widget"
+    else -> EigenWidgets.IDS.indexOf(id).let { if (it >= 0) EigenWidgets.NAMES[it] else "Widget" }
 }
 
 @Composable

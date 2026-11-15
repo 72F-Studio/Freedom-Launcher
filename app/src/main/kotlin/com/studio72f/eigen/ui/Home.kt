@@ -1,5 +1,6 @@
 package com.studio72f.eigen.ui
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -291,7 +292,7 @@ private fun Drawers(state: EigenState, host: EigenHost, modifier: Modifier, pull
                 HomeClock(
                     state.clockStyle, onTime = host::openAlarms, onDate = host::openCalendar,
                     modifier = Modifier.padding(top = 28.dp).onGloballyPositioned { clockBounds = it.boundsInRoot(); clockHeight = it.size.height.toFloat() },
-                    onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Launcher settings" to host::openSettings)) },
+                    onLongPress = { state.pillMenu = PillMenu(clockBounds.center.x - 80f, clockBounds.bottom, listOf("Change style" to { state.clockSheet = true }, "Settings" to host::openSettings)) },
                 )
             }
             if (state.glance) item(key = "glance") { Glance(state, host) }
@@ -342,7 +343,7 @@ private fun CardRow(state: EigenState, host: EigenHost, row: List<MainActivity.A
 }
 
 private fun homeMenu(state: EigenState, host: EigenHost, x: Float, y: Float) = PillMenu(x, y, listOf(
-    "Add drawer" to host::addDrawer,
+    "New drawer" to host::addDrawer,
     "Settings" to host::openSettings,
     "Wallpaper" to host::openWallpaper,
     "Widgets" to { state.showPage(EigenState.PAGE_WIDGETS) },
@@ -375,7 +376,7 @@ private fun DrawerTitle(state: EigenState, host: EigenHost, drawer: Drawer, open
                 ).padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            KText(drawer.name.replaceFirstChar { it.titlecase(locale) }, style = Kelvin.type.display.copy(fontSize = 31.sp, lineHeight = 38.sp), color = ink, maxLines = 1, align = TextAlign.Center)
+            KText(MainActivity.drawerName(drawer.name), style = Kelvin.type.display.copy(fontSize = 31.sp, lineHeight = 38.sp), color = ink, maxLines = 1, align = TextAlign.Center)
             // Unread: a short accent dash or a dot, just after the name.
             if (showUnread && state.dotStyle == "dash") Box(Modifier.padding(start = 6.dp, top = 9.dp).size(16.dp, 6.dp).clip(CapsuleShape).background(c.accent))
             if (showUnread && state.dotStyle == "dot") Box(Modifier.padding(start = 6.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(c.accent))
@@ -468,7 +469,7 @@ fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: In
             AppIcon(app, 44.dp, state.monoIcons)
             Column(Modifier.padding(start = 12.dp)) {
                 KText(app.title(), style = label.copy(fontSize = 15.sp, lineHeight = 18.sp), color = ink, maxLines = 2)
-                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption, color = ink.copy(alpha = 0.6f), maxLines = 1)
+                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption, color = ink.copy(alpha = 0.82f), maxLines = 1)
             }
         } else Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             // A fixed layout that fills the card: icon, two reserved lines for the name, one for today's minutes,
@@ -479,8 +480,8 @@ fun AppCard(state: EigenState, host: EigenHost, app: MainActivity.App, index: In
             Box(Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.TopCenter) {
                 KText(app.title(), style = label, color = ink, maxLines = 2, align = TextAlign.Center)
             }
-            Box(Modifier.fillMaxWidth().height(14.dp), contentAlignment = Alignment.Center) {
-                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 11.sp, lineHeight = 13.sp), color = ink.copy(alpha = 0.6f), maxLines = 1, align = TextAlign.Center)
+            Box(Modifier.fillMaxWidth().height(16.dp), contentAlignment = Alignment.Center) {
+                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 12.sp, lineHeight = 15.sp), color = ink.copy(alpha = 0.82f), maxLines = 1, align = TextAlign.Center)
             }
         }
         if (dot) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(8.dp).clip(CircleShape).background(if (style == "marker") c.onAccent else c.accent))
@@ -509,7 +510,7 @@ private fun Dock(state: EigenState, host: EigenHost, backdrop: KelvinBackdrop) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 AppIcon(app, 46.dp, state.monoIcons)
-                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 11.sp), color = c.ink2, maxLines = 1)
+                if (minutes > 0) KText(Usage.formatMinutes(minutes), style = Kelvin.type.caption.copy(fontSize = 12.sp), color = c.ink2, maxLines = 1)
             }
         }
     }
@@ -705,7 +706,8 @@ private fun SearchCapsule(state: EigenState, host: EigenHost, backdrop: KelvinBa
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { submitSearch(state, host) }),
                 )
-                if (state.query.isEmpty()) KText("Search apps, or ask anything", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink.copy(alpha = 0.78f), maxLines = 1)
+                val ready = com.studio72f.eigen.ai.EigenAssistant.status.collectAsState().value == com.studio72f.eigen.ai.EigenAssistant.Status.Ready
+                if (state.query.isEmpty()) KText(if (ready) "Search apps, or ask anything" else "Search apps, settings and sums", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink.copy(alpha = 0.78f), maxLines = 1)
             } else {
                 KText("Tap to search", style = Kelvin.type.body.copy(fontSize = 17.sp), color = c.ink.copy(alpha = 0.78f), maxLines = 1)
             }
@@ -770,10 +772,14 @@ private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBa
             if ("settings" in sources) addAll(SearchProviders.settings(q))
         }
     }
+    // Eigen's own settings are always findable, whatever the sources.
+    val eigenPages = remember(q) { SearchProviders.eigenPages(q) }
     Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = bottomInset), verticalArrangement = Arrangement.Bottom) {
         if (q.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                KText("Apps, shortcuts, contacts, settings and sums.\nOr ask a question: the model on this phone answers.", style = Kelvin.type.body, color = c.ink2, align = TextAlign.Center)
+                val ready = com.studio72f.eigen.ai.EigenAssistant.status.collectAsState().value == com.studio72f.eigen.ai.EigenAssistant.Status.Ready
+                KText(if (ready) "Apps, shortcuts, contacts, settings and sums.\nOr ask a question: the model on this phone answers."
+                    else "Apps, shortcuts, contacts, settings and sums.\nTo ask questions, add a model in Settings, under Assistant.", style = Kelvin.type.body, color = c.ink2, align = TextAlign.Center)
             }
         } else {
             // Nearest the thumb first: a sum's answer, then apps, then everything else rising above them.
@@ -798,6 +804,13 @@ private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBa
                         KText(app.title(), style = Kelvin.type.rowTitle.copy(fontSize = 18.sp, fontWeight = if (i == 0) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
                     }
                 }
+                items(eigenPages, key = { "eigen:" + it.page }) { p ->
+                    HitRow(p.title, "Eigen settings", null, KelvinIcons.Settings) {
+                        state.searching = false; state.query = ""
+                        host.openSettings()
+                        if (p.page.isNotEmpty()) host.openSettingsPage(p.page)
+                    }
+                }
                 items(hits.filter { it !is SearchProviders.Hit.Answer }, key = { it.key }) { hit ->
                     when (hit) {
                         is SearchProviders.Hit.Shortcut -> HitRow(hit.hit.label, "Shortcut · " + hit.hit.appName, state.allApps.firstOrNull { it.id == hit.hit.appId }) { host.startShortcut(hit.hit) }
@@ -817,7 +830,7 @@ private fun SearchResults(state: EigenState, host: EigenHost, backdrop: KelvinBa
             }
             // A sum already answered above needs no second card.
             val answered = hits.any { it is SearchProviders.Hit.Answer }
-            if (!answered && (naturalLanguage(q) || (found.isEmpty() && hits.isEmpty()))) AskCard(state, q, backdrop)
+            if (!answered && eigenPages.isEmpty() && (naturalLanguage(q) || (found.isEmpty() && hits.isEmpty()))) AskCard(state, q, backdrop)
         }
     }
 }
@@ -956,7 +969,7 @@ private fun Glance(state: EigenState, host: EigenHost) {
     LaunchedEffect(state.resumeCount) { while (true) { now = System.currentTimeMillis(); delay(30_000) } }
     val is24 = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
     val locale = LocalConfiguration.current.locales[0]
-    val line: Pair<String, () -> Unit>? = when {
+    val line: Pair<String, (() -> Unit)?>? = when {
         state.nextEventTitle != null && state.nextEventAt - now in -15 * 60_000L..2 * 3_600_000L -> {
             val mins = ((state.nextEventAt - now) / 60_000L).toInt()
             (if (mins <= 0) "Now" else if (mins < 60) "In $mins min" else "In ${mins / 60} h ${mins % 60} min") + " · " + state.nextEventTitle to host::openCalendar
@@ -964,14 +977,15 @@ private fun Glance(state: EigenState, host: EigenHost) {
         state.mediaPlaying && state.mediaTitle != null -> "Playing · " + state.mediaTitle + (state.mediaArtist?.let { " · $it" } ?: "") to { state.showPage(EigenState.PAGE_WIDGETS) }
         state.alarmAt > now && state.alarmAt - now < 12 * 3_600_000L ->
             "Alarm " + java.text.SimpleDateFormat(if (is24) "HH:mm" else "h:mm a", locale).format(java.util.Date(state.alarmAt)) to host::openAlarms
-        state.batteryLevel <= 20 && !state.charging -> "Battery ${state.batteryLevel}%" to { }
+        // Nothing to open for the battery, so the line doesn't press.
+        state.batteryLevel <= 20 && !state.charging -> "Battery ${state.batteryLevel}%" to null
         else -> null
     }
     androidx.compose.animation.AnimatedVisibility(line != null, enter = fadeIn(Kelvin.motion.gentle()), exit = fadeOut(Kelvin.motion.gentle())) {
         val shown = remember { mutableStateOf(line) }
         if (line != null) shown.value = line
         shown.value?.let { (text, open) ->
-            KText(text, Modifier.padding(top = 10.dp).clip(CapsuleShape).eigenPress(open, shape = CapsuleShape, label = text).padding(horizontal = 14.dp, vertical = 6.dp),
+            KText(text, Modifier.padding(top = 10.dp).clip(CapsuleShape).then(if (open != null) Modifier.eigenPress(open, shape = CapsuleShape, label = text) else Modifier).padding(horizontal = 14.dp, vertical = 6.dp),
                 Kelvin.type.label.copy(fontSize = 15.sp), Kelvin.colors.ink.copy(alpha = 0.82f), maxLines = 1)
         }
     }

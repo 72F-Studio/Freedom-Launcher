@@ -115,7 +115,7 @@ internal fun AssistantPage(state: EigenState, host: EigenHost) {
                     if (here && !isDownloading) {
                         KelvinRow("Delete ${c.model.name}", summary = "Frees $sizeMb MB. Other 72F apps using this copy look for another, or download their own.",
                             danger = true, onClick = {
-                                host.choose("Delete ${c.model.name}?", listOf("Delete", "Keep it")) { i -> if (i == 0) GemmaModels.delete(context, c.model) }
+                                host.confirm("Delete ${c.model.name}?", "This frees $sizeMb MB. You can download it again any time.", "Delete", "Keep it", true) { GemmaModels.delete(context, c.model) }
                             })
                     }
                 }
@@ -128,21 +128,25 @@ internal fun AssistantPage(state: EigenState, host: EigenHost) {
         Modifier.padding(horizontal = 32.dp, vertical = 12.dp), Kelvin.type.summary, Kelvin.colors.ink2,
     )
     KelvinGroup(Modifier.padding(top = 8.dp)) {
-        KelvinRow("Start a new conversation", icon = KelvinIcons.Refresh, tile = KelvinTiles.Grey, onClick = {
-            EigenAssistant.clearHistory(); state.chat.clear()
-        })
+        KelvinRow("Start a new conversation", summary = if (state.chat.isEmpty()) "Nothing to clear yet" else "Clears the conversation on screen",
+            icon = KelvinIcons.Refresh, tile = KelvinTiles.Grey, onClick = if (state.chat.isEmpty()) null else ({
+                host.confirm("Start a new conversation?", "The assistant forgets this conversation. It was never saved, so it can't be brought back.", "Start new", "Keep it", false) {
+                    EigenAssistant.clearHistory(); state.chat.clear()
+                }
+            }))
     }
 }
 
 private fun askToDownload(host: EigenHost, c: GemmaModels.Choice) {
     val context = host.context()
     val terms = if (c.model.vision) "the Apache License 2.0" else "the Gemma Terms of Use and its Prohibited Use Policy"
-    host.choose(
-        "Download ${c.model.name}? By downloading you accept $terms.",
-        listOf("Accept and download", "Read the terms"),
-    ) { i ->
-        if (i == 0) { GemmaModels.acceptTerms(context); GemmaModels.download(context, c) }
-        else runCatching {
+    host.consent(
+        "Download ${c.model.name}?",
+        "By downloading you accept $terms. The file comes from 72F's mirror on Hugging Face; after that, the model runs on this phone and nothing you ask leaves it.",
+        "Accept and download", "Read the terms",
+        { GemmaModels.acceptTerms(context); GemmaModels.download(context, c) },
+    ) {
+        runCatching {
             context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                 android.net.Uri.parse(if (c.model.vision) "https://www.apache.org/licenses/LICENSE-2.0" else "https://ai.google.dev/gemma/terms"))
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))

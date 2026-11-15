@@ -79,7 +79,9 @@ fun PowerOverlay(state: EigenState, host: EigenHost) {
             val (title, summary) = when (page) {
                 "gestures" -> "Gestures" to "What each gesture on home does."
                 "search" -> "Search" to "What the search capsule looks through. Everything is found on this phone."
-                "icons" -> "Icons" to "Shape and style for every app; hold an app to change just its icon."
+                "icons" -> "Icons" to "Shape, pack and colour for every app; hold an app to change just its icon."
+                "wallpaper" -> "Wallpaper" to "What's behind home, and how it looks there. Eigen's blur and brightness never change the phone's own wallpaper."
+                "drawers" -> "Drawers" to "Eigen sorts your apps into drawers on the phone. Tap a drawer to move, hide, merge, rename or delete it."
                 "private" -> "Private apps" to "Kept out of drawers and search, behind your screen lock."
                 "automation" -> "Automation" to "Let Tasker, MacroDroid and similar apps work with your contexts."
                 "assistant" -> "Assistant" to "Which model answers you. It runs on this phone."
@@ -95,6 +97,11 @@ fun PowerOverlay(state: EigenState, host: EigenHost) {
                     "private" -> PrivatePage(state, host)
                     "automation" -> AutomationPage(state, host)
                     "assistant" -> AssistantPage(state, host)
+                    "wallpaper" -> SettingsSections(state.pageRows) { section -> if (section.title == "On home") BrightnessRow(state, host) }
+                    "drawers" -> {
+                        SettingsSections(state.pageRows)
+                        Note("Favourites always comes first. Hold an app on home and choose Move to drawer to put it somewhere else; Automatic gives it back to Eigen.")
+                    }
                     else -> SetupsPage(state, host)
                 }
                 Spacer(Modifier.height(32.dp))
@@ -108,16 +115,18 @@ private fun Note(text: String) = KText(text, Modifier.padding(horizontal = 32.dp
 
 @Composable
 private fun GesturesPage(state: EigenState, host: EigenHost) {
-    val needsService = Gestures.ALL.any { g -> Gestures.ACTIONS.firstOrNull { it.id == Gestures.actionFor(state, g.id) }?.system == true }
-    if (needsService && !state.accessibilityOn) {
-        KelvinNotice("Some gestures need Eigen's gesture service", "Lock, notifications, quick settings and recents go through it. It reads nothing on your screen.",
+    // The caution shows only once a gesture is set to something that needs the service (none does by default).
+    val needing = Gestures.ALL.filter { g -> Gestures.ACTIONS.firstOrNull { it.id == Gestures.actionFor(state, g.id) }?.system == true }
+    if (needing.isNotEmpty() && !state.accessibilityOn) {
+        KelvinNotice(needing.joinToString(" and ") { it.name } + (if (needing.size == 1) " needs" else " need") + " Eigen's gesture service",
+            "Locking the screen, notifications, quick settings and recents go through it. It reads nothing on your screen.",
             Modifier.padding(bottom = 16.dp), Tone.Caution, actionText = "Turn on", onAction = { state.accessibilityAsk = "These gestures" })
     }
     KelvinGroup {
         for (g in Gestures.ALL) {
             val action = Gestures.actionFor(state, g.id)
             KelvinRow(g.name, value = Gestures.actionName(state, action), chevron = true, onClick = {
-                val names = Gestures.ACTIONS.map { it.name } + (if (state.plus) "Open an app…" else "Open an app… · Plus")
+                val names = Gestures.ACTIONS.map { if (it.system && !state.accessibilityOn) it.name + " · needs the gesture service" else it.name } + (if (state.plus) "Open an app…" else "Open an app… · Plus")
                 host.choose(g.name, names) { i ->
                     if (i < Gestures.ACTIONS.size) host.setGesture(g.id, Gestures.ACTIONS[i].id)
                     else if (!state.plus) state.plusSheet = "Opening an app with a gesture"
@@ -173,9 +182,11 @@ private fun IconsPage(state: EigenState, host: EigenHost) {
     }
     Spacer(Modifier.height(16.dp))
     KelvinGroup {
-        KelvinRow("Themed icons", summary = "The app's own monochrome glyph in your colour, Android 13 and later. Others stay as they are.",
+        KelvinRow("Icon pack", summary = "Icons from an ADW, Nova or Apex compatible pack", value = host.iconPackName(), chevron = true, onClick = host::chooseIconPack)
+        KelvinRow("Icons in your colour", summary = "Apps that offer a one-colour glyph show it in your accent colour. Android 13 and later.",
             trailing = { KelvinSwitch(state.themedIcons, { host.setPref("themed_icons", it) }) })
-        KelvinRow("Icon pack", value = host.iconPackName(), chevron = true, onClick = host::chooseIconPack)
+        KelvinRow("Grey icons", summary = "App icons in shades of grey; the rest of Eigen keeps its colour.",
+            trailing = { KelvinSwitch(state.monoIcons, { host.setGreyIcons(it) }) })
     }
     Note("Shapes apply to adaptive icons, which is nearly every app made since 2018. Hold an app, then More → Change icon to pick any icon from a pack for it.")
 }
@@ -217,7 +228,7 @@ private fun SetupsPage(state: EigenState, host: EigenHost) {
         KelvinRow("Import a setup", summary = "See what changes before anything is applied", icon = KelvinIcons.Download, tile = KelvinTiles.Blue, onClick = host::importSetup)
     }
     Note("A setup holds your colour, clock, glass, icon shape, gestures, drawer names and order, which drawer each app is in, and your contexts. It never holds your photo, notes, messages, app widgets or private apps, so it's safe to post.")
-    Note("Apps that aren't installed on the other phone are skipped. Backup and restore is still the way to move everything to a new phone.")
+    Note("Apps that aren't installed on the other phone are skipped. To move everything, photo included, to a new phone, use Backup and restore in Settings, under Backup and sharing.")
 }
 
 // ---- Sheets
@@ -232,7 +243,7 @@ fun AccessibilitySheet(state: EigenState, host: EigenHost, backdrop: KelvinBackd
         Spacer(Modifier.height(12.dp))
         KelvinGroup(gutter = 0.dp) {
             KelvinRow("What it does", summary = "Locks the screen, opens notifications or quick settings, or shows recent apps, when you make a gesture on home.", icon = KelvinIcons.Check, tile = KelvinTiles.Green)
-            KelvinRow("What it never does", summary = "Read your screen, watch other apps, record what you type, or send anything anywhere. Eigen only goes online to download an assistant model you pick.", icon = KelvinIcons.Shield, tile = KelvinTiles.Blue)
+            KelvinRow("What it never does", summary = "Read your screen, watch other apps, record what you type, or send anything anywhere. Eigen goes online only to download an assistant model you pick, and to reach Google Play for Plus and tips.", icon = KelvinIcons.Shield, tile = KelvinTiles.Blue)
         }
         Spacer(Modifier.height(12.dp))
         KText("In the next screen, choose Eigen Launcher and switch it on. You can turn it off there at any time.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)

@@ -10,10 +10,12 @@ import java.util.zip.ZipOutputStream;
 /** Portable, bounded backups. Assets are staged before a single preference commit. */
 final class BackupStore {
     static final String[] KEYS={"favorites","custom","disabled","assignments","merges","categories","header","left","media","icons","iconPack","wallpaperMode","wallpaperDim","theme","seeded","introduced","contexts","legibility","hidden","labels","order","dots"};
+    /** The file was read but isn't a backup Eigen can restore: damaged, unsupported, or a value out of range. */
+    static final class Invalid extends IOException { Invalid(String why){super(why);} }
     static final class Pending {
         final File directory;final JSONObject preferences;final ThemeEngine theme;
         Pending(File d,JSONObject p,ThemeEngine t){directory=d;preferences=p;theme=t;}
-        String summary()throws JSONException{return new JSONArray(preferences.optString("favorites","[]")).length()+" favorites · "+new JSONArray(preferences.optString("custom","[]")).length()+" custom categories\nTheme: "+theme.name+"\n\nReplaces launcher settings. Apps and Android permissions stay as they are.";}
+        String summary()throws JSONException{int f=new JSONArray(preferences.optString("favorites","[]")).length(),d=new JSONArray(preferences.optString("custom","[]")).length();return f+(f==1?" favourite":" favourites")+" and "+d+(d==1?" drawer of your own":" drawers of your own")+", with its look and wallpaper.\n\nThis replaces Eigen's settings on this phone. Your apps and Android permissions stay as they are.";}
     }
     static File wallpaperFile(Context c,SharedPreferences prefs) {
         String path=prefs.getString("wallpaperPath","wallpaper.jpg");
@@ -42,60 +44,60 @@ final class BackupStore {
         File stage=new File(context.getFilesDir(),"imports/"+UUID.randomUUID());
         try {
             ThemeEngine.unpack(in,stage);JSONObject manifest=ThemeEngine.readJson(new File(stage,"backup.json"));
-            if(!manifest.optString("kind").equals("72f-backup")||manifest.optInt("version")!=1)throw new IOException("Unsupported launcher backup");
+            if(!manifest.optString("kind").equals("72f-backup")||manifest.optInt("version")!=1)throw new Invalid("Unsupported launcher backup");
             JSONObject values=manifest.getJSONObject("preferences");validate(values);
             ThemeEngine theme=new ThemeEngine(new JSONObject(values.optString("theme","{}")),new File(stage,"theme"));
             values.put("theme",theme.json.toString());
             String wallpaper=manifest.optString("wallpaper","");
-            if(!wallpaper.isEmpty()&&!wallpaper.equals("wallpaper.jpg"))throw new IOException("Invalid wallpaper reference");
+            if(!wallpaper.isEmpty()&&!wallpaper.equals("wallpaper.jpg"))throw new Invalid("Invalid wallpaper reference");
             if(!wallpaper.isEmpty()){
                 File file=ThemeEngine.safeFile(stage,wallpaper);
                 android.graphics.BitmapFactory.Options bounds=new android.graphics.BitmapFactory.Options();bounds.inJustDecodeBounds=true;
                 android.graphics.BitmapFactory.decodeFile(file.getPath(),bounds);
-                if(bounds.outWidth<1||bounds.outHeight<1||bounds.outWidth>8192||bounds.outHeight>8192)throw new IOException("Invalid backup wallpaper");
-            }else if(values.optString("wallpaperMode").equals("photo"))throw new IOException("Backup photo is missing");
+                if(bounds.outWidth<1||bounds.outHeight<1||bounds.outWidth>8192||bounds.outHeight>8192)throw new Invalid("Invalid backup wallpaper");
+            }else if(values.optString("wallpaperMode").equals("photo"))throw new Invalid("Backup photo is missing");
             return new Pending(stage,values,theme);
         }catch(Exception e){ThemeEngine.deleteTree(stage);throw e;}
     }
     static void validate(JSONObject p)throws Exception {
         Set<String> allowed=new HashSet<>(Arrays.asList(KEYS));Iterator<String> keys=p.keys();
         while(keys.hasNext()){
-            String key=keys.next();if(!allowed.contains(key))throw new IOException("Unknown backup setting: "+key);
+            String key=keys.next();if(!allowed.contains(key))throw new Invalid("Unknown backup setting: "+key);
             Object value=p.get(key);
-            if(Arrays.asList("categories","left","media","seeded","introduced","dots").contains(key)) {if(!(value instanceof Boolean))throw new IOException("Invalid toggle: "+key);}
-            else if(Arrays.asList("header","wallpaperDim").contains(key)){if(!(value instanceof Number))throw new IOException("Invalid number: "+key);}
-            else if(!(value instanceof String))throw new IOException("Invalid setting: "+key);
+            if(Arrays.asList("categories","left","media","seeded","introduced","dots").contains(key)) {if(!(value instanceof Boolean))throw new Invalid("Invalid toggle: "+key);}
+            else if(Arrays.asList("header","wallpaperDim").contains(key)){if(!(value instanceof Number))throw new Invalid("Invalid number: "+key);}
+            else if(!(value instanceof String))throw new Invalid("Invalid setting: "+key);
         }
-        if(!Arrays.asList(0,10,20,30,40).contains(p.optInt("header",20)))throw new IOException("Invalid header height");
-        if(p.optInt("wallpaperDim",60)<0||p.optInt("wallpaperDim",60)>90)throw new IOException("Invalid wallpaper dimming");
-        if(!Arrays.asList("solid","photo","system").contains(p.optString("wallpaperMode","solid")))throw new IOException("Invalid wallpaper mode");
-        if(!Arrays.asList("mono","color","none").contains(p.optString("icons","mono")))throw new IOException("Invalid icon style");
-        String pack=p.optString("iconPack","");if(pack.length()>200||(!pack.isEmpty()&&!pack.matches("[A-Za-z0-9_.]+")))throw new IOException("Invalid icon pack");
+        if(!Arrays.asList(0,10,20,30,40).contains(p.optInt("header",20)))throw new Invalid("Invalid header height");
+        if(p.optInt("wallpaperDim",60)<0||p.optInt("wallpaperDim",60)>90)throw new Invalid("Invalid wallpaper dimming");
+        if(!Arrays.asList("solid","photo","system").contains(p.optString("wallpaperMode","solid")))throw new Invalid("Invalid wallpaper mode");
+        if(!Arrays.asList("mono","color","none").contains(p.optString("icons","mono")))throw new Invalid("Invalid icon style");
+        String pack=p.optString("iconPack","");if(pack.length()>200||(!pack.isEmpty()&&!pack.matches("[A-Za-z0-9_.]+")))throw new Invalid("Invalid icon pack");
         Set<String> groups=new HashSet<>(Arrays.asList("social","music","video","photos","games","travel","tools"));
         JSONArray custom=new JSONArray(p.optString("custom","[]"));
-        if(custom.length()>100)throw new IOException("Too many categories");
-        for(int i=0;i<custom.length();i++){String group=custom.getString(i);if(group.trim().isEmpty()||group.length()>24||group.equals("favorites")||group.equals("all apps")||!groups.add(group))throw new IOException("Invalid category");}
+        if(custom.length()>100)throw new Invalid("Too many categories");
+        for(int i=0;i<custom.length();i++){String group=custom.getString(i);if(group.trim().isEmpty()||group.length()>24||group.equals("favorites")||group.equals("all apps")||!groups.add(group))throw new Invalid("Invalid category");}
         JSONArray favorites=new JSONArray(p.optString("favorites","[]"));Set<String> ids=new HashSet<>();
-        if(favorites.length()>20)throw new IOException("Too many favorites");
-        for(int i=0;i<favorites.length();i++){String id=favorites.getString(i);if(id.length()>400||!id.contains(":")||!ids.add(id))throw new IOException("Invalid favorite");}
-        JSONArray disabled=new JSONArray(p.optString("disabled","[]"));for(int i=0;i<disabled.length();i++)if(!groups.contains(disabled.getString(i)))throw new IOException("Invalid hidden category");
-        JSONObject assignments=new JSONObject(p.optString("assignments","{}"));if(assignments.length()>5000)throw new IOException("Too many app assignments");
-        Iterator<String> apps=assignments.keys();while(apps.hasNext()){String id=apps.next();if(id.length()>400||!groups.contains(assignments.getString(id)))throw new IOException("Invalid app assignment");}
+        if(favorites.length()>20)throw new Invalid("Too many favorites");
+        for(int i=0;i<favorites.length();i++){String id=favorites.getString(i);if(id.length()>400||!id.contains(":")||!ids.add(id))throw new Invalid("Invalid favorite");}
+        JSONArray disabled=new JSONArray(p.optString("disabled","[]"));for(int i=0;i<disabled.length();i++)if(!groups.contains(disabled.getString(i)))throw new Invalid("Invalid hidden category");
+        JSONObject assignments=new JSONObject(p.optString("assignments","{}"));if(assignments.length()>5000)throw new Invalid("Too many app assignments");
+        Iterator<String> apps=assignments.keys();while(apps.hasNext()){String id=apps.next();if(id.length()>400||!groups.contains(assignments.getString(id)))throw new Invalid("Invalid app assignment");}
         JSONObject merges=new JSONObject(p.optString("merges","{}"));Iterator<String> from=merges.keys();
         while(from.hasNext()){
-            String source=from.next();if(!groups.contains(source)||!groups.contains(merges.getString(source)))throw new IOException("Invalid category merge");
+            String source=from.next();if(!groups.contains(source)||!groups.contains(merges.getString(source)))throw new Invalid("Invalid category merge");
             Set<String> seen=new HashSet<>();String node=source;
-            while(merges.has(node)){if(!seen.add(node))throw new IOException("Category merge cycle");node=merges.getString(node);}
+            while(merges.has(node)){if(!seen.add(node))throw new Invalid("Category merge cycle");node=merges.getString(node);}
         }
         new JSONObject(p.optString("theme","{}"));
         if(p.has("contexts"))ContextStore.parse(p.getString("contexts"));
-        if(!Arrays.asList(Legibility.MODES).contains(p.optString("legibility","auto")))throw new IOException("Invalid text legibility");
-        JSONArray hiddenApps=new JSONArray(p.optString("hidden","[]"));if(hiddenApps.length()>5000)throw new IOException("Too many hidden apps");
-        for(int i=0;i<hiddenApps.length();i++){String id=hiddenApps.getString(i);if(id.length()>400||!id.contains(":"))throw new IOException("Invalid hidden app");}
-        JSONObject names=new JSONObject(p.optString("labels","{}"));if(names.length()>5000)throw new IOException("Too many app names");
-        Iterator<String> named=names.keys();while(named.hasNext()){String id=named.next();String name=names.getString(id);if(id.length()>400||name.trim().isEmpty()||name.length()>40)throw new IOException("Invalid app name");}
-        JSONArray order=new JSONArray(p.optString("order","[]"));if(order.length()>200)throw new IOException("Invalid category order");
-        for(int i=0;i<order.length();i++)if(!groups.contains(order.getString(i)))throw new IOException("Invalid category order");
+        if(!Arrays.asList(Legibility.MODES).contains(p.optString("legibility","auto")))throw new Invalid("Invalid text legibility");
+        JSONArray hiddenApps=new JSONArray(p.optString("hidden","[]"));if(hiddenApps.length()>5000)throw new Invalid("Too many hidden apps");
+        for(int i=0;i<hiddenApps.length();i++){String id=hiddenApps.getString(i);if(id.length()>400||!id.contains(":"))throw new Invalid("Invalid hidden app");}
+        JSONObject names=new JSONObject(p.optString("labels","{}"));if(names.length()>5000)throw new Invalid("Too many app names");
+        Iterator<String> named=names.keys();while(named.hasNext()){String id=named.next();String name=names.getString(id);if(id.length()>400||name.trim().isEmpty()||name.length()>40)throw new Invalid("Invalid app name");}
+        JSONArray order=new JSONArray(p.optString("order","[]"));if(order.length()>200)throw new Invalid("Invalid category order");
+        for(int i=0;i<order.length();i++)if(!groups.contains(order.getString(i)))throw new Invalid("Invalid category order");
     }
     // Restore must know whether the write landed (and roll back if not), so commit() is intentional.
     @android.annotation.SuppressLint("ApplySharedPref")

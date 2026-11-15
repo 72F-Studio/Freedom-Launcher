@@ -23,10 +23,13 @@ object Gestures {
     data class Gesture(val id: String, val name: String, val default: String)
     data class Action(val id: String, val name: String, val system: Boolean = false)
 
+    // Defaults need no special access: a stray double-tap never raises Android's accessibility prompt. Locking the
+    // screen and the rest are one choice away in Settings > Gestures. (Installs that already had the gesture service
+    // on keep their old double-tap and two-finger defaults: see MainActivity.keepOldGestureDefaults.)
     val ALL = listOf(
-        Gesture("double_tap", "Double-tap", "lock"),
+        Gesture("double_tap", "Double-tap", "none"),
         Gesture("swipe_down", "Swipe down", "drawers"),
-        Gesture("two_down", "Two-finger swipe down", "notifications"),
+        Gesture("two_down", "Two-finger swipe down", "search"),
         Gesture("two_up", "Two-finger swipe up", "none"),
         Gesture("home_again", "Home, when already home", "none"),
         Gesture("capsule_hold", "Hold the search capsule", "assistant"),

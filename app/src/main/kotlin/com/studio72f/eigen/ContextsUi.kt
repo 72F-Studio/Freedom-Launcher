@@ -113,8 +113,8 @@ private fun ContextList(state: EigenState, host: ContextsHost) {
     @Suppress("UNUSED_VARIABLE") val version = state.contextsVersion
     val c = Kelvin.colors
     Column(Modifier.fillMaxSize()) {
-        KelvinDetailHeader("Contexts and widgets", { state.contextsPage = null }, "Back",
-            summary = "The first context that matches decides what the widgets page shows and which drawer home opens.")
+        KelvinDetailHeader("Widgets by time and place", { state.contextsPage = null }, "Back",
+            summary = "Each context is a moment, such as mornings or headphones in. The first one that matches decides what the widgets page shows and which drawer home opens.")
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             Spacer(Modifier.height(8.dp))
             KelvinGroup {

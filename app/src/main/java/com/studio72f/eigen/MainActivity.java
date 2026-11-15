@@ -135,12 +135,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 options = o.toBundle();
             }
             try { launcher.startMainActivity(app.component, app.user, bounds, options); returningFromApp = true; }
-            catch (Exception e) { toast(str(R.string.app_unavailable_its_profile_may_be_pause)); loadApps(); }
+            catch (Exception e) { launchFailed(e); loadApps(); }
             eigen.setSearching(false); eigen.setQuery("");
         }
         @Override public void appMenu(App app) { MainActivity.this.appMenu(app); }
         @Override public void homeMenu() { homescreenMenu(); }
         @Override public void openSettings() { MainActivity.this.openSettings(); }
+        @Override public void openSettingsPage(String page) { if (page.equals("wallpaper") || page.equals("drawers")) openPage(page); else eigen.setPowerPage(page); }
         @Override public void addWidget() {
             ArrayList<String> ids = new ArrayList<>(), names = new ArrayList<>();
             String[] all = com.studio72f.eigen.ui.EigenWidgets.IDS, labels = com.studio72f.eigen.ui.EigenWidgets.NAMES;
@@ -169,7 +170,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void makeDefaultHome() { defaultHome(); }
         @Override public void setColour(int index) { applyColour(index); }
         @Override public void setClock(String style) { prefs.edit().putString("clock_face", style).apply(); eigen.setClockStyle(style); }
-        @Override public void chooseWallpaper() { try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 44); } catch (ActivityNotFoundException e) { toast(str(R.string.no_image_picker_available)); } }
+        @Override public void chooseWallpaper() { try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 44); } catch (ActivityNotFoundException e) { wallpaperPickerMissing(); } }
         @Override public void finishTour() { endTour(); }
         @Override public ContextsHost contexts() { return contextsHost; }
         @Override public boolean isFavorite(App app) { return favorites.contains(app.id); }
@@ -180,11 +181,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         }
         @Override public void moveApp(App app) {
             ArrayList<String> destinations = editableCategories(); destinations.add("automatic");
-            menu("Move " + app.name + " to", destinations.toArray(new String[0]), n -> { if (n == destinations.size() - 1) assignments.remove(app.id); else assignments.put(app.id, destinations.get(n)); saveState(); refreshList(false); });
+            menu("Move " + app.name + " to", drawerNames(destinations), n -> { if (n == destinations.size() - 1) assignments.remove(app.id); else assignments.put(app.id, destinations.get(n)); saveState(); refreshList(false); });
         }
-        @Override public void addDrawer() { nameDialog("new drawer", "", name -> { custom.add(name); saveState(); refreshCategories(); refreshList(false); }); }
+        @Override public void addDrawer() { nameDialog("New drawer", "", name -> { custom.add(name); saveState(); refreshCategories(); refreshList(false); refreshPage(); toast(drawerName(name) + " is ready. Hold an app and choose Move to drawer."); }); }
         @Override public void openWallpaper() { wallpaperSettings(); }
-        @Override public void appInfo(App app) { try { launcher.startAppDetailsActivity(app.component, app.user, null, null); } catch (Exception e) { toast(str(R.string.app_info_unavailable)); } }
+        @Override public void appInfo(App app) { try { launcher.startAppDetailsActivity(app.component, app.user, null, null); } catch (Exception e) { appInfoFailed(e); } }
         @Override public void uninstall(App app) { if (app.work) { toast(str(R.string.use_app_info_to_manage_work_apps)); return; } safeStart(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.component.getPackageName()))); }
         @Override public void setCardStyle(App app, String style) {
             try { JSONObject m = new JSONObject(prefs.getString("card_styles", "{}")); if (style.equals("classic")) m.remove(app.id); else m.put(app.id, style); prefs.edit().putString("card_styles", m.toString()).apply(); } catch (JSONException ignored) { }
@@ -270,6 +271,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             return "None";
         }
         @Override public void chooseIconPack() { MainActivity.this.chooseIconPack(); }
+        @Override public void setGreyIcons(boolean on) { setIcons(on ? "mono" : "color"); }
+        @Override public void confirm(String title, String body, String confirmLabel, String cancelLabel, boolean destructive, kotlin.jvm.functions.Function0<kotlin.Unit> onConfirm) {
+            track(com.studio72f.eigen.ui.EigenSheets.dialog(MainActivity.this, eigen, title, body, confirmLabel, cancelLabel, destructive, onConfirm::invoke));
+        }
+        @Override public void consent(String title, String body, String acceptLabel, String linkLabel, kotlin.jvm.functions.Function0<kotlin.Unit> onAccept, kotlin.jvm.functions.Function0<kotlin.Unit> onLink) {
+            track(com.studio72f.eigen.ui.EigenSheets.dialog(MainActivity.this, eigen, title, body, acceptLabel, "Not now", false, onAccept::invoke, linkLabel, onLink::invoke));
+        }
     };
     private WidgetHosting.Host widgetHost;
     private final HashMap<String,Integer> stackPages=new HashMap<>();
@@ -289,6 +297,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         @Override public void onProductDetailsUpdated() { pushPlus(); if (sheet != null && sheet.isShowing()) sheet.refresh(); }
         @Override public void onPurchaseCompleted(String productId) { if (sheet != null && sheet.isShowing()) sheet.refresh(); }
         @Override public void onPlusChanged(boolean plus) { pushPlus(); }
+        @Override public void onPurchaseProblem(String stage, String productId, int response) { purchaseProblem(stage, response); }
     };
     private final MediaController.Callback mediaCallback = new MediaController.Callback() {
         @Override public void onMetadataChanged(MediaMetadata m) { updateMedia(); }
@@ -327,6 +336,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new WidgetHosting.Host(this, 7272);
         grandfatherPlus();
+        keepOldGestureDefaults();
         readState();
         FrostedCard.setGlassLevel(prefs.getFloat("glass_level", 0.30f));
         restoreWallpaper();
@@ -342,7 +352,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     @Override protected void onStart() { super.onStart(); try { widgetHost.startListening(); } catch (RuntimeException ignored) { } }
     @Override protected void onStop() { try { widgetHost.stopListening(); } catch (RuntimeException ignored) { } super.onStop(); }
-    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); eigen.setReturnPulse(eigen.getReturnPulse() + 1); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); pushPower(); applyAutomationCommands(); com.studio72f.eigen.ui.LivingTexture.INSTANCE.refreshIfDue(this, eigen, host, prefs); }
+    @Override protected void onResume() { super.onResume(); foreground = true; eigen.setResumeCount(eigen.getResumeCount() + 1); if (returningFromApp) { returningFromApp = false; homeEntrance(); eigen.setReturnPulse(eigen.getReturnPulse() + 1); } registerSignals(); agendaLoaded = 0; handler.removeCallbacks(tick); handler.post(tick); loadApps(); pushPower(); if (eigen.getSettingsOpen()) eigen.setSettings(settingsModel()); refreshPage(); applyAutomationCommands(); com.studio72f.eigen.ui.LivingTexture.INSTANCE.refreshIfDue(this, eigen, host, prefs); }
     @Override protected void onPause() { foreground = false; eigen.setPrivateOpen(false); eigen.setPrivateApps(new ArrayList<>()); unregisterSignals(); handler.removeCallbacks(tick); handler.removeCallbacks(evaluate); super.onPause(); }
     @Override protected void onDestroy() { EigenBilling.getInstance(this).removeListener(billingListener); MediaAccessService.setListener(null); if (Build.VERSION.SDK_INT >= 29) com.kieronquinn.app.smartspacer.sdk.client.SmartspacerClient.Companion.close(); launcher.unregisterCallback(appChanges); for(GlassSurface glass:glassSurfaces)glass.stop(); if(pendingRestore!=null)ThemeEngine.deleteTree(pendingRestore.directory); if (controller != null) controller.unregisterCallback(mediaCallback); worker.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle out) { out.putString("category", category); out.putString("query", query); out.putBoolean("searching", searching); out.putInt("tour", eigen.getTourPage()); super.onSaveInstanceState(out); }
@@ -513,6 +523,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         eigen.setNotificationAccess(mediaAccess());
         pushPlus(); pushLayoutPrefs(); pushPower(); applyMonochrome();
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
+        refreshPage();
     }
     /**
      * Installs from before Plus existed keep everything, for good: checked once, on the first launch of a build with
@@ -524,11 +535,22 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(prefs.getBoolean("seeded",false)||prefs.getBoolean("introduced",false))edit.putBoolean(EigenBilling.PREF_GRANDFATHERED,true);
         edit.apply();
     }
+    /**
+     * Double-tap used to lock the screen and a two-finger swipe down to open notifications. New installs start with
+     * gestures that need no special access; an install that already turned the gesture service on keeps the old pair.
+     */
+    private void keepOldGestureDefaults(){
+        if(prefs.getBoolean("gesture_defaults_v2",false))return;
+        SharedPreferences.Editor edit=prefs.edit().putBoolean("gesture_defaults_v2",true);
+        if(EigenAccessibility.enabled(this))try{JSONObject g=new JSONObject(prefs.getString("gestures","{}"));if(!g.has("double_tap"))g.put("double_tap","lock");if(!g.has("two_down"))g.put("two_down","notifications");edit.putString("gestures",g.toString());}catch(JSONException ignored){}
+        edit.apply();
+    }
     private void pushPlus(){
         eigen.setPlus(EigenBilling.hasPlus(this));
-        eigen.setPlusPrice(EigenBilling.getInstance(this).getFormattedPrice(EigenBilling.PLUS,EigenBilling.PLUS_FALLBACK_PRICE));
+        // No price until Play answers: never a guessed or hard-coded one.
+        eigen.setPlusPrice(EigenBilling.getInstance(this).getFormattedPrice(EigenBilling.PLUS,null));
         HashMap<String,String> tipPrices=new HashMap<>();
-        for(EigenBilling.DonationTier tier:EigenBilling.TIERS)tipPrices.put(tier.id,EigenBilling.getInstance(this).getFormattedPrice(tier.id,tier.fallbackPrice));
+        for(EigenBilling.DonationTier tier:EigenBilling.TIERS){String price=EigenBilling.getInstance(this).getFormattedPrice(tier.id,null);if(price!=null)tipPrices.put(tier.id,price);}
         eigen.setTipPrices(tipPrices);
         if(eigen.getSettingsOpen())eigen.setSettings(settingsModel());
     }
@@ -805,7 +827,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             }
         }
         try { launcher.startMainActivity(app.component,app.user,bounds,options); returningFromApp = true; pushIn(bounds); }
-        catch (Exception e) { toast(str(R.string.app_unavailable_its_profile_may_be_pause)); loadApps(); }
+        catch (Exception e) { launchFailed(e); loadApps(); }
     }
     private void openSearch() {
         if (searching) { search.requestFocus(); return; }
@@ -948,7 +970,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         ArrayList<String> options=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
         for(ShortcutInfo shortcut:shortcuts(app)){
             CharSequence title=shortcut.getShortLabel()!=null?shortcut.getShortLabel():shortcut.getLongLabel();if(title==null)continue;
-            options.add(str(R.string.x_shortcut, title));actions.add(()->{try{launcher.startShortcut(shortcut,null,null);}catch(RuntimeException e){toast(str(R.string.shortcut_unavailable));}});
+            options.add(str(R.string.x_shortcut, title));actions.add(()->{try{launcher.startShortcut(shortcut,null,null);}catch(RuntimeException e){problem(com.studio72f.eigen.ui.Problems.APP_SHORTCUT,"app:shortcut","Shortcut didn't open","Open the app and use the action from there. If it keeps happening, the app may have removed this shortcut.","Android refused to start the app's shortcut. The app may have changed or turned it off.",e);}});
         }
         boolean favorite=favorites.contains(app.id),isHidden=hidden.contains(app.id);
         options.add(favorite?str(R.string.remove_favorite):str(R.string.add_to_favorites));actions.add(()->{if(favorite)favorites.remove(app.id);else if(favorites.size()<20){favorites.add(app.id);hidden.remove(app.id);}else{toast(str(R.string.favorites_holds_up_to_20_apps));return;}saveState();refreshList(false);});
@@ -956,7 +978,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             options.add(str(R.string.move_favorite_up));actions.add(()->moveFavorite(app,-1));
             options.add(str(R.string.move_favorite_down));actions.add(()->moveFavorite(app,1));
         }
-        options.add(str(R.string.move_to_category));actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu(str(R.string.move_to),destinations.toArray(new String[0]),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
+        options.add(str(R.string.move_to_category));actions.add(()->{ArrayList<String> destinations=editableCategories();destinations.add("automatic");menu(str(R.string.move_to),drawerNames(destinations),n->{if(n==destinations.size()-1)assignments.remove(app.id);else assignments.put(app.id,destinations.get(n));saveState();refreshList(false);});});
         options.add(str(R.string.rename_x, (app.name.equals(app.label)?"":" · "+app.label)));actions.add(()->renameApp(app));
         options.add("Change icon");actions.add(()->{
             List<IconPacks.Pack> packs=IconPacks.installed(this);
@@ -966,7 +988,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         });
         options.add(prefs.getStringSet("private_apps",Collections.emptySet()).contains(app.id)?"Stop keeping private":"Make private · screen lock");actions.add(()->host.setPrivate(app,!prefs.getStringSet("private_apps",Collections.emptySet()).contains(app.id)));
         options.add(isHidden?str(R.string.show_in_lists):str(R.string.hide_from_lists_still_in_search));actions.add(()->{if(isHidden)hidden.remove(app.id);else{hidden.add(app.id);favorites.remove(app.id);}saveState();refreshList(false);toast(isHidden?str(R.string.x_is_back_in_its_category, app.name):str(R.string.x_hidden_find_it_in_search, app.name));});
-        options.add(str(R.string.app_info));actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){toast(str(R.string.app_info_unavailable));}});
+        options.add(str(R.string.app_info));actions.add(()->{try{launcher.startAppDetailsActivity(app.component,app.user,null,null);}catch(Exception e){appInfoFailed(e);}});
         options.add(str(R.string.uninstall));actions.add(()->{if(app.work){toast(str(R.string.use_app_info_to_manage_work_apps));return;}safeStart(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.component.getPackageName())));});
         menu(app.name,options.toArray(new String[0]),i->actions.get(i).run());
     }
@@ -986,11 +1008,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         return out;
     }
     private void renameApp(App app){
-        EditText input=new EditText(this);input.setSingleLine();input.setText(app.name);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.rename)).setView(input).setNegativeButton(str(R.string.cancel),null)
-            .setNeutralButton(str(R.string.original_name),(a,b)->{labels.remove(app.id);saveState();loadApps();}).setPositiveButton(str(R.string.save),null).create();showDialog(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError(str(R.string.enter_a_name));return;}
-            if(name.equals(app.label))labels.remove(app.id);else labels.put(app.id,name);saveState();d.dismiss();loadApps();});
+        track(com.studio72f.eigen.ui.EigenSheets.prompt(this,eigen,str(R.string.rename)+" "+app.name,"App name",app.name,40,
+            text->text.trim().isEmpty()?str(R.string.enter_a_name):null,
+            text->{String name=text.trim();if(name.equals(app.label))labels.remove(app.id);else labels.put(app.id,name);saveState();loadApps();},
+            app.name.equals(app.label)?null:str(R.string.original_name)+" · "+app.label,()->{labels.remove(app.id);saveState();loadApps();}));
     }
     private void hiddenAppsSettings(){
         ArrayList<App> list=new ArrayList<>();for(App a:apps)if(hidden.contains(a.id))list.add(a);
@@ -999,20 +1020,17 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         menu(str(R.string.hidden_apps),names,i->{hidden.remove(list.get(i).id);saveState();refreshList(false);toast(str(R.string.x_is_back, list.get(i).name));});
     }
     private String version(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(PackageManager.NameNotFoundException e){return "";}}
-    private void aboutSettings(){menu(str(R.string.s_72f_x, version()),new String[]{str(R.string.about_72f),str(R.string.open_source_notices)},n->{if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message(str(R.string.open_source_notices),new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){fileError(e);}return;}message(str(R.string.s_72f_x, version()),str(R.string.horizontal_categories_vertical_app_lists));});}
-    private void categorySettings(){menu(str(R.string.categories),new String[]{prefs.getBoolean("categories",true)?str(R.string.turn_categories_off):str(R.string.turn_categories_on),str(R.string.create_category),str(R.string.show_or_hide_categories),str(R.string.merge_categories),str(R.string.rename_custom_category),str(R.string.delete_custom_category)},i->{
-        if(i==0){prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);}
-        if(i==1)nameDialog("new category","",name->{custom.add(name);saveState();refreshCategories();});
-        if(i==2){ArrayList<String> cs=editableCategories();boolean[] checked=new boolean[cs.size()];for(int j=0;j<cs.size();j++)checked[j]=!disabled.contains(cs.get(j));AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.visible_categories)).setMultiChoiceItems(cs.toArray(new String[0]),checked,(dialog,n,on)->{if(on)disabled.remove(cs.get(n));else disabled.add(cs.get(n));}).setPositiveButton(str(R.string.done),(a,b)->{saveState();refreshCategories();refreshList(true);}).create();d.setOnCancelListener(a->{saveState();refreshCategories();refreshList(true);});showDialog(d);}
-        if(i==3){ArrayList<String> cs=editableCategories();menu(str(R.string.merge_from),cs.toArray(new String[0]),n->{String from=cs.remove(n);menu(str(R.string.merge_into),cs.toArray(new String[0]),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);toast(str(R.string.merged_into_x, target));});});}
-        if(i==4||i==5){ArrayList<String> cs=new ArrayList<>(custom);cs.removeAll(merges.keySet());if(cs.isEmpty()){toast(str(R.string.no_custom_categories_yet));return;}menu(i==4?str(R.string.rename):str(R.string.delete),cs.toArray(new String[0]),n->{String old=cs.get(n);if(i==4)nameDialog("rename category",old,name->{custom.set(custom.indexOf(old),name);assignments.replaceAll((k,v)->v.equals(old)?name:v);merges.replaceAll((k,v)->v.equals(old)?name:v);if(disabled.remove(old))disabled.add(name);if(category.equals(old))category=name;saveState();refreshCategories();refreshList(true);});else{showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.delete_x, old)).setMessage(str(R.string.apps_remain_installed_and_return_to_auto)).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.delete),(a,b)->{custom.remove(old);disabled.remove(old);assignments.values().removeIf(v->v.equals(old));merges.values().removeIf(v->v.equals(old));saveState();refreshCategories();refreshList(true);}).create());}});}
-    });}
+    private void aboutSettings(){menu(str(R.string.s_72f_x, version()),new String[]{str(R.string.about_72f),str(R.string.open_source_notices)},n->{
+        if(n==1){try(java.io.InputStream notice=getAssets().open("THIRD-PARTY-NOTICE.txt");java.io.InputStream license=getAssets().open("material-icons-LICENSE.txt")){message(str(R.string.open_source_notices),new String(ThemeEngine.readBounded(notice,32768),java.nio.charset.StandardCharsets.UTF_8)+"\n\n"+new String(ThemeEngine.readBounded(license,32768),java.nio.charset.StandardCharsets.UTF_8));}
+            catch(Exception e){problem(com.studio72f.eigen.ui.Problems.ABT_NOTICES,"about:notices","Notices couldn't be shown","Try again. The same notices are on Eigen's Play listing and website.","The open-source notices bundled in the app couldn't be read.",e);}return;}
+        message(str(R.string.s_72f_x, version()),str(R.string.horizontal_categories_vertical_app_lists));});}
     private interface NameAction{void accept(String s);}
+    /** A drawer name in Kelvin's text field. Names are stored lowercase and must be new. */
     private void nameDialog(String title,String existing,NameAction action){
-        EditText input=new EditText(this);input.setSingleLine();input.setText(existing);input.setSelectAllOnFocus(true);input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
-        AlertDialog d=new AlertDialog.Builder(this).setTitle(title).setView(input).setNegativeButton(str(R.string.cancel),null).setPositiveButton(str(R.string.save),null).create();showDialog(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String name=input.getText().toString().trim().toLowerCase(Locale.ROOT);ArrayList<String> used=editableCategories();used.addAll(merges.keySet());used.add("favorites");used.add("all apps");
-            if(name.isEmpty()||!name.equals(existing)&&used.contains(name)){input.setError(str(R.string.choose_a_unique_category_name));return;}action.accept(name);d.dismiss();});
+        track(com.studio72f.eigen.ui.EigenSheets.prompt(this,eigen,title,"Drawer name",existing.isEmpty()?"":drawerName(existing),24,
+            text->{String name=text.trim().toLowerCase(Locale.ROOT);ArrayList<String> used=editableCategories();used.addAll(merges.keySet());used.add("favorites");used.add("all apps");used.add("automatic");
+                if(name.isEmpty())return str(R.string.enter_a_name);if(!name.equals(existing)&&used.contains(name))return str(R.string.choose_a_unique_category_name);return null;},
+            text->action.accept(text.trim().toLowerCase(Locale.ROOT))));
     }
     private void bindMedia(){
         if(!mediaWanted()){if(controller!=null)controller.unregisterCallback(mediaCallback);controller=null;updateMedia();return;}
@@ -1033,18 +1051,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     private void mediaAction(int action){if(controller==null)return;MediaController.TransportControls c=controller.getTransportControls();if(action==0)c.skipToPrevious();else if(action==2)c.skipToNext();else if(controller.getPlaybackState()!=null&&controller.getPlaybackState().getState()==PlaybackState.STATE_PLAYING)c.pause();else c.play();}
 
-    private void themeSettings(){menu(str(R.string.appearance),new String[]{str(R.string.retro_cyan),str(R.string.retro_cobalt),str(R.string.retro_magenta),str(R.string.paper_light),str(R.string.wave),str(R.string.liquid_retro),str(R.string.material_3_expressive),str(R.string.import_theme),str(R.string.export_theme_package),str(R.string.title_size),str(R.string.app_icons),str(R.string.app_icon_packs),str(R.string.effects),str(R.string.launcher_icon_set)},i->{
-        try{
-            if(i<7){applyPreset(i);return;}
-            i--;
-            if(i==6)pickDocument(41,false,"application/octet-stream","72f-theme.72ftheme.zip");
-            if(i==7)pickDocument(42,true,"application/zip","72f-theme.72ftheme.zip");
-            if(i==8)menu(str(R.string.title_size),new String[]{str(R.string.compact_32),str(R.string.retro_60),str(R.string.oversized_72)},n->{try{JSONObject t=themeJson();t.put("titleSize",new int[]{32,60,72}[n]);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
-            if(i==9)menu(str(R.string.app_icons),new String[]{str(R.string.monochrome),str(R.string.original_color),str(R.string.text_only)},n->{prefs.edit().putString("icons",new String[]{"mono","color","none"}[n]).apply();buildUi();});
-            if(i==10)chooseIconPack();if(i==11)effectsSettings();
-            if(i==12)menu(str(R.string.launcher_icon_set),new String[]{str(R.string.retro),str(R.string.wave),str(R.string.material)},n->{try{JSONObject t=themeJson();t.put("uiIconSet",new String[]{"retro","wave","material"}[n]);t.remove("uiIcons");applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
-        }catch(Exception e){fileError(e);}
-    });}
     private void applyTheme(JSONObject t)throws Exception {
         ThemeEngine next=new ThemeEngine(t,BackupStore.themeDirectory(this,prefs));theme=next;uiIcons=new UiIcons(this,next);Motion.setEnabled(next.motionMs>0);
         bg=next.background;fg=next.text;muted=next.muted;accent=next.accent;font=next.font;titleSize=next.titleSize;
@@ -1072,110 +1078,34 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     }
     private JSONObject themeJson(){try{return new JSONObject(theme.json.toString());}catch(JSONException e){throw new IllegalStateException(e);}}
     private void persistTheme(){prefs.edit().putString("theme",theme.json.toString()).apply();prepareSoftWallpaper();}
-    private void effectsSettings(){menu(str(R.string.effects),new String[]{str(R.string.background_blur),str(R.string.glass_surfaces),str(R.string.glass_tuning_blur_tint_refraction),str(R.string.material_3_expressive_x, (theme.expressive?str(R.string.on):str(R.string.off))),str(R.string.wallpaper_colors_x, (Build.VERSION.SDK_INT<31?str(R.string.android_12):theme.dynamic?str(R.string.on):str(R.string.off)))},i->{
-        if(i==0)menu(str(R.string.blur),new String[]{str(R.string.off),str(R.string.soft_8),str(R.string.frosted_18),str(R.string.deep_32)},n->changeEffect("blur",new int[]{0,8,18,32}[n]));
-        if(i==1)menu(str(R.string.glass),new String[]{str(R.string.off),str(R.string.subtle),str(R.string.frosted),str(R.string.liquid_glass)},n->{try{JSONObject t=themeJson();t.put("glass",new int[]{0,20,40,65}[n]);t.put("liquid",n==3);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}});
-        if(i==2){glassTuning();return;}
-        if(i==3)changeEffect("expressive",!theme.expressive);
-        if(i==4){if(Build.VERSION.SDK_INT<31){toast(str(R.string.wallpaper_colors_need_android_12_or_newe));return;}changeEffect("dynamic",!theme.dynamic);}
-    });}
-    // Glass tuning: three live sliders. Rebuilds are debounced so dragging stays smooth.
-    private JSONObject pendingGlass;
-    private final Runnable applyGlass=()->{if(pendingGlass==null)return;try{applyTheme(pendingGlass);persistTheme();buildUi();}catch(Exception e){fileError(e);}pendingGlass=null;};
-    private String getGlassLabel(float level) {
-        if (level < 0.15f) return "Opaque (0.0)";
-        if (level < 0.45f) return "Frosted (0.3)";
-        if (level < 0.70f) return "Glass (0.55)";
-        if (level < 0.90f) return "Liquid (0.8)";
-        return "Clear (1.0)";
-    }
-    private void glassTuning(){
-        if(sheet!=null)sheet.dismiss(); // show the whole screen while tuning
-        LinearLayout box=column();box.setPadding(dp(24),dp(8),dp(24),dp(12));
-        TextView note=text("Stepless Kelvin glass setting (0.0 Opaque to 1.0 Clear). Frosted (0.30) is the accessible default.",14,muted);
-        note.setPadding(0,0,0,dp(8));box.addView(note);
-
-        float currentGlass = prefs.getFloat("glass_level", 0.30f);
-        TextView shown = text("Level: " + getGlassLabel(currentGlass) + " (" + String.format(Locale.ROOT, "%.2f", currentGlass) + ")", 16, fg);
-        shown.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        shown.setPadding(0, dp(6), 0, dp(6));
-        box.addView(shown);
-
-        SeekBar bar = new SeekBar(this);
-        bar.setMax(100);
-        bar.setProgress(Math.round(currentGlass * 100));
-        styleSlider(bar);
-        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar b, int p, boolean user){
-                if (!user) return;
-                float lvl = p / 100f;
-                prefs.edit().putFloat("glass_level", lvl).apply();
-                FrostedCard.setGlassLevel(lvl);
-                shown.setText(str(R.string.glass_level_x, getGlassLabel(lvl), String.format(Locale.ROOT, "%.2f", lvl)));
-                pushApps();
-                updateBackdrop();
-            }
-            public void onStartTrackingTouch(SeekBar b){}
-            public void onStopTrackingTouch(SeekBar b){}
-        });
-        box.addView(bar, new LinearLayout.LayoutParams(-1, dp(48)));
-
-        // Preset quick chips: Opaque (0), Frosted (0.3), Glass (0.55), Liquid (0.8), Clear (1.0)
-        LinearLayout chips = row();
-        chips.setPadding(0, dp(10), 0, dp(4));
-        chips.addView(chip("Opaque", false, v -> bar.setProgress(0)));
-        chips.addView(chip("Frosted", false, v -> bar.setProgress(30)));
-        chips.addView(chip("Glass", false, v -> bar.setProgress(55)));
-        chips.addView(chip("Liquid", false, v -> bar.setProgress(80)));
-        chips.addView(chip("Clear", false, v -> bar.setProgress(100)));
-        box.addView(chips);
-
-        TextView warning = text("Clear glass has no contrast protection.", 12, 0x88F1F2F3);
-        warning.setPadding(0, dp(8), 0, 0);
-        box.addView(warning);
-
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Glass Settings (Kelvin)").setView(box)
-            .setNeutralButton("Reset (0.30)",(a,b)->{
-                prefs.edit().putFloat("glass_level", 0.30f).apply();
-                FrostedCard.setGlassLevel(0.30f);
-                pushApps();
-                updateBackdrop();
-            })
-            .setPositiveButton(str(R.string.done),null).create();
-        showDialog(d);
-        if(d.getWindow()!=null)d.getWindow().setDimAmount(0f);
-    }
-    private interface Label{String of(int v);}
-    private View glassSlider(String name,int value,int min,int max,Label label,IntChoice change){
-        LinearLayout block=column();block.setPadding(0,dp(10),0,0);
-        LinearLayout head=row();head.addView(text(name,17,fg),new LinearLayout.LayoutParams(0,-2,1));
-        TextView shown=text(label.of(value),14,muted);head.addView(shown);block.addView(head);
-        SeekBar bar=new SeekBar(this);bar.setMax(max-min);bar.setProgress(value-min);bar.setContentDescription(name);
-        styleSlider(bar);
-        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar b,int p,boolean user){if(!user)return;shown.setText(label.of(p+min));change.accept(p+min);}
-            public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){handler.removeCallbacks(applyGlass);applyGlass.run();}
-        });
-        block.addView(bar,new LinearLayout.LayoutParams(-1,dp(48)));return block;
-    }
-    private void tuneGlass(String key,int value){
-        try{if(pendingGlass==null)pendingGlass=themeJson();pendingGlass.put(key,value);}catch(JSONException e){return;}
-        handler.removeCallbacks(applyGlass);handler.postDelayed(applyGlass,90);
-    }
-    private void changeEffect(String key,Object value){try{JSONObject t=themeJson();t.put(key,value);applyTheme(t);persistTheme();buildUi();}catch(Exception e){fileError(e);}}
     private void chooseIconPack(){
-        List<IconPacks.Pack> packs=IconPacks.installed(this);ArrayList<String> names=new ArrayList<>();names.add("system icons");for(IconPacks.Pack p:packs)names.add(p.label);
+        List<IconPacks.Pack> packs=IconPacks.installed(this);ArrayList<String> names=new ArrayList<>();names.add("The apps' own icons");for(IconPacks.Pack p:packs)names.add(p.label);
         if(packs.isEmpty()){message(str(R.string.icon_packs),str(R.string.install_an_adw_compatible_icon_pack_then));return;}
         menu(str(R.string.icon_packs),names.toArray(new String[0]),i->{if(i==0){prefs.edit().remove("iconPack").apply();loadApps();return;}
-            IconPacks.Pack p=packs.get(i-1);worker.execute(()->{try{new IconPacks(this,p.packageName);prefs.edit().putString("iconPack",p.packageName).apply();handler.post(()->{loadApps();toast(str(R.string.x_applied, p.label));});}catch(Exception e){handler.post(()->fileError(e));}});
+            IconPacks.Pack p=packs.get(i-1);worker.execute(()->{try{new IconPacks(this,p.packageName);prefs.edit().putString("iconPack",p.packageName).apply();handler.post(()->{loadApps();toast(str(R.string.x_applied, p.label));});}catch(Exception e){handler.post(()->problem(com.studio72f.eigen.ui.Problems.ICN_PACK,"icons:open-pack","Icon pack couldn't be read","Update the pack or choose another one. Your icons haven't changed.","The pack has no appfilter mapping Eigen understands, or Android couldn't open its resources.",e));}});
         });
     }
     private void pickDocument(int request,boolean create,String mime,String name){
         Intent intent=new Intent(create?Intent.ACTION_CREATE_DOCUMENT:Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(create?mime:"*/*");
         if(create)intent.putExtra(Intent.EXTRA_TITLE,name);startActivityForResult(intent,request);
     }
-    private void backupSettings(){menu(str(R.string.backup_restore),new String[]{str(R.string.export_launcher_backup),str(R.string.restore_launcher_backup)},i->{try{pickDocument(i==0?45:46,i==0,"application/zip","72f-launcher.72fbackup.zip");}catch(Exception e){fileError(e);}});}
-    private void fileError(Exception error){if(!isDestroyed())message(str(R.string.couldn_t_use_this_file),error.getMessage()==null?str(R.string.choose_a_supported_72f_file):error.getMessage());}
+    private void backupSettings(){menu(str(R.string.backup_restore),new String[]{str(R.string.export_launcher_backup)+" · everything, photo included",str(R.string.restore_launcher_backup)+" · see what it holds first"},i->{try{pickDocument(i==0?45:46,i==0,"application/zip","eigen.72fbackup.zip");}catch(Exception e){backupError(i==0?"backup:export":"backup:open",e);}});}
+    /** Shows a failure in Eigen's problem sheet: headline, what to try, then View more with the code and a redacted report. */
+    private void problem(String code,String stage,String headline,String description,String why,Exception e){if(!isDestroyed())com.studio72f.eigen.ui.Problems.show(eigen,this,code,stage,headline,description,why,e);}
+    /** A look change (colour, preset, theme file, glass) failed; the previous look stays. */
+    private void fileError(Exception error){problem(com.studio72f.eigen.ui.Problems.LOK_APPLY,"look:apply","That change didn't apply","Your previous look is still in place. Try again, or pick another option.","Eigen couldn't read or save the look's settings.",error);}
+    private void backupError(String stage,Exception e){
+        if(stage.equals("backup:export"))problem(com.studio72f.eigen.ui.Problems.BAK_EXPORT,stage,"Backup wasn't saved","Choose another folder, or check there's free space, then export again.","Android couldn't write the backup where you chose.",e);
+        else if(stage.equals("backup:apply"))problem(com.studio72f.eigen.ui.Problems.BAK_APPLY,stage,"Restore didn't finish","Your previous settings were put back. Try again, or export a fresh backup on the other phone.","Saving the restored settings failed partway.",e);
+        else if(e instanceof BackupStore.Invalid||e instanceof JSONException)problem(com.studio72f.eigen.ui.Problems.BAK_INVALID,"backup:validate","This backup can't be restored","Choose a backup exported from Eigen, or export a fresh one. Nothing has changed.","The file is damaged, isn't an Eigen backup, or holds a setting outside what this version allows.",e);
+        else problem(com.studio72f.eigen.ui.Problems.BAK_READ,"backup:open","Backup couldn't be opened","Make sure the file is downloaded to the phone, then try again. Nothing has changed.","Android couldn't read or unpack the file you picked.",e);
+    }
+    private void purchaseProblem(String stage,int response){
+        if(stage.equals("connect"))problem(com.studio72f.eigen.ui.Problems.BIL_CONNECT,"billing:connect","Google Play isn't connected yet","Eigen is connecting to Google Play now. Wait a moment, then tap again. If it keeps happening, check Play Store is signed in and up to date.","Play Billing wasn't ready when the purchase was tapped.",null);
+        else if(stage.equals("details"))problem(com.studio72f.eigen.ui.Problems.BIL_DETAILS,"billing:details","The price hasn't loaded yet","Google Play hasn't sent the price. Check you're online, wait a moment, then try again. Nothing was charged.","Play hadn't returned the product's details, so no purchase could start.",null);
+        else problem(com.studio72f.eigen.ui.Problems.BIL_FLOW,"billing:flow","The purchase didn't go through","Google Play stopped it before it finished, so nothing was charged. Try again in a moment.","Play ended the purchase flow with response code "+response+".",null);
+    }
+    private void wallpaperPickerMissing(){problem(com.studio72f.eigen.ui.Problems.WAL_PICKER,"wallpaper:picker","No photo picker found","Install or turn on a gallery or files app, then choose a photo again.","No app on this phone answered the request to pick an image.",null);}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==47||request==48){int id=prefs.getInt("pendingWidget",-1);if(id<0)return;if(result!=RESULT_OK){cancelWidget();return;}if(request==47)configureWidget(id);else placeWidget(id);return;}
@@ -1189,8 +1119,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             try{
                 if(request==42||request==45){try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Destination unavailable");if(request==42)currentTheme.exportSnapshot(this,prefs,out);else BackupStore.export(this,prefs,currentTheme,out);}handler.post(()->toast(request==42?str(R.string.theme_exported):str(R.string.backup_exported)));}
                 if(request==41)importTheme(uri);
-                if(request==46){BackupStore.Pending prepared;try(InputStream in=getContentResolver().openInputStream(uri)){prepared=BackupStore.prepare(this,in);}handler.post(()->reviewRestore(prepared));}
-            }catch(Exception e){handler.post(()->fileError(e));}
+                if(request==46){BackupStore.Pending prepared;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("File unavailable");prepared=BackupStore.prepare(this,in);}handler.post(()->reviewRestore(prepared));}
+            }catch(Exception e){handler.post(()->{if(request==45)backupError("backup:export",e);else if(request==46)backupError("backup:open",e);else fileError(e);});}
         });
     }
     private void importTheme(Uri uri)throws Exception {
@@ -1216,11 +1146,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if(isDestroyed()){ThemeEngine.deleteTree(prepared.directory);return;}
         pendingRestore=prepared;
         try{
-            AlertDialog d=new AlertDialog.Builder(this).setTitle(str(R.string.restore_launcher)).setMessage(prepared.summary())
-                .setNegativeButton(str(R.string.cancel),(a,b)->{ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;})
-                .setPositiveButton(str(R.string.restore),(a,b)->{pendingRestore=null;worker.execute(()->{try{BackupStore.apply(this,prefs,prepared);handler.post(()->{if(isDestroyed())return;pendingRestore=null;wallpaper=null;softWallpaper=null;readState();activeContext=resolveContext();appliedLayout=layoutKey(activeContext);category=startCategory(activeContext);searching=false;query="";scrollPositions.clear();restoreWallpaper();buildUi();loadApps();toast(str(R.string.launcher_restored));});}catch(Exception e){handler.post(()->fileError(e));}});}).create();
-            d.setOnCancelListener(a->{ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;});showDialog(d);
-        }catch(Exception e){ThemeEngine.deleteTree(prepared.directory);fileError(e);}
+            final boolean[] chosen={false};
+            Dialog d=track(com.studio72f.eigen.ui.EigenSheets.dialog(this,eigen,str(R.string.restore_launcher),prepared.summary(),str(R.string.restore),str(R.string.cancel),false,()->{
+                chosen[0]=true;pendingRestore=null;
+                worker.execute(()->{try{BackupStore.apply(this,prefs,prepared);handler.post(()->{if(isDestroyed())return;pendingRestore=null;wallpaper=null;softWallpaper=null;readState();activeContext=resolveContext();appliedLayout=layoutKey(activeContext);category=startCategory(activeContext);searching=false;query="";scrollPositions.clear();restoreWallpaper();buildUi();loadApps();toast(str(R.string.launcher_restored));});}catch(Exception e){handler.post(()->backupError("backup:apply",e));}});
+            }));
+            d.setOnDismissListener(x->{openDialogs.remove(d);if(!chosen[0]){ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;}});
+        }catch(Exception e){ThemeEngine.deleteTree(prepared.directory);pendingRestore=null;backupError("backup:open",e);}
     }
     private GlassSurface glassSurface(View host){GlassSurface surface=new GlassSurface(host,scene,()->backdropView.getBackground(),glassBackdrop,theme,getResources().getDisplayMetrics().density);glassSurfaces.add(surface);host.setClipToOutline(true);if(theme.liquid)host.setElevation(dp(3));return surface;}
     /** 10th/90th percentile relative luminance of the photo; the spots that threaten dark and light text. */
@@ -1311,7 +1243,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 try{if(!image.compress(Bitmap.CompressFormat.JPEG,94,output))throw new IOException("Couldn't save image");saved.finishWrite(output);}catch(IOException e){saved.failWrite(output);throw e;}
                 prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
                 handler.post(()->{if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();if(!quiet)toast(str(R.string.wallpaper_set));}});
-            }catch(Exception e){handler.post(()->message(str(R.string.couldn_t_open_wallpaper),"The texture couldn't be saved. Try again."));}
+            }catch(Exception e){handler.post(()->problem(com.studio72f.eigen.ui.Problems.WAL_SAVE,"wallpaper:save","Texture wasn't set","Check there's some free space on the phone, then try again. Your wallpaper hasn't changed.","Eigen couldn't store its copy of the texture.",e));}
         });
     }
     private void importWallpaper(Uri uri) {
@@ -1331,37 +1263,17 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 android.util.AtomicFile saved=new android.util.AtomicFile(new File(getFilesDir(),"wallpaper.jpg"));
                 FileOutputStream output=null;
                 try { output=saved.startWrite();if(!image.compress(Bitmap.CompressFormat.JPEG,92,output))throw new IOException("Couldn't save image");saved.finishWrite(output); }
-                catch(IOException error){if(output!=null)saved.failWrite(output);image.recycle();throw error;}
-                prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").apply();
+                catch(IOException error){if(output!=null)saved.failWrite(output);image.recycle();handler.post(()->problem(com.studio72f.eigen.ui.Problems.WAL_SAVE,"wallpaper:save","Photo wasn't set","Check there's some free space on the phone, then choose it again. Your wallpaper hasn't changed.","Eigen couldn't store its copy of the photo.",error));return;}
+                // A new photo starts clearly visible (about 55% brightness), not at the old dark default; Settings > Wallpaper changes it.
+                prefs.edit().putString("wallpaperMode","photo").putString("wallpaperPath","wallpaper.jpg").putInt("wallpaperDim",40).apply();
                 handler.post(() -> { if(!isDestroyed()&&request==wallpaperGeneration){wallpaper=image;prepareSoftWallpaper();buildUi();toast(str(R.string.wallpaper_set));}else image.recycle(); });
             } catch(Exception error) {
-                handler.post(() -> {if(!isDestroyed())message(str(R.string.couldn_t_open_wallpaper),str(R.string.choose_a_readable_photo_or_image_up_to_3));});
+                handler.post(() -> problem(com.studio72f.eigen.ui.Problems.WAL_OPEN,"wallpaper:open","That photo couldn't be opened",str(R.string.choose_a_readable_photo_or_image_up_to_3)+" Your wallpaper hasn't changed.","The image couldn't be read or decoded, or it is larger than 32 MB.",error));
             } finally { if(incoming!=null)incoming.delete(); }
         });
     }
-    private void wallpaperSettings() {
-        menu(str(R.string.wallpaper),new String[]{str(R.string.choose_a_photo),str(R.string.use_phone_wallpaper),str(R.string.solid_background),str(R.string.wallpaper_dimming),str(R.string.use_saved_photo),str(R.string.text_legibility_x, legibilitySummary()),"Set as phone wallpaper","Eigen textures"},i -> {
-            if(i==7){eigen.setTextureSheet(true);return;}
-            if(i==6){systemWallpaper();return;}
-            if(i==5){legibilitySettings();return;}
-            if(i==0){try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast(str(R.string.no_image_picker_available));}}
-            if(i==1||i==2){prefs.edit().putString("wallpaperMode",i==1?"system":"solid").apply();buildUi();}
-            if(i==3){
-                LinearLayout box=column();box.setPadding(dp(24),dp(12),dp(24),dp(18));
-                TextView value=text(str(R.string.x_dim, prefs.getInt("wallpaperDim",75)),24,fg);box.addView(value);
-                TextView explanation=text(str(R.string.adjust_the_wallpaper_brightness_behind_a),14,muted);explanation.setPadding(0,dp(8),0,dp(16));box.addView(explanation);
-                SeekBar dimmer=new SeekBar(this);dimmer.setContentDescription(str(R.string.wallpaper_dimming_2));dimmer.setMax(90);dimmer.setProgress(prefs.getInt("wallpaperDim",75));
-                styleSlider(dimmer);
-                dimmer.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                    public void onProgressChanged(SeekBar bar,int amount,boolean user){if(!user)return;prefs.edit().putInt("wallpaperDim",amount).apply();value.setText(str(R.string.x_dim, amount));updateBackdrop();}
-                    public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}
-                });
-                box.addView(dimmer,new LinearLayout.LayoutParams(-1,dp(48)));
-                showDialog(new AlertDialog.Builder(this).setTitle(str(R.string.wallpaper_dimming)).setView(box).setPositiveButton(str(R.string.done),null).create());
-            }
-            if(i==4){if(!BackupStore.wallpaperFile(this,prefs).exists()){toast(str(R.string.choose_a_photo_first));return;}prefs.edit().putString("wallpaperMode","photo").apply();if(wallpaper==null)restoreWallpaper();else buildUi();}
-        });
-    }
+    /** Every wallpaper control lives on one page: the picture, its blur and brightness, and legibility. */
+    private void wallpaperSettings() { if(!eigen.getSettingsOpen())openSettings(); openPage("wallpaper"); }
 
     /**
      * Pushes the launcher's photo to Android as the home and/or lock screen wallpaper. It goes unblurred: Android
@@ -1376,23 +1288,12 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 try(java.io.InputStream in=new java.io.FileInputStream(file)){
                     android.app.WallpaperManager.getInstance(this).setStream(in,null,true,which);
                     handler.post(()->toast(n==1?"Lock screen wallpaper set":n==0?"Phone wallpaper set":"Home and lock screen wallpaper set"));
-                }catch(Exception e){handler.post(()->message("Couldn't set the wallpaper",e.getMessage()==null?"Android refused the image. Try a different photo.":e.getMessage()));}
+                }catch(Exception e){handler.post(()->problem(com.studio72f.eigen.ui.Problems.WAL_SYSTEM,"wallpaper:system","The phone's wallpaper didn't change","Android refused the image. Try again, or set it from your gallery app instead.","WallpaperManager rejected the stream, or the phone doesn't allow apps to set the wallpaper.",e));}
             });
         });
     }
     /** Settings > Assistant: the model page (Gemini Nano, or Gemma through 72F AI Share). */
     private void assistantSettings() { eigen.setPowerPage("assistant"); }
-
-    private void assistantMenuLegacy() {
-        boolean ready = !com.studio72f.eigen.ai.EigenAssistant.statusLabel().startsWith("Quick");
-        menu("Assistant", new String[]{ com.studio72f.eigen.ai.EigenAssistant.statusLabel(), "Start a new conversation", "How your data is handled" }, i -> {
-            if (i == 0) message("On-device model", ready
-                ? "Eigen uses Gemini Nano through Android AICore. It runs on this phone's own chip, works offline, and nothing you type is sent anywhere."
-                : "This phone doesn't have Android AICore, so Eigen can't run a language model here. Quick answers still work: open an app, ask the time or battery, or do a sum.");
-            else if (i == 1) { com.studio72f.eigen.ai.EigenAssistant.clearHistory(); eigen.getChat().clear(); toast("Started a new conversation"); }
-            else message("Your data", "The assistant and search answers run entirely on this phone. Eigen keeps no chat log on disk and sends nothing you type to any server. It goes online only to download an assistant model you pick.");
-        });
-    }
 
     private void homescreenMenu() {
         menu("Eigen", new String[]{"Assistant", "Settings", "Wallpaper", "Clock style", "Colour", "Widgets", "Search apps"}, i -> {
@@ -1627,20 +1528,20 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             if(widgetManager.bindAppWidgetIdIfAllowed(id,info.getProfile(),info.provider,null)){configureWidget(id);return;}
             Intent bind=new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER,info.provider).putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE,info.getProfile());
-            try{startActivityForResult(bind,47);}catch(Exception e){cancelWidget();toast(str(R.string.this_phone_doesn_t_allow_adding_widgets));}
+            try{startActivityForResult(bind,47);}catch(Exception e){cancelWidget();problem(com.studio72f.eigen.ui.Problems.WID_BIND,"widgets:bind","Widget couldn't be added","This phone doesn't let Eigen ask for permission to add widgets here. Try another widget.","Android has no screen that lets Eigen ask for permission to show this widget.",e);}
         });
     }
     private void widgetMenu(ContextRules.Rule rule,String item){
         int id=Integer.parseInt(item.substring(7));AppWidgetProviderInfo info=widgetManager.getAppWidgetInfo(id);
         boolean reconfigurable=Build.VERSION.SDK_INT>=31&&info!=null&&info.configure!=null&&(info.widgetFeatures&AppWidgetProviderInfo.WIDGET_FEATURE_RECONFIGURABLE)!=0;
         int height=rule.header>=0?rule.header:prefs.getInt("header",20);
-        ArrayList<String> options=new ArrayList<>(Arrays.asList("remove from "+rule.name,"top zone · "+height+"%","edit "+rule.name+" context"));
+        ArrayList<String> options=new ArrayList<>(Arrays.asList("Remove from "+rule.name,"Widget area · "+height+"%","Edit the "+rule.name+" context"));
         if(reconfigurable)options.add(str(R.string.widget_settings));
         menu(itemLabel(item),options.toArray(new String[0]),i->{
             if(i==0){removeContextItem(rule,item);contextsChanged();toast(str(R.string.widget_removed));}
             if(i==1)menu(str(R.string.top_zone_height),new String[]{"20%","30%","40%"},n->{rule.header=new int[]{20,30,40}[n];contextsChanged();});
             if(i==2)eigen.setContextsPage(rule.id);
-            if(i==3)try{widgetHost.startAppWidgetConfigureActivityForResult(this,id,0,50,null);}catch(Exception e){toast(str(R.string.widget_settings_unavailable));}
+            if(i==3)try{widgetHost.startAppWidgetConfigureActivityForResult(this,id,0,50,null);}catch(Exception e){problem(com.studio72f.eigen.ui.Problems.WID_CONFIGURE,"widgets:configure","Widget settings didn't open","Open the widget's own app to change how it looks.","The widget's settings screen refused to start.",e);}
         });
     }
     private void configureWidget(int id){
@@ -1651,7 +1552,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void placeWidget(int id){
         String target=prefs.getString("pendingWidgetContext","");prefs.edit().remove("pendingWidget").remove("pendingWidgetContext").apply();
         for(ContextRules.Rule r:contexts)if(r.id.equals(target)){if(r.widgets.size()<ContextStore.MAX_WIDGETS){r.widgets.add("widget:"+id);if(r.header==0||r.header<0&&prefs.getInt("header",20)<30)r.header=30;contextsChanged();return;}}
-        widgetHost.deleteAppWidgetId(id);toast(str(R.string.couldn_t_place_that_widget));
+        widgetHost.deleteAppWidgetId(id);problem(com.studio72f.eigen.ui.Problems.WID_PLACE,"widgets:place","Widget couldn't be placed","The context it was for is full or was removed. Make room, then add the widget again.","When the widget came back from its setup, its context was missing or already held the most widgets allowed.",null);
     }
     private void cancelWidget(){int id=prefs.getInt("pendingWidget",-1);if(id>=0)widgetHost.deleteAppWidgetId(id);prefs.edit().remove("pendingWidget").remove("pendingWidgetContext").apply();}
     private void removeContextItem(ContextRules.Rule rule,String item){
@@ -1777,7 +1678,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("market://details?id="+getPackageName())));}
         catch(Exception e){safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("https://play.google.com/store/apps/details?id="+getPackageName())));}
     }
-    private void sendFeedback(){safeStart(new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:parth.k.design@gmail.com")).putExtra(Intent.EXTRA_SUBJECT,"Eigen "+version()+" feedback"));}
+    private void sendFeedback(){
+        try{startActivity(new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:"+com.studio72f.eigen.ui.Problems.DEVELOPER)).putExtra(Intent.EXTRA_SUBJECT,"Eigen "+version()+" feedback"));}
+        catch(Exception e){problem(com.studio72f.eigen.ui.Problems.FDB_MAIL,"feedback:mail","No mail app found","Set up a mail app and try again, or write to "+com.studio72f.eigen.ui.Problems.DEVELOPER+" from any device.","Android found no app that sends email on this phone.",e);}
+    }
     private com.studio72f.eigen.ui.SettingsRow row(String title,String summary,String value,String icon,String tile,Boolean toggle,Runnable action){return new com.studio72f.eigen.ui.SettingsRow(title,summary,value,icon,tile,toggle,action);}
     /**
      * The Kelvin settings page's rows. Rows that still lead to an older editor (contexts, drawer order, support)
@@ -1785,42 +1689,43 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
      */
     private List<com.studio72f.eigen.ui.SettingsSection> settingsModel(){
         ArrayList<com.studio72f.eigen.ui.SettingsSection> out=new ArrayList<>();
-        String mode=prefs.getString("wallpaperMode","solid"),icons=prefs.getString("icons",theme.iconStyle);
-        out.add(new com.studio72f.eigen.ui.SettingsSection("Eigen Plus",Arrays.asList(
+        String mode=prefs.getString("wallpaperMode","solid");
+        // Plus stands alone at the top: one row needs no header of its own.
+        out.add(new com.studio72f.eigen.ui.SettingsSection("",Arrays.asList(
             row("Eigen Plus",eigen.getPlus()?"Thank you for backing Eigen":"Contexts, clocks, widgets and more",eigen.getPlus()?"On":eigen.getPlusPrice(),"sparkles","orange",null,()->eigen.setPlusSheet("")))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Look",Arrays.asList(
-            row("Colour",null,colourName(),"palette","orange",null,this::colourSettings),
+            row("Colour",EigenPalette.isGreyscale(accent)?"Greyscale greys icons and the wallpaper too":null,colourName(),"palette","orange",null,this::colourSettings),
             row("Clock style",null,com.studio72f.eigen.ui.ClockStyles.NAMES[Math.max(0,Arrays.asList(com.studio72f.eigen.ui.ClockStyles.IDS).indexOf(prefs.getString("clock_face","ratio")))],"clock","violet",null,this::clockSettings),
-            row("Wallpaper",mode.equals("photo")?"Your photo, or an Eigen texture":mode.equals("system")?"The phone's wallpaper":"Solid black",null,"photo","blue",null,this::wallpaperSettings),
-            row("Home wallpaper","Blur behind your drawers",prefs.getFloat("home_blur",0f)==0f?"Sharp":prefs.getFloat("home_blur",0f)<1f?"Soft":"Frosted","photo","blue",null,()->menu("Home wallpaper",new String[]{"Sharp · just dimmed","Soft · a light blur","Frosted · a full blur"},n->{prefs.edit().putFloat("home_blur",new float[]{0f,.45f,1f}[n]).apply();pushState();})),
-            row("App icons",null,icons.equals("mono")?"Monochrome":!prefs.getString("iconPack","").isEmpty()?"Icon pack":"Colour","apps","teal",null,()->menu("App icons",new String[]{"Colour","Monochrome","Icon pack"},n->{if(n==2)chooseIconPack();else setIcons(n==0?"color":"mono");})),
-            row("Text legibility",legibilitySummary(),null,"text","grey",null,this::legibilitySettings),
-            row("Monochrome only","Black and white over everything",null,"adjust","grey",prefs.getBoolean("monochrome",false),()->{prefs.edit().putBoolean("monochrome",!prefs.getBoolean("monochrome",false)).apply();pushState();}))));
+            row("Wallpaper",mode.equals("photo")?"Your photo or an Eigen texture, with its blur and brightness":mode.equals("system")?"The phone's wallpaper, with its brightness":"Solid black. Choose a photo or texture here",null,"photo","blue",null,()->openPage("wallpaper")),
+            row("Icons","Shape, icon pack, grey icons and icons in your colour",com.studio72f.eigen.ui.IconShaper.INSTANCE.getNAMES().get(Math.max(0,com.studio72f.eigen.ui.IconShaper.INSTANCE.getSHAPES().indexOf(prefs.getString("icon_shape","system")))).split(" ")[0],"apps","teal",null,()->eigen.setPowerPage("icons")),
+            row("Black and white screen","Everything Eigen shows, wallpaper included, without colour",null,"adjust","grey",prefs.getBoolean("monochrome",false),()->{prefs.edit().putBoolean("monochrome",!prefs.getBoolean("monochrome",false)).apply();pushState();}))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Home",Arrays.asList(
             row("Grid density","Cards in each row of a drawer",prefs.getInt("grid_columns",4)==4?"Roomy":prefs.getInt("grid_columns",4)==6?"Compact":"Balanced","apps","blue",null,()->menu("Grid density",new String[]{"Roomy · 4 in a row","Balanced · 5 in a row","Compact · 6 in a row"},n->{prefs.edit().putInt("grid_columns",4+n).apply();pushState();})),
-            row("Drawers","Create, hide, merge and rename",null,"folder","blue",null,this::categorySettings),
-            row("Drawer order",String.join(", ",editableCategories().subList(0,Math.min(3,editableCategories().size()))),null,"sort","blue",null,()->sheet.open(this::orderPage)),
+            row("Drawers",drawersSummary(),null,"folder","blue",null,()->openPage("drawers")),
             row("Hidden apps",hidden.isEmpty()?"None. Hold an app to hide it.":hidden.size()+" hidden, still in search",null,"eye-off","grey",null,this::hiddenAppsSettings),
             row("At a glance","Next event, alarm or what's playing under the clock",null,"clock","violet",prefs.getBoolean("glance",true),()->{prefs.edit().putBoolean("glance",!prefs.getBoolean("glance",true)).apply();pushPower();eigen.setSettings(settingsModel());}),
-            row("Unread mark","On a closed drawer with notifications",new String[]{"Dash","Dot","Colour","Off"}[Math.max(0,Arrays.asList("dash","dot","colour","off").indexOf(prefs.getString("dot_style","dash")))],"bell","orange",null,()->menu("Unread mark",new String[]{"Dash · after the name","Dot · after the name","Colour · the name turns orange","Off"},n->{prefs.edit().putString("dot_style",new String[]{"dash","dot","colour","off"}[n]).apply();pushState();})),
-            row("Notification dots",mediaAccess()?null:"Needs notification access",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}))));
-        out.add(new com.studio72f.eigen.ui.SettingsSection("Power",Arrays.asList(
+            row("Notification dots",mediaAccess()?"A dot on app cards that have notifications":"Needs notification access: tap to allow it",null,"bell","red",mediaAccess()&&prefs.getBoolean("dots",true),()->{if(!mediaAccess()){safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));return;}prefs.edit().putBoolean("dots",!prefs.getBoolean("dots",true)).apply();eigen.setDotsVersion(eigen.getDotsVersion()+1);eigen.setSettings(settingsModel());}),
+            row("Unread mark","How a closed drawer shows that an app inside has notifications",new String[]{"Dash","Dot","Colour","Off"}[Math.max(0,Arrays.asList("dash","dot","colour","off").indexOf(prefs.getString("dot_style","dash")))],"dashes","orange",null,()->menu("Unread mark",new String[]{"Dash · after the name","Dot · after the name","Colour · the name turns your accent colour","Off"},n->{prefs.edit().putString("dot_style",new String[]{"dash","dot","colour","off"}[n]).apply();pushState();})))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Controls",Arrays.asList(
             row("Gestures","Double-tap, swipes and the Home button",null,"hand","violet",null,()->eigen.setPowerPage("gestures")),
             row("Search","Shortcuts, contacts, settings and sums",null,"search","blue",null,()->eigen.setPowerPage("search")),
-            row("Icons","Shapes, themed icons and per-app icons",com.studio72f.eigen.ui.IconShaper.INSTANCE.getNAMES().get(Math.max(0,com.studio72f.eigen.ui.IconShaper.INSTANCE.getSHAPES().indexOf(prefs.getString("icon_shape","system")))).split(" ")[0],"apps","teal",null,()->eigen.setPowerPage("icons")),
             row("Private apps","Behind your screen lock",eigen.getPlus()?null:"Plus","lock","orange",null,()->eigen.setPowerPage("private")),
-            row("Automation","Tasker, MacroDroid and friends",eigen.getPlus()?null:"Plus","adjust","green",null,()->eigen.setPowerPage("automation")),
-            row("Share your setup","Export or import a .eigen file",null,"share","grey",null,()->eigen.setPowerPage("setups")))));
+            row("Automation","Tasker, MacroDroid and friends",eigen.getPlus()?null:"Plus","adjust","green",null,()->eigen.setPowerPage("automation")))));
         out.add(new com.studio72f.eigen.ui.SettingsSection("Your day",Arrays.asList(
-            row("Contexts and widgets","Which widgets show, and when",null,"layers","green",null,()->eigen.setContextsPage("")),
+            row("Widgets by time and place","Different widgets, and a different first drawer, for mornings, work or headphones",null,"layers","green",null,()->eigen.setContextsPage("")),
             row("Assistant",com.studio72f.eigen.ai.EigenAssistant.statusLabel(),null,"sparkles","orange",null,this::assistantSettings))));
+        boolean contacts=checkSelfPermission(android.Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED,gestures=EigenAccessibility.enabled(this),home=isDefaultHome();
         out.add(new com.studio72f.eigen.ui.SettingsSection("Access",Arrays.asList(
             row("Notification access","Conversations, replies and dots",mediaAccess()?"On":"Off","message","green",null,()->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))),
-            row("Calendar access","Your agenda on the widgets page",calendarAllowed()?"On":"Off","calendar","red",null,()->{if(calendarAllowed())safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}),
+            row("Calendar","Your agenda on the widgets page",calendarAllowed()?"On":"Off","calendar","red",null,()->{if(calendarAllowed())appDetails();else requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR},49);}),
+            row("Contacts","Names from your contacts in search",contacts?"On":"Off","search","blue",null,()->{if(contacts)appDetails();else host.requestContacts();}),
             row("Usage access","Screen time on cards and app dashboards",com.studio72f.eigen.ui.Usage.INSTANCE.hasAccess(this)?"On":"Off","adjust","violet",null,()->safeStart(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))),
-            row("Default home app",null,isDefaultHome()?"Eigen":null,"home","blue",null,this::defaultHome))));
-        out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and about",Arrays.asList(
-            row("Backup and restore","Drawers, contexts, look and wallpaper",null,"archive","grey",null,this::backupSettings),
+            row("Gesture service","Lets gestures lock the screen or open notifications, quick settings and recents",gestures?"On":"Off","hand","violet",null,()->{if(gestures)safeStart(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));else eigen.setAccessibilityAsk("Locking the screen and opening notifications");}),
+            row("Default home app",home?"Eigen is your home screen. Switch back to another one here, any time.":"Make Eigen your home screen. You can switch back here, any time.",home?"Eigen":null,"home","blue",null,this::defaultHome))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("Backup and sharing",Arrays.asList(
+            row("Share your setup","Your look, drawers and contexts in a small .eigen file, safe to post",null,"share","grey",null,()->eigen.setPowerPage("setups")),
+            row("Backup and restore","Everything, photo included, to move to a new phone",null,"archive","grey",null,this::backupSettings))));
+        out.add(new com.studio72f.eigen.ui.SettingsSection("About",Arrays.asList(
             row("Replay the tour",null,null,"refresh","grey",null,()->{eigen.setSettingsOpen(false);startTour(0);}),
             row("Rate Eigen",null,null,"heart","red",null,this::rateApp),
             row("Send feedback","Report a bug or suggest something",null,"message","green",null,this::sendFeedback),
@@ -1828,6 +1733,87 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             row("Terms of use",null,null,"info","grey",null,()->safeStart(new Intent(Intent.ACTION_VIEW,Uri.parse("https://72fstudio.in/eigen/terms/")))),
             row("About Eigen",version(),null,"info","grey",null,this::aboutSettings))));
         return out;
+    }
+    private void appDetails(){safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));}
+    /** A drawer's name as people read it: keys are stored lowercase, and favourites is spelt the British way. */
+    public static String drawerName(String key){
+        if(key==null||key.isEmpty())return "";
+        if(key.equals("favorites"))return "Favourites";
+        if(key.equals("all apps"))return "All apps";
+        if(key.equals("automatic"))return "Automatic";
+        return Character.toUpperCase(key.charAt(0))+key.substring(1);
+    }
+    private String[] drawerNames(List<String> keys){String[] out=new String[keys.size()];for(int i=0;i<out.length;i++)out[i]=drawerName(keys.get(i));return out;}
+    private String drawersSummary(){
+        if(!prefs.getBoolean("categories",true))return "Off. Home shows Favourites only";
+        ArrayList<String> cs=editableCategories();cs.removeAll(disabled);
+        StringBuilder b=new StringBuilder();for(int i=0;i<Math.min(3,cs.size());i++){if(i>0)b.append(", ");b.append(drawerName(cs.get(i)));}
+        return cs.size()>3?b+" and "+(cs.size()-3)+" more":b.toString();
+    }
+    // ---- Pages of rows built here and shown by PowerPages (Wallpaper, Drawers).
+    private void openPage(String page){eigen.setPageRows(pageModel(page));eigen.setPowerPage(page);}
+    private void refreshPage(){String p=eigen.getPowerPage();if("wallpaper".equals(p)||"drawers".equals(p))eigen.setPageRows(pageModel(p));}
+    private List<com.studio72f.eigen.ui.SettingsSection> pageModel(String page){
+        ArrayList<com.studio72f.eigen.ui.SettingsSection> out=new ArrayList<>();
+        if(page.equals("wallpaper")){
+            String mode=prefs.getString("wallpaperMode","solid");boolean saved=BackupStore.wallpaperFile(this,prefs).exists(),texture=prefs.getString("living_texture",null)!=null;
+            ArrayList<com.studio72f.eigen.ui.SettingsRow> picture=new ArrayList<>();
+            picture.add(row("Choose a photo","From your gallery or files. It's shown inside Eigen only",mode.equals("photo")&&!texture?"In use":null,"photo","blue",null,host::chooseWallpaper));
+            picture.add(row("Eigen textures","Soft colour fields, some that follow the time of day",mode.equals("photo")&&texture?"In use":null,"sparkles","violet",null,()->eigen.setTextureSheet(true)));
+            if(saved&&!mode.equals("photo"))picture.add(row("Use your last photo",null,null,"photo","blue",null,()->{prefs.edit().putString("wallpaperMode","photo").apply();if(wallpaper==null)restoreWallpaper();else buildUi();}));
+            picture.add(row("The phone's wallpaper","What Android shows on the lock screen and in other launchers",mode.equals("system")?"In use":null,"home","teal",null,()->{prefs.edit().putString("wallpaperMode","system").apply();buildUi();}));
+            picture.add(row("Solid black","The calmest, and easy on an OLED battery",mode.equals("solid")?"In use":null,"adjust","grey",null,()->{prefs.edit().putString("wallpaperMode","solid").apply();buildUi();}));
+            out.add(new com.studio72f.eigen.ui.SettingsSection("Picture",picture));
+            float blur=prefs.getFloat("home_blur",0f);
+            boolean photo=mode.equals("photo"),solid=mode.equals("solid");
+            out.add(new com.studio72f.eigen.ui.SettingsSection("On home",Arrays.asList(
+                row("Wallpaper blur",photo?"How soft the picture behind your drawers looks":solid?"Only for a photo or texture: solid black has nothing to blur":"Android draws the phone's wallpaper, so Eigen can't blur it",photo?(blur==0f?"Sharp":blur<1f?"Soft":"Strong"):null,"photo","blue",null,
+                    photo?()->menu("Wallpaper blur",new String[]{"Sharp · dimmed only","Soft · a light blur","Strong · a heavy blur"},n->{prefs.edit().putFloat("home_blur",new float[]{0f,.45f,1f}[n]).apply();pushState();}):null),
+                row("Text legibility",solid?"Not needed on solid black: text is already at full contrast":legibilitySummary(),null,"text","grey",null,solid?null:this::legibilitySettings))));
+            if(saved)out.add(new com.studio72f.eigen.ui.SettingsSection("Outside Eigen",Arrays.asList(
+                row("Set as the phone's wallpaper","For the lock screen and other apps. It goes as it is, without Eigen's blur",null,"share","grey",null,this::systemWallpaper))));
+        }else if(page.equals("drawers")){
+            boolean on=prefs.getBoolean("categories",true);
+            out.add(new com.studio72f.eigen.ui.SettingsSection("",Arrays.asList(
+                row("Sort apps into drawers",on?"Social, music, games and the rest, sorted on this phone":"Off. Home shows Favourites, and every app is a swipe up",null,"folder","blue",on,()->{prefs.edit().putBoolean("categories",!prefs.getBoolean("categories",true)).apply();refreshCategories();refreshList(true);refreshPage();}),
+                row("New drawer","Name it, then hold an app and choose Move to drawer",null,"folder","green",null,host::addDrawer))));
+            if(on){
+                ArrayList<com.studio72f.eigen.ui.SettingsRow> rows=new ArrayList<>();
+                for(String c:editableCategories()){
+                    int count=0;for(App a:apps)if(!hidden.contains(a.id)&&group(a).equals(c))count++;
+                    rows.add(row(drawerName(c),(custom.contains(c)?"Yours · ":"")+count+(count==1?" app":" apps"),disabled.contains(c)?"Hidden":null,"folder",disabled.contains(c)?"grey":"blue",null,()->drawerMenu(c)));
+                }
+                out.add(new com.studio72f.eigen.ui.SettingsSection("Your drawers, top to bottom",rows));
+                out.add(new com.studio72f.eigen.ui.SettingsSection("",Arrays.asList(
+                    row("Merge two drawers","Every app in one goes into the other",null,"layers","grey",null,this::mergeDrawers),
+                    row("Reset to the default order",null,null,"sort","grey",null,order.isEmpty()?null:()->{order.clear();saveState();refreshCategories();refreshList(true);refreshPage();toast("Drawers are back in their default order");}))));
+            }
+        }
+        return out;
+    }
+    /** One drawer's actions: move it, hide it, merge it; rename and delete for drawers of your own. */
+    private void drawerMenu(String c){
+        ArrayList<String> cs=editableCategories();int at=cs.indexOf(c);
+        ArrayList<String> options=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        if(at>0){options.add("Move up");actions.add(()->moveDrawer(c,-1));}
+        if(at>=0&&at<cs.size()-1){options.add("Move down");actions.add(()->moveDrawer(c,1));}
+        boolean shown=!disabled.contains(c);
+        options.add(shown?"Hide this drawer · its apps stay in search":"Show this drawer");actions.add(()->{if(shown)disabled.add(c);else disabled.remove(c);saveState();refreshCategories();refreshList(true);refreshPage();});
+        options.add("Merge into another drawer");actions.add(()->mergeInto(c));
+        if(custom.contains(c)){
+            options.add("Rename");actions.add(()->nameDialog("Rename "+drawerName(c),c,name->{custom.set(custom.indexOf(c),name);assignments.replaceAll((k,v)->v.equals(c)?name:v);merges.replaceAll((k,v)->v.equals(c)?name:v);int o=order.indexOf(c);if(o>=0)order.set(o,name);if(disabled.remove(c))disabled.add(name);if(category.equals(c))category=name;saveState();refreshCategories();refreshList(true);refreshPage();}));
+            options.add("Delete");actions.add(()->track(com.studio72f.eigen.ui.EigenSheets.dialog(this,eigen,"Delete "+drawerName(c)+"?",str(R.string.apps_remain_installed_and_return_to_auto),"Delete","Keep it",true,()->{custom.remove(c);disabled.remove(c);order.remove(c);assignments.values().removeIf(v->v.equals(c));merges.values().removeIf(v->v.equals(c));saveState();refreshCategories();refreshList(true);refreshPage();})));
+        }
+        menu(drawerName(c),options.toArray(new String[0]),i->actions.get(i).run());
+    }
+    private void moveDrawer(String c,int by){
+        ArrayList<String> cs=editableCategories();int at=cs.indexOf(c),to=at+by;if(at<0||to<0||to>=cs.size())return;
+        Collections.swap(cs,at,to);order.clear();order.addAll(cs);saveState();refreshCategories();refreshList(true);refreshPage();
+    }
+    private void mergeDrawers(){ArrayList<String> cs=editableCategories();menu(str(R.string.merge_from),drawerNames(cs),n->mergeInto(cs.get(n)));}
+    private void mergeInto(String from){
+        ArrayList<String> cs=editableCategories();cs.remove(from);
+        menu(str(R.string.merge_into),drawerNames(cs),to->{String target=cs.get(to);merges.put(from,target);disabled.remove(target);saveState();refreshCategories();refreshList(true);refreshPage();toast(str(R.string.merged_into_x, drawerName(target)));});
     }
     private final class SwipeUpFooter extends LinearLayout {
         float downX,downY;boolean opened;
@@ -1887,11 +1873,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         LinearLayout line=row();for(View c:chips){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(8),0);line.addView(c,p);}
         scroll.addView(line);return scroll;
     }
-    /** Segmented control: one rounded track, the chosen segment raised in the accent tint. */
-    private void styleSlider(SeekBar bar){
-        bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setThumbTintList(ColorStateList.valueOf(accent));
-        bar.setProgressBackgroundTintList(ColorStateList.valueOf(MetroArt.alpha(fg,.35f)));bar.setSplitTrack(false);
-    }
     /** Quick toggle: soft tonal tile, tinted with the accent and marked with a dot when on. */
     private View tile(String label,String state,boolean on,View.OnClickListener click){
         LinearLayout t=column();t.setPadding(dp(12),dp(11),dp(10),dp(10));t.setBackground(rounded(on?tint(.24f):card(),18));
@@ -1912,94 +1893,23 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
             if(longest>width&&t.getTextSize()>dp(10)){t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,Math.max(dp(10),t.getTextSize()*width/longest*.92f));}
         });
     }
-    private static final String[] PRESETS={"Ratio Frosted","retro · cyan","retro · cobalt","retro · magenta","paper · light","Wave","Liquid Retro","Expressive"};
-    private void applyPreset(int i){
-        try{SharedPreferences.Editor edit=prefs.edit().remove("themeDir").remove("icons");if(PRESETS[i].equals("Wave"))edit.putString("wallpaperMode","solid");edit.apply();
-            // Expressive and wallpaper colors are styles, like glass: they carry over when you switch palettes.
-            JSONObject next=ThemeEngine.preset(PRESETS[i]);if(!next.has("expressive")){next.put("expressive",theme.expressive);next.put("dynamic",theme.dynamic);}
-            applyTheme(next);persistTheme();buildUi();loadApps();}catch(Exception e){fileError(e);}
-    }
-    private View supportPage(){
-        LinearLayout page=column();
-        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
-        head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text(str(R.string.support_72f_title),28,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);
-        head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        page.addView(head);
-        TextView note=text(str(R.string.support_72f_intro),13.5f,muted);
-        note.setPadding(dp(26),dp(6),dp(26),dp(14));note.setLineSpacing(dp(2),1);
-        page.addView(note);
-
-        EigenBilling billing=EigenBilling.getInstance(this);
-        ArrayList<View> rows=new ArrayList<>();
-        for(EigenBilling.DonationTier tier:EigenBilling.TIERS){
-            String price=billing.getFormattedPrice(tier.id,tier.fallbackPrice);
-            LinearLayout row=row();row.setGravity(Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(64));row.setPadding(dp(18),dp(12),dp(16),dp(12));
-            TextView emoji=text(tier.emoji,20,fg);emoji.setPadding(0,0,dp(14),0);
-            row.addView(emoji);
-            LinearLayout words=column();
-            TextView name=text(tier.title,16.5f,fg);name.setTypeface(Typeface.create(theme.typeface,600,false));
-            words.addView(name);
-            TextView desc=text(tier.description,12.5f,muted);desc.setPadding(0,dp(2),0,0);
-            words.addView(desc);
-            row.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-            TextView priceChip=chip(price,true,v->billing.launchDonation(MainActivity.this,tier.id));
-            priceChip.setContentDescription(tier.title+", "+price);
-            row.addView(priceChip);
-            row.setFocusable(true);pressFeedback(row);
-            row.setOnClickListener(v->billing.launchDonation(MainActivity.this,tier.id));
-            row.setContentDescription(tier.title+" "+price+". "+tier.description);
-            rows.add(row);
-        }
-        page.addView(group(rows.toArray(new View[0])));
-        TextView thankNote=text(str(R.string.support_72f_thanks),13,mix(accent,muted,.4f));
-        thankNote.setGravity(Gravity.CENTER);thankNote.setPadding(dp(26),dp(20),dp(26),dp(20));
-        page.addView(thankNote);
-        return page;
-    }
-    /** Category order: favorites stays first and all apps last; everything between can move. */
-    private View orderPage(){
-        LinearLayout page=column();
-        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(14),dp(4),dp(18),0);
-        head.addView(iconButton("back","Back",false,v->sheet.back()));
-        TextView title=text(str(R.string.category_order),30,fg);title.setPadding(dp(6),0,0,0);title.setAccessibilityHeading(true);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        page.addView(head);
-        TextView note=text(str(R.string.favorites_is_always_first_and_all_apps_l),13,muted);note.setPadding(dp(26),dp(4),dp(26),dp(8));page.addView(note);
-        ArrayList<String> current=editableCategories();
-        for(int i=0;i<current.size();i++){
-            final int index=i;String c=current.get(i);
-            LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(26),dp(2),dp(14),dp(2));line.setMinimumHeight(dp(56));
-            TextView label=text(c,18,disabled.contains(c)?muted:fg);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            if(index>0){TextView up=chip("↑",false,v->moveCategory(current,index,-1));up.setContentDescription(str(R.string.move_x_up, c));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.setMargins(0,0,dp(6),0);line.addView(up,p);}
-            if(index<current.size()-1){TextView down=chip("↓",false,v->moveCategory(current,index,1));down.setContentDescription(str(R.string.move_x_down, c));line.addView(down);}
-            page.addView(line);
-        }
-        page.addView(settingRow(str(R.string.reset_to_default_order),null,v->{order.clear();saveState();refreshCategories();sheet.refresh();}));
-        return page;
-    }
-    private void moveCategory(ArrayList<String> current,int index,int by){
-        Collections.swap(current,index,index+by);order.clear();order.addAll(current);saveState();refreshCategories();sheet.refresh();
-    }
-    private interface IntChoice{void accept(int n);}
     private void pickTime(ContextRules.Rule r,boolean start){
         int current=start?(r.allDay()?7*60:r.start):(r.allDay()?9*60:r.end);
-        TimePickerDialog picker=new TimePickerDialog(this,(view,h,m)->{
-            int minute=h*60+m;
+        track(com.studio72f.eigen.ui.EigenSheets.time(this,eigen,start?"Starts at":"Ends at",current,android.text.format.DateFormat.is24HourFormat(this),minute->{
             if(start){if(r.allDay())r.end=(minute+120)%1440;r.start=minute;}else{if(r.allDay())r.start=(minute+1320)%1440;r.end=minute;}
             if(r.start==r.end)r.end=(r.end+60)%1440;
             contextsChanged();
-        },current/60,current%60,android.text.format.DateFormat.is24HourFormat(this));
-        track(picker);picker.show();
+        }));
     }
 
     private String legibilitySummary(){
-        String mode=prefs.getString("legibility","auto");
-        if(!overImage())return mode+" · applies over photos";
-        return mode.equals("auto")?"auto · "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper":mode;
+        String mode=prefs.getString("legibility","auto");String name=Character.toUpperCase(mode.charAt(0))+mode.substring(1);
+        if(!overImage())return name+" · applies over photos";
+        return mode.equals("auto")?"Auto · "+(legibility==Legibility.STRONG?"strong":"subtle")+" for this wallpaper":name;
     }
     private void legibilitySettings(){
         menu(str(R.string.text_legibility),new String[]{str(R.string.auto_measures_your_wallpaper),str(R.string.subtle_soft_halo_lifted_grey_text),str(R.string.strong_stronger_halo_and_a_little_extra),str(R.string.off)},n->{
-            prefs.edit().putString("legibility",Legibility.MODES[n]).apply();buildUi();
+            prefs.edit().putString("legibility",Legibility.MODES[n]).apply();buildUi();refreshPage();
             if(n==0&&overImage())toast(str(R.string.auto_picked_x_for_this_wallpaper, (legibility==Legibility.STRONG?str(R.string.strong):str(R.string.subtle))));
         });
     }
@@ -2013,7 +1923,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private void setIcons(String style){prefs.edit().putString("icons",style).apply();buildUi();}
     private interface Choice{void accept(int i);}
     /** Rounded sheet surface for menus and dialogs: top corners only, it sits on the bottom edge. */
-    private GradientDrawable sheetSurface(){GradientDrawable d=new GradientDrawable();d.setColor(surface());float r=dp(28);d.setCornerRadii(new float[]{r,r,r,r,0,0,0,0});return d;}
     private View sheetHandle(){View h=new View(this);h.setBackground(rounded(MetroArt.alpha(muted,.4f),2));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(32),dp(4));p.gravity=Gravity.CENTER_HORIZONTAL;p.setMargins(0,0,0,dp(14));h.setLayoutParams(p);return h;}
     /** Every menu is a Kelvin sheet in its own window (it can open over the settings sheet). */
     private void menu(String title,String[] options,Choice action){
@@ -2024,23 +1933,15 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     private final ArrayList<Dialog> openDialogs=new ArrayList<>();
     private <T extends Dialog> T track(T d){openDialogs.add(d);d.setOnDismissListener(x->openDialogs.remove(d));return d;}
     private void dismissDialogs(){for(Dialog d:new ArrayList<>(openDialogs))if(d.isShowing())d.dismiss();openDialogs.clear();}
-    private void showDialog(AlertDialog d){
-        track(d);if(d.getWindow()!=null)d.getWindow().setWindowAnimations(R.style.SheetMotion);d.show();
-        Window window=d.getWindow();if(window!=null)riseIn(window.getDecorView());
-        if(window!=null){window.setBackgroundDrawable(sheetSurface());window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(14),dp(8),dp(12));tintDialog(window.getDecorView());}
-        for(int which:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){android.widget.Button b=d.getButton(which);if(b!=null){b.setTextColor(accent);b.setAllCaps(false);b.setTypeface(Typeface.create(theme.typeface,600,false));}}
-    }
-    private void tintDialog(View view){
-        if(view instanceof TextView){TextView t=(TextView)view;t.setTextColor(fg);t.setTypeface(theme.typeface);if(t instanceof EditText)((EditText)t).setBackgroundTintList(ColorStateList.valueOf(accent));}
-        if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++)tintDialog(group.getChildAt(i));}
-    }
     private GradientDrawable outline(int fill,int border){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setStroke(dp(1),border);return d;}
     private void pressFeedback(View view){view.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(MetroArt.alpha(accent,.13f)),null,new android.graphics.drawable.ColorDrawable(Color.WHITE)));}
     private MetroArt.Icon iconButton(String mark,String description,boolean ring,View.OnClickListener click){
         MetroArt.Icon icon=new MetroArt.Icon(this,uiIcons,mark,fg,ring);icon.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));icon.setContentDescription(description);icon.setOnClickListener(click);pressFeedback(icon);return icon;
     }
     private void message(String title,String body){track(com.studio72f.eigen.ui.EigenSheets.message(this,eigen,title,body==null?"":body));}
-    private void safeStart(Intent intent){try{startActivity(intent);}catch(Exception e){toast(str(R.string.no_app_available_for_this_action));}}
+    private void safeStart(Intent intent){try{startActivity(intent);}catch(Exception e){problem(com.studio72f.eigen.ui.Problems.APP_HANDOFF,"app:handoff","Nothing could open this","No app on this phone handles this action. Install one that does, or try another way.","No app answered the request Eigen sent to Android.",e);}}
+    private void launchFailed(Exception e){problem(com.studio72f.eigen.ui.Problems.APP_LAUNCH,"app:launch","App didn't open","It may be in a paused work profile, or it was just updated or removed. Turn the work profile on, or try again in a moment.","Android refused to start the app's main screen for its profile.",e);}
+    private void appInfoFailed(Exception e){problem(com.studio72f.eigen.ui.Problems.APP_INFO,"app:info","App info didn't open","Open the phone's Settings, then Apps, to find this app.","Android's app details page refused to open for this app or its profile.",e);}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     /** UI text from res/values/strings.xml (translatable); formats only when there are arguments. */
     private String str(int id,Object... args){return args.length==0?getString(id):getString(id,args);}
@@ -2054,12 +1955,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
                 c.drawCircle(cx,cy,r,p);c.drawLine(cx+d+dp(1),cy+d+dp(1),cx+d+r*.8f,cy+d+r*.8f,p);
             }
         };
-    }
-    /** Sheets and dialogs rise from below on a spring; their dim fades in with the window. */
-    private void riseIn(View content){
-        if(!Motion.on())return;
-        content.post(()->{float from=Math.max(dp(80),content.getHeight()*.35f);
-            new Motion.Spring(Motion.SPATIAL,(y,v)->content.setTranslationY(y)).animate(from,0,0,null);});
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}

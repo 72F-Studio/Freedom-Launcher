@@ -52,6 +52,34 @@ object Problems {
     const val AI_CHECKSUM = "EIG-AI-03"      // the downloaded file didn't match its checksum, so it was deleted
     const val AI_TERMS = "EIG-AI-04"         // the Gemma terms weren't accepted yet
     const val AI_MODEL = "EIG-AI-05"         // the model wouldn't run (AI Share AIS- code in the report)
+    // Backup and restore (BAK)
+    const val BAK_EXPORT = "EIG-BAK-01"      // writing the backup file failed
+    const val BAK_READ = "EIG-BAK-02"        // the backup couldn't be opened or unpacked
+    const val BAK_INVALID = "EIG-BAK-03"     // not an Eigen backup, damaged, or a value out of range
+    const val BAK_APPLY = "EIG-BAK-04"       // saving the restored settings failed; the old ones were put back
+    // Wallpaper (WAL)
+    const val WAL_OPEN = "EIG-WAL-01"        // the chosen photo couldn't be read or decoded
+    const val WAL_SAVE = "EIG-WAL-02"        // Eigen couldn't store its copy of the photo or texture
+    const val WAL_SYSTEM = "EIG-WAL-03"      // Android refused to set the phone's wallpaper
+    const val WAL_PICKER = "EIG-WAL-04"      // no app can pick an image
+    // Look (LOK)
+    const val LOK_APPLY = "EIG-LOK-01"       // a colour, look or icon pack change couldn't be applied
+    // Billing (BIL)
+    const val BIL_CONNECT = "EIG-BIL-01"     // Play Billing wasn't connected
+    const val BIL_DETAILS = "EIG-BIL-02"     // Play hadn't sent the product details yet
+    const val BIL_FLOW = "EIG-BIL-03"        // Play ended the purchase with an error
+    // About (ABT) and feedback (FDB)
+    const val ABT_NOTICES = "EIG-ABT-01"     // the bundled open-source notices couldn't be read
+    const val FDB_MAIL = "EIG-FDB-01"        // no mail app for Send feedback
+    // Apps (APP)
+    const val APP_LAUNCH = "EIG-APP-01"      // Android refused to start an app (paused profile, just removed)
+    const val APP_INFO = "EIG-APP-02"        // the app details page wouldn't open
+    const val APP_SHORTCUT = "EIG-APP-03"    // an app shortcut from the long-press menu wouldn't start
+    const val APP_HANDOFF = "EIG-APP-04"     // no app handles an action Eigen hands off (uninstall, settings)
+    // Widgets (WID)
+    const val WID_BIND = "EIG-WID-01"        // the phone has no screen to grant widget permission
+    const val WID_CONFIGURE = "EIG-WID-02"   // a widget's settings screen wouldn't start
+    const val WID_PLACE = "EIG-WID-03"       // a widget came back from setup with no room in its context
 
     /** Builds a problem with a redacted report for [code] at [stage]. */
     @JvmStatic

@@ -136,7 +136,7 @@ private fun Welcome() {
         style = androidx.compose.ui.text.TextStyle(fontFamily = KelvinDisplay, fontWeight = FontWeight.Bold, fontSize = 76.sp, letterSpacing = (-0.05).em, color = c.ink),
     )
     KText(
-        "A calm home screen. Your apps in drawers, your messages on the left, your widgets on the right, and an assistant that runs on this phone.",
+        "A calm home screen. Your apps sorted into drawers, your widgets a swipe away, and a search that finds apps, settings and sums, all on this phone.",
         Modifier.padding(top = 16.dp), Kelvin.type.body.copy(fontSize = 17.sp, lineHeight = 25.sp), c.ink2, align = TextAlign.Center,
     )
 }
@@ -187,11 +187,11 @@ private fun ClockPage(state: EigenState, host: EigenHost) {
 private fun GesturesPage() {
     Title("How it moves", "Everything is a swipe or a tap from home.")
     KelvinGroup(gutter = 0.dp) {
-        Hint(Apps, KelvinTiles.Blue, "Drawers", "Tap a name to open it. Hold an app for its shortcuts.")
-        Hint(Message, KelvinTiles.Green, "Swipe right", "Conversations, and the assistant.")
+        Hint(Apps, KelvinTiles.Blue, "Drawers", "Tap a name to open it. Pull down on home to open or close them all. Hold an app for its shortcuts.")
         Hint(KelvinIcons.Calendar, KelvinTiles.Red, "Swipe left", "Your widgets, agenda and what's playing.")
-        Hint(KelvinIcons.Search, KelvinTiles.Violet, "Search", "Type an app's name, or ask a question.")
-        Hint(Hand, KelvinTiles.Orange, "Hold home", "Settings, wallpaper, clock and colour.")
+        Hint(Message, KelvinTiles.Green, "Swipe right", "The assistant for quick answers, and Conversations with Plus.")
+        Hint(KelvinIcons.Search, KelvinTiles.Violet, "Search", "Type an app's name, a setting or a sum. Type settings for Eigen's own.")
+        Hint(Hand, KelvinTiles.Orange, "Hold an empty part of home", "Settings, wallpaper, widgets and a new drawer. Hold the clock to change its style.")
     }
 }
 
@@ -202,7 +202,7 @@ private fun Hint(icon: ImageVector, tile: Color, title: String, body: String) = 
 private fun FinishPage(state: EigenState, host: EigenHost) {
     Title("Make it yours", "Both are optional, and both can be changed later in Settings.")
     KelvinGroup(gutter = 0.dp) {
-        KelvinRow("Choose a wallpaper", summary = "Eigen blurs it beautifully, inside the launcher only", icon = KelvinIcons.Photo, tile = KelvinTiles.Blue, chevron = true, onClick = host::chooseWallpaper)
+        KelvinRow("Choose a wallpaper", summary = "Shown sharp and gently dimmed behind your drawers. Blur and brightness are in Settings, under Wallpaper", icon = KelvinIcons.Photo, tile = KelvinTiles.Blue, chevron = true, onClick = host::chooseWallpaper)
         KelvinRow("Allow notification access", summary = "For app dots and what's playing, and Conversations with Plus. Nothing leaves your phone.", icon = Message, tile = KelvinTiles.Green,
             value = if (state.notificationAccess) "On" else null, chevron = !state.notificationAccess, onClick = host::openNotificationAccess)
     }

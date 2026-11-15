@@ -79,6 +79,7 @@ private val icons: Map<String, ImageVector> by lazy {
         "archive" to tablerIcon("archive", "M3 4m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z", "M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10", "M10 12l4 0"),
         "text" to tablerIcon("typography", "M4 20l3 0", "M14 20l7 0", "M6.9 15l6.9 0", "M10.2 6.3l5.8 13.7", "M5 20l6 -16l2 0l7 16"),
         "apps" to tablerIcon("apps", "M4 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M14 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z", "M14 7l6 0", "M17 4l0 6"),
+        "dashes" to tablerIcon("line-dashed", "M5 12h2", "M17 12h2", "M11 12h2"),
         "message" to tablerIcon("message", "M8 9h8", "M8 13h6", "M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12"),
     )
 }
@@ -117,22 +118,25 @@ fun SettingsOverlay(state: EigenState, host: EigenHost) {
                 KelvinIconButton(KelvinIcons.X, "Close settings", { state.settingsOpen = false }, kind = IconButtonKind.Raised)
             })
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-                for ((i, section) in state.settings.withIndex()) {
-                    KelvinSection(section.title, Modifier.padding(top = if (i == 0) 4.dp else 0.dp)) {
-                        KelvinGroup {
-                            for (row in section.rows) SettingsRowView(row)
-                            if (section.title == "Look") { BrightnessRow(state, host); GlassRow(state, host) }
-                        }
-                    }
-                    Spacer(Modifier.height(24.dp))
-                }
+                SettingsSections(state.settings) { section -> if (section.title == "Look") GlassRow(state, host) }
             }
         }
     }
 }
 
+/** Sections of rows; a section without a title is a plain group. [extra] adds controls at the end of a section's group. */
 @Composable
-private fun SettingsRowView(row: SettingsRow) {
+internal fun SettingsSections(sections: List<SettingsSection>, extra: @Composable (SettingsSection) -> Unit = {}) {
+    for ((i, section) in sections.withIndex()) {
+        val group = @Composable { KelvinGroup { for (row in section.rows) SettingsRowView(row); extra(section) } }
+        if (section.title.isEmpty()) Column(Modifier.padding(top = if (i == 0) 4.dp else 0.dp)) { group() }
+        else KelvinSection(section.title, Modifier.padding(top = if (i == 0) 4.dp else 0.dp)) { group() }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+internal fun SettingsRowView(row: SettingsRow) {
     KelvinRow(
         row.title,
         summary = row.summary,
@@ -145,11 +149,16 @@ private fun SettingsRowView(row: SettingsRow) {
     )
 }
 
+/** The one brightness control, 0 (darkest) to 100%, on the Wallpaper page. Solid black has nothing to brighten. */
 @Composable
-private fun BrightnessRow(state: EigenState, host: EigenHost) {
-    var bright by remember { mutableFloatStateOf(1f - state.dim / 0.9f) }
+internal fun BrightnessRow(state: EigenState, host: EigenHost) {
+    var bright by remember { mutableFloatStateOf((1f - state.dim / 0.9f).coerceIn(0f, 1f)) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         studio72f.kelvin.KText("Wallpaper brightness", style = Kelvin.type.rowTitle)
+        if (state.wallpaperMode == "solid") {
+            studio72f.kelvin.KText("Only for a photo, a texture or the phone's wallpaper: solid black stays black.", style = Kelvin.type.summary, color = Kelvin.colors.ink2)
+            return@Column
+        }
         studio72f.kelvin.KelvinSlider(bright, { bright = it; state.dim = (1f - it) * 0.9f }, "Wallpaper brightness", valueText = "${(bright * 100).toInt()}%",
             onValueChangeFinished = { host.setDim((1f - bright) * 0.9f) })
     }
