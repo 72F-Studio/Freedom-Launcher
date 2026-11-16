@@ -16,7 +16,7 @@ import studio72f.kelvin.kelvinProblemDetail
  * email themselves. Nothing is sent without them.
  */
 object Problems {
-    const val DEVELOPER = "parth.k.design@gmail.com"
+    const val DEVELOPER = "support@72fstudio.in"
 
     // Gestures (GES)
     const val GES_ACCESS = "EIG-GES-01"      // a system gesture action needs Eigen's accessibility service
