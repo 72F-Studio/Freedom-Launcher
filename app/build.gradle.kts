@@ -4,7 +4,17 @@ plugins { id("com.android.application"); kotlin("plugin.compose") }
 
 // Production signing: create it with scripts/make-release-key.sh. keystore.properties and the .jks stay
 // out of git; without them, release builds are unsigned and scripts/release.sh signs with the dev key.
-val releaseKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file -> Properties().apply { file.inputStream().use(::load) } }
+// The shared 72F upload key wins when ../_signing/signing.properties (outside the repo, or $SIGNING_PROPERTIES)
+// exists; its storeFile resolves from that folder.
+val sharedSigningFile = (System.getenv("SIGNING_PROPERTIES")?.takeIf { it.isNotBlank() }?.let(::File)
+    ?: rootDir.parentFile.resolve("_signing/signing.properties")).takeIf { it.isFile }
+val releaseKey = sharedSigningFile?.let { file ->
+    logger.lifecycle("Release signing: shared 72F upload key")
+    Properties().apply {
+        file.inputStream().use(::load)
+        setProperty("storeFile", file.parentFile.resolve(getProperty("storeFile")).absolutePath)
+    }
+} ?: rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
     namespace = "com.studio72f.eigen"
