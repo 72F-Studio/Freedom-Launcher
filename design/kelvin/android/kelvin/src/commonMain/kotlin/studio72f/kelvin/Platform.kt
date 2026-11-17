@@ -41,6 +41,14 @@ enum class KelvinString(internal val english: String) {
     PlayerPosition("Position"),
     PlayerQueue("Queue"),
     PageOf("Page %1\$d of %2\$d"),
+    ReviewTitle("Rate %1\$s on Google Play?"),
+    ReviewMessage("A short review helps other people find %1\$s. It opens right here and takes a moment."),
+    ReviewRate("Rate"),
+    ReviewLater("Maybe next time"),
+    ReviewNever("Don't show again"),
+    ReviewNoStoreHeadline("Google Play didn't open"),
+    ReviewNoStoreDescription("This phone has no Google Play or browser to rate in. Nothing else is affected."),
+    ReviewNoStoreWhy("The review card and the store page both need Google Play or a browser, and neither could be opened."),
 }
 
 @Composable
@@ -77,6 +85,9 @@ internal enum class HapticKind { Tick, ToggleOn, ToggleOff, Confirm }
 
 @Composable
 internal expect fun rememberHapticPerformer(): (HapticKind) -> Unit
+
+/** The pointer that says an edge can be dragged sideways; the usual arrow where a system has no such pointer. */
+internal expect fun kelvinResizeCursor(): androidx.compose.ui.input.pointer.PointerIcon
 
 /** A soft shadow of [path], [blur] wide and dropped by [offsetY]. Built once, drawn each frame. */
 internal expect fun pathShadowPainter(path: Path, blur: Float, offsetY: Float, color: Color): DrawScope.() -> Unit

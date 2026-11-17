@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -131,42 +132,69 @@ fun KelvinFlowPage(
     val page = rememberKelvinBackdrop()
     val stepped = step != null && steps > 0
     val scroll = rememberScrollState()
-    Box(modifier.fillMaxSize().background(c.canvas)) {
+    // A phone: the header over the content, the action at the foot. A fold or a tablet held upright: the same, held
+    // to a centred column so nothing runs across the screen. A wide window on its side (a tablet, a phone in
+    // landscape): the header stands on the left and the content with its action on the right, so the step and the
+    // question are seen together and the content keeps the height it needs.
+    BoxWithConstraints(modifier.fillMaxSize().background(c.canvas)) {
+        val split = maxWidth >= FlowSplitWidth && maxWidth > maxHeight
+        val held = if (!split && maxWidth >= 600.dp) Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = FlowColumn)
+            else Modifier.fillMaxWidth()
+        val header: @Composable (Modifier) -> Unit = { m ->
+            Column(m, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // From the top, so the button stands beside the first line of a title long enough to wrap.
+                Row(verticalAlignment = Alignment.Top) {
+                    // The button's disc, not its 48dp touch square, stands on the gutter, over the text below.
+                    if (onBack != null) KelvinIconButton(KelvinIcons.Back, backLabel, onBack, Modifier.offset(x = (-4).dp))
+                    // As tall as the button with or without one, so the title stays put from step to step, and
+                    // centred in that height, so one line (or the step over the title) sits level with the button.
+                    Column(Modifier.weight(1f).heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
+                        if (stepped) KelvinEyebrow(stepText)
+                        KText(title, Modifier.semantics { heading() }, Kelvin.type.display)
+                    }
+                }
+                if (step != null && stepped) FlowProgress(step, steps)
+                if (summary != null) KText(summary, style = Kelvin.type.body, color = c.ink2)
+            }
+        }
+        val body: @Composable (Modifier) -> Unit = { m ->
+            // Split, a short page stands in the middle of its pane rather than at the top of an empty one; a long one
+            // scrolls as usual.
+            BoxWithConstraints(m) {
+                val pane = maxHeight
+                Column(
+                    Modifier.fillMaxSize().dissolveAtEnds(scroll).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp)
+                        .then(if (arrives) Modifier.arrive(1) else Modifier),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().then(if (split) Modifier.heightIn(min = pane - 16.dp) else Modifier),
+                        verticalArrangement = Arrangement.spacedBy(16.dp, if (split) Alignment.CenterVertically else Alignment.Top),
+                        content = content,
+                    )
+                }
+            }
+        }
         Box(Modifier.fillMaxSize().kelvinBackdrop(page).background(c.canvas)) {
             // The light keeps its own height, whatever the header under it holds, so a one-line header is not a
             // thin strip of colour.
             Box(Modifier.fillMaxWidth().horizon().statusBarsPadding().height(FlowLight))
-            Column(Modifier.fillMaxSize()) {
-                Column(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // From the top, so the button stands beside the first line of a title long enough to wrap.
-                    Row(verticalAlignment = Alignment.Top) {
-                        // The button's disc, not its 48dp touch square, stands on the gutter, over the text below.
-                        if (onBack != null) KelvinIconButton(KelvinIcons.Back, backLabel, onBack, Modifier.offset(x = (-4).dp))
-                        // As tall as the button with or without one, so the title stays put from step to step, and
-                        // centred in that height, so one line (or the step over the title) sits level with the button.
-                        Column(Modifier.weight(1f).heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
-                            if (stepped) KelvinEyebrow(stepText)
-                            KText(title, Modifier.semantics { heading() }, Kelvin.type.display)
-                        }
-                    }
-                    if (step != null && stepped) FlowProgress(step, steps)
-                    if (summary != null) KText(summary, style = Kelvin.type.body, color = c.ink2)
+            if (split) Row(Modifier.fillMaxSize()) {
+                header(Modifier.weight(FlowSplitHeader).statusBarsPadding().padding(start = 32.dp, end = 24.dp, top = 32.dp))
+                Column(Modifier.weight(1f - FlowSplitHeader).fillMaxSize().statusBarsPadding().padding(end = 16.dp, top = 20.dp)) {
+                    body(Modifier.weight(1f).fillMaxWidth())
+                    Box(Modifier.navigationBarsPadding().imePadding().padding(bottom = 96.dp))
                 }
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().dissolveAtEnds(scroll).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp)
-                        .then(if (arrives) Modifier.arrive(1) else Modifier),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    content = content,
-                )
+            } else Column(Modifier.fillMaxSize()) {
+                header(held.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp))
+                body(Modifier.weight(1f).then(held))
                 // Room for the actions that float over the page. It grows with the keyboard, so fields scroll clear of both.
                 Box(Modifier.navigationBarsPadding().imePadding().padding(bottom = 96.dp))
             }
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 12.dp),
+            (if (split) Modifier.align(Alignment.BottomEnd).fillMaxWidth(1f - FlowSplitHeader).padding(end = 16.dp)
+                else Modifier.align(Alignment.BottomCenter).then(held))
+                .navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             actions(page)
@@ -293,7 +321,8 @@ fun KelvinFlowHero(
             KelvinIconButton(KelvinIcons.Back, backLabel, onBack, Modifier.statusBarsPadding().padding(start = 12.dp, top = 12.dp))
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding()
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = FlowColumn)
+                .navigationBarsPadding().imePadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp).then(if (arrives) Modifier.arrive(3) else Modifier),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -355,7 +384,8 @@ fun KelvinFlowTour(
             KelvinButton(skipText, onSkip, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 8.dp, top = 12.dp), kind = ButtonKind.Text)
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }.navigationBarsPadding()
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = FlowColumn)
+                .onSizeChanged { foot = it.height }.navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp).arrive(3),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -421,7 +451,7 @@ private fun HeroBody(
         // What the app puts under the hero keeps its own order; while the picture lifts, all of it waits with the rest.
         CompositionLocalProvider(LocalArriveWait provides wait) {
             Column(
-                Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 8.dp),
+                Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = FlowColumn).padding(top = 28.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 content = content,
@@ -625,6 +655,15 @@ fun rememberKelvinFlowTransitions(): KelvinFlowTransitions {
 
 /** How tall the aurora stands behind a flow page's header, under the status bar. */
 private val FlowLight = 200.dp
+
+/** From this width, on a window wider than tall, a flow page stands its header beside its content. */
+private val FlowSplitWidth = 720.dp
+
+/** The share of a split flow page its header takes. */
+private const val FlowSplitHeader = 0.4f
+
+/** The widest a flow page's column runs on a fold or a tablet held upright, centred. */
+private val FlowColumn = 560.dp
 
 /** The distance over which a flow page's content dissolves where it scrolls out of its room. */
 private val FlowDissolve = 20.dp

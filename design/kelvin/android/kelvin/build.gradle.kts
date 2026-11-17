@@ -33,7 +33,7 @@ kotlin {
             api(libs.jetbrains.compose.ui)
         }
         // Android adds Backdrop (Kyant, glass rendering) and Vitro (itshedimisawi, the iOS-calibrated Vitro texture),
-        // both Apache 2.0. No Material, no Miuix.
+        // both Apache 2.0, and Google Play's in-app review. No Material, no Miuix.
         // Desktop takes the same fonts and doodles Android ships as resources, straight from Android's folders, so
         // there is one copy of each. The variable fonts are Android's; desktop loads the static weights.
         named("desktopMain") {
@@ -54,6 +54,8 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             implementation(libs.kyant.backdrop)
             implementation(libs.vitro)
+            // Google Play's in-app review, for KelvinReviewRequest (Review.android.kt).
+            implementation(libs.play.review)
         }
     }
 }

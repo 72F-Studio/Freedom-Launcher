@@ -10,6 +10,7 @@ appcompat = "1.8.0"
 recyclerview = "1.4.0"
 wearCompose = "1.7.1"
 jetbrainsCompose = "1.12.2"
+playReview = "2.0.2"
 
 [libraries]
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
@@ -28,6 +29,7 @@ jetbrains-compose-foundation = { module = "org.jetbrains.compose.foundation:foun
 jetbrains-compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "jetbrainsCompose" }
 
 kyant-backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
+play-review = { group = "com.google.android.play", name = "review", version.ref = "playReview" }
 vitro = { group = "io.github.itshedimisawi", name = "vitro", version.ref = "vitro" }
 
 [plugins]

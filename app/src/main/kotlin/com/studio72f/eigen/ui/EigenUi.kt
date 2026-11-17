@@ -102,6 +102,15 @@ fun EigenApp(state: EigenState, host: EigenHost) {
             PlusSheet(state, host, backdrop)
             ProblemSheet(state, backdrop)
             TourOverlay(state, host)
+            // The shared 72F review ask: from the third use, only on a quiet home screen (no tour, sheet or dashboard).
+            studio72f.kelvin.KelvinReviewRequest(
+                backdrop = backdrop,
+                noStoreCode = Problems.REV_NO_STORE,
+                enabled = state.tourPage < 0 && state.dashboardApp == null && !state.settingsOpen && !state.appDrawerOpen &&
+                    !state.clockSheet && !state.textureSheet && !state.privateOpen && state.plusSheet == null &&
+                    state.powerPage == null && state.contextsPage == null && state.iconPickerApp == null && state.problem == null,
+                onNoStore = { Problems.show(state, it) },
+            )
         }
     }
 }

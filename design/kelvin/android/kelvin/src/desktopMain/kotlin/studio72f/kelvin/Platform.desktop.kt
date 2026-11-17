@@ -175,3 +175,6 @@ actual fun Modifier.veil(backdrop: KelvinBackdrop?, fade: Dp): Modifier = compos
 /** Nothing shows through a desktop veil, so its ink is the theme's. */
 @Composable
 internal actual fun rememberVeilInk(page: KelvinBackdrop?, height: Int): Color = Kelvin.colors.ink
+
+internal actual fun kelvinResizeCursor(): androidx.compose.ui.input.pointer.PointerIcon =
+    androidx.compose.ui.input.pointer.PointerIcon(java.awt.Cursor(java.awt.Cursor.E_RESIZE_CURSOR))

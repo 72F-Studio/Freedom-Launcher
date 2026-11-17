@@ -193,7 +193,8 @@ fun KelvinReachHeader(
         modifier
             .fillMaxWidth()
             // Grows with large text so the summary never climbs into the centred title.
-            .height(maxOf(screen * 0.34f, 240.dp).withTextScale(Kelvin.type.summary.lineHeight * 6))
+            // A phone on its side keeps its opening to under half the window, or the list would start off screen.
+            .height((if (screen < 480.dp) maxOf(screen * 0.42f, 132.dp) else maxOf(screen * 0.34f, 240.dp)).withTextScale(Kelvin.type.summary.lineHeight * 6))
             .horizon(animate = showing)
             .onGloballyPositioned {
                 val h = it.size.height.toFloat()
@@ -384,16 +385,19 @@ fun KelvinDock(
     }
     val dockMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val dockDensity = LocalDensity.current
-    // Room alone is not enough to name every tab: the names must fit their tabs too. Each tab
-    // gets 64dp, less if the dock has to shrink to fit beside the orb; a name wider than its tab
-    // (long words, a long translation) would be cut off, so the dock names only the current tab.
+    // Room alone is not enough to name every tab: the names must fit their tabs too. Each tab is
+    // 64dp, widened to fit the longest name when the window has room for that (a fold, a tablet,
+    // a large phone), so a word like "Memories" never costs every tab its name. Only when even
+    // the widened tabs would not fit (long words, a long translation, a narrow window) does the
+    // dock name just the current tab.
     val restStyle = Kelvin.type.micro
-    val namesFit = remember(items, restStyle, dockDensity, width, action != null) {
+    val widestName = remember(items, restStyle, dockDensity) {
+        items.maxOfOrNull { item -> with(dockDensity) { dockMeasurer.measure(item.label, restStyle, maxLines = 1).size.width.toDp() } } ?: 0.dp
+    }
+    val namedSlot = maxOf(DockSlot, widestName + DockNameInset * 2 + DockNameAir)
+    val namesFit = remember(namedSlot, items.size, width, action != null) {
         val room = width.dp - 32.dp - (if (action != null) OrbReach else 0.dp) - DockSidePad * 2
-        val slot = minOf(DockSlot, room / items.size.coerceAtLeast(1))
-        items.all { item ->
-            with(dockDensity) { dockMeasurer.measure(item.label, restStyle, maxLines = 1).size.width.toDp() } <= slot - DockNameInset * 2
-        }
+        namedSlot * items.size <= room
     }
     val mode = when (labels) {
         DockLabels.Auto -> when {
@@ -457,7 +461,11 @@ fun KelvinDock(
             if (total > room) raw.map { it * (room / total) } else raw
         } else null
         // Icon-only tabs are square (1:1): as wide as the droplet is tall. Named tabs keep the roomier slot.
-        val tabWidth = if (mode == DockLabels.Never) DockSquare else DockSlot
+        val tabWidth = when (mode) {
+            DockLabels.Never -> DockSquare
+            DockLabels.Always -> namedSlot
+            else -> DockSlot
+        }
         val dockWidth = if (activeWidths != null) activeWidths.fold(0.dp) { a, w -> a + w } + DockSidePad * 2
             else minOf(maxWidth - orbRoom, tabWidth * items.size + DockSidePad * 2)
         // The orb buds out of the dock, as on HyperOS 4: it starts inside the dock's end and
@@ -969,6 +977,9 @@ private val DockLabelMax = 124.dp
 
 /** The least room either side of a name in [DockLabels.Always]; a name needing more falls back to Active. */
 private val DockNameInset = 4.dp
+
+/** Room either side of a name, beyond [DockNameInset], when tabs widen to fit their names. */
+private val DockNameAir = 12.dp
 
 /** How much wider than its name the current tab is in [DockLabels.Active]. */
 private const val DockLabelAir = 1.25f

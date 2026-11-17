@@ -119,6 +119,7 @@ Kelvin may be unfamiliar; it may never be a dead end. A pattern people have not 
 - **What looks tappable is tappable.** Accent words are actions; a figure's accent glyphs (`:`, `/`, `%`) are punctuation, never words. A time that is a word ("Sun", "Now") on an unread message is bold `ink`, not accent: the dot beside it already says unread.
 - **Every action has a visible way in.** Gestures (a long press, a drag) only ever add a shortcut to something also reachable by a plain tap.
 - Assistive tech always has a plain route: slide to confirm is one action for TalkBack and Switch Access.
+- **Buttons that move you on stay put.** In any stepped flow (onboarding, setup, a tour, a wizard), the actions live in a bar fixed at the foot of the window, the same height on every step: Back always in the far start corner, the action that moves on always in the far end corner, the step dots between (on a phone the foot is one full-width button, as `KelvinFlowPage` has it). Someone who only presses on never moves their hand or pointer. Never put a flow's actions under content whose height changes from step to step. `KelvinFlowPage`, `KelvinFlowTour` and `KelvinDeskIntro` do this; build a flow from them rather than placing buttons by hand (72F owner rule, 2026-11-12).
 
 ## Which switcher
 
@@ -142,6 +143,16 @@ Apps that sort for the person (an inbox's categories, a gallery's moments) show 
 - **Bundled:** what the person rarely needs right now (promotions, low priority) folds into a `KelvinBundleRow`: the topic's glyph where an avatar would be, a count, who it is from, and a chevron. A tap opens the category.
 
 Sorting a person's things is a guess, so it is never a dead end: every tag the app gave explains itself on a tap ("It mentions an invoice") and offers to correct it ("Not Money"), and the correction sticks.
+
+**Records read from a person's things are checked before they count.** When an app reads a record out of mail (an
+invoice, a bill, a receipt), it shows it first as a `KelvinRecordCard` under "Check these": what it is as the eyebrow,
+the amount as the figure, who it is from, a line of facts, and the email it came from as an action that opens it, so
+every amount can be checked against what was written. A guess says so in a quiet line led by the info glyph. The
+person confirms it (tinted, never Primary: a list holds several), edits it, or says it is not one, and an app never
+reads the same email into a record again. Confirmed records live in a ledger of `KelvinRecordLine`s: who, what and
+when, a status pill that is always a word (To check is Info, Owed is Caution, Overdue is Critical, Paid is Positive,
+anything closed is neutral), and the amount at the end as a row figure. Totals go above as toned stat cards, at most
+two (what is to pay, what is owed to the person).
 
 ## Settings
 
@@ -197,7 +208,7 @@ Settings is a list of places, not a list of options. Past about a dozen options 
 ## Layout, shape and depth
 
 - 4dp grid: `space-1` 4 · `space-2` 8 · `space-3` 12 · `space-4` 16 · `space-5` 20 · `space-6` 24 · `space-8` 32. Gutter `space-4`; gap between groups `space-6`; rows at least `space-14`; touch targets at least `space-12`.
-- **The dock names its tabs by room** (`KelvinDock(labels = DockLabels.Auto)`): every tab from 420dp wide, but only if every name fits inside its tab (64dp, less where the dock shrinks beside the orb, with 4dp either side); one name too long, as long words and translations often are, and the dock names only the current tab instead, never cutting a name off; only the current tab from 360dp, where icon-only tabs narrow to 46dp and the current one widens to 1.2 times the longest tab name and its margins, so the droplet has air around the name rather than hugging it, capped at 124dp (the same width for every tab, so the dock keeps one width as the droplet moves; a name longer than the cap ends in an ellipsis, so a dock of two long-named tabs never grows absurdly wide), the widths flowing with the droplet as it moves, the icon gliding up and the name fading in only as the droplet settles (never a grey half-name, never a reflow); icons alone below 360dp or with text above 130%. The names stay for TalkBack throughout. `Always`, `Active` and `Never` override.
+- **The dock names its tabs by room** (`KelvinDock(labels = DockLabels.Auto)`): every tab from 420dp wide, each tab 64dp or, when a name needs more, all tabs widened alike to the longest name with 10dp either side, as long as the widened dock fits the window (a fold, a tablet, a large phone); when even that does not fit, as with long translations on a narrow phone, the dock names only the current tab instead, never cutting a name off; only the current tab from 360dp, where icon-only tabs narrow to 46dp and the current one widens to 1.2 times the longest tab name and its margins, so the droplet has air around the name rather than hugging it, capped at 124dp (the same width for every tab, so the dock keeps one width as the droplet moves; a name longer than the cap ends in an ellipsis, so a dock of two long-named tabs never grows absurdly wide), the widths flowing with the droplet as it moves, the icon gliding up and the name fading in only as the droplet settles (never a grey half-name, never a reflow); icons alone below 360dp or with text above 130%. The names stay for TalkBack throughout. `Always`, `Active` and `Never` override.
 - **Top-level screen**: the masthead (aurora, a massive centred title, actions at the top-end) → search capsule → tabs → groups → the compact, centred glass dock (64dp per tab, shrink-wrapped) with the accent selection droplet, and the orb budding out beside it for the screen's creation action. The title folds into the top bar as the page scrolls. **Detail screen**: circle back button, then the `headline` title, on the veil; on scroll the compact bar fades in on the veil with the title centred.
 - Continuous (G2) corners on every rounded surface, Kelvin's own curve with 60% smoothing: `radius-xs` 8 (icon tiles), `radius-sm` 12, `radius-md` 16 (fields, notices), `radius-lg` 24 (cards and group wells), `radius-tile` 22, `radius-xl` 32 (sheets, dialogs), `radius-full` (buttons, chips, the dock, the orb).
 - **The notch**: a media tile may carry one round glass badge in its bottom-end corner, with the cover cut away around it by a `space-1` moat.
@@ -278,14 +289,14 @@ Everything is in the `:kelvin` library and shown in the catalog. Each follows th
 | Figures and data | `KelvinFigure`, `KelvinRollingText`, `KelvinTimeLockup`, `KelvinStatRow` / `KelvinStatCard`, `KelvinChoiceCard`, `KelvinBarChart`, `KelvinRingMeter`, `KelvinPageIndicator` |
 | People | `KelvinAvatar`, `KelvinAvatarStack`, `SenderBadge` |
 | Mail | `KelvinMessageRow` (unread by the time; attachment, important, star; sender badge; `MessageTag`s), `KelvinBundleRow` (promotions, low priority), `KelvinSwipeRow` (archive, delete), `KelvinRecipientField`, `KelvinAttachmentChip`, `KelvinVoiceNote` |
-| Mail, mailbox and errors | `KelvinErrorPanel` (headline, plain text, View more with code, email the logs), `KelvinFolderRow`, `KelvinAccountSwitcher`, `KelvinSelectionBar`, `KelvinSelectableMessageRow`, `KelvinStepHeader`, `KelvinCryptoBanner`, `KelvinMessageBody` (hosts the app's own view), `KelvinFromField`, `KelvinIdentityRow`, `KelvinBodyEditor` |
+| Mail, mailbox and errors | `KelvinErrorPanel` (headline, plain text, View more with code, email the logs), `KelvinFolderRow`, `KelvinAccountSwitcher`, `KelvinSelectionBar`, `KelvinSelectableMessageRow`, `KelvinStepHeader`, `KelvinCryptoBanner`, `KelvinMessageBody` (hosts the app's own view), `KelvinFromField`, `KelvinIdentityRow`, `KelvinBodyEditor`, `KelvinRecordCard` (a record read from mail, to check), `KelvinRecordLine` (one record in a ledger) |
 | Listening | `KelvinEpisodeRow`, `KelvinMiniPlayer` (skip previous and next for music; a close for sound with no player), `KelvinFullPlayer`, `KelvinTransport` (anything that plays: episodes, tracks, words), `KelvinScrubber`, `KelvinVoiceNote`, `KelvinDownloadButton`, `KelvinReorderList` + `KelvinGrip` (the queue), `KelvinWheelPicker` (sleep timer, speed), `KelvinStepper` (skip length) |
 | Media | `KelvinTile`, `KelvinGlassTile`, `KelvinWordCover` |
 | Plans and payments | `KelvinPlanMark`, `KelvinPlanHero`, `KelvinPlanPicker` (`PlanOption`), `KelvinPurchaseBar`, `KelvinPlanBenefits` (`PlanBenefit`), `KelvinPlanOwned`, `KelvinPlanCta`, `KelvinTipJar` (`TipTier`, list or grid), `KelvinPlanTerms`, `KelvinPlanSheet` |
 | Choosing one of several that need a line | `KelvinChoiceList` (`KelvinChoice`): a reading font set in itself, a strength that shows its effect |
 | Pages of their own colour | `KelvinOnPage` (a reader's sepia or night page, a viewer's black: Kelvin's controls inked in the page's colours) |
-| Flows (onboarding, sign-in, setup) | `KelvinFlowPage` (a step: Back and the title on one line, a step bar, content, the action at the foot), `KelvinFlowHero` (the screen a flow opens, closes or waits on: picture, title and line centred in the upper part of the window), `KelvinFlowTour` (hero pages side by side with dots, to open an app with), `KelvinFootCaption` (the centred line over a foot's button that says where things stand), `KelvinWaitMark` (a wait that ends on a tick), `Modifier.arrive` (a screen assembling from the top down), `rememberKelvinFlowTransitions` (one screen crossing over to the next) |
-| Work apps on a desk (see `caligo-parity.md`) | `KelvinCommandPalette` (`KelvinCommand`), `KelvinTable` (`KelvinColumn`), `KelvinKbd`, `KelvinShortcutList`, `KelvinTooltip`, `KelvinBreadcrumbs`, `KelvinPagination`, `KelvinBanner`, `KelvinTreeItem`, `KelvinSelect`, `KelvinToolbar` / `KelvinToolbarGap`, `KelvinActivityItem`, `KelvinRowActions` (and `actions` on `KelvinMailLine`), `KelvinRail` / `KelvinRailItem`, `KelvinMailLine`, `KelvinBundleLine`, `KelvinLineHeading` |
+| Flows (onboarding, sign-in, setup) | `KelvinFlowPage` (a step: Back and the title on one line, a step bar, content, the action at the foot), `KelvinFlowHero` (the screen a flow opens, closes or waits on: picture, title and line centred in the upper part of the window), `KelvinFlowTour` (hero pages side by side with dots, to open an app with), `KelvinFootCaption` (the centred line over a foot's button that says where things stand), `KelvinWaitMark` (a wait that ends on a tick), `Modifier.arrive` (a screen assembling from the top down), `rememberKelvinFlowTransitions` (one screen crossing over to the next). On a desktop window: `KelvinDeskIntro` (a step of an opening, centred in a column over a bar fixed across the window's foot: Back in the far start corner, step dots, the action that moves on in the far end corner; stepped by button and keys rather than swiped) and `KelvinDeskPoint` (one thing the app does or promises: glyph on the accent's wash, name, line, and a key at the end) |
+| Work apps on a desk (see `caligo-parity.md`) | `KelvinCommandPalette` (`KelvinCommand`), `KelvinTable` (`KelvinColumn`), `KelvinKbd`, `KelvinShortcutList`, `KelvinTooltip`, `KelvinBreadcrumbs`, `KelvinPagination`, `KelvinBanner`, `KelvinTreeItem`, `KelvinSelect`, `KelvinToolbar` / `KelvinToolbarGap`, `KelvinActivityItem`, `KelvinRowActions` (and `actions` on `KelvinMailLine`), `rememberKelvinTrayMark` (the app's mark for the system tray: white glyph on the app's colour, a dot when something waits), `KelvinSplitHandle` (the edge between two panes, dragged to share the width), `KelvinDragChip` (what follows the pointer while an item is dragged to a place; the place under it shows `dropTarget`), `KelvinRail` (with `expanded`, naming every place, and `KelvinRailToggle`, the bare menu icon that expands it; it stays at every window size, laid over the content when expanded on the narrowest) / `KelvinRailItem` / `KelvinRailAccount` (one avatar per signed-in account at the rail's foot, washed while shown, dotted when something is new), `KelvinMailLine`, `KelvinBundleLine`, `KelvinLineHeading` |
 | Chrome | `KelvinReachHeader` / `KelvinReachBar`, `KelvinPageHeader`, `KelvinDetailHeader`, `KelvinCompactBar`, `KelvinDock`, `KelvinSheet`, `KelvinDialog`, veiled headers and pages |
 
 - **Swipe rows** reveal their action in the group grey and trade it for the action's colour as the row is pulled, tick at the point of no return (35% of the row) and act on release past it; TalkBack lists the actions instead.
@@ -317,6 +328,15 @@ Every 72F app sells and thanks the same way (`Plans.kt`). Kelvin draws; the app 
 - **Marks** (`KelvinPlanMark`) sit beside what a plan adds: the sparkle and the plan's name, or the sparkle alone inside a chip. Gone once it is owned.
 - Each app wears its own accent here as everywhere: no plan colour of its own.
 
+## Asking for a review
+
+Every 72F app asks for a Google Play review the same way (`Review.kt`, `KelvinReviewRequest` on Android), and never pesters.
+
+- **Not before the third use.** A use is the app coming to the front after half an hour or more away. The card waits a few seconds into the use, so it never meets someone at the door, and appears at most once per use.
+- **First ask: Rate and "Maybe next time".** Every later ask adds "Don't show again", and comes only after five more uses *and* ten more days. Rate or "Don't show again" ends it for good; dismissing the card is "Maybe next time".
+- **Ask for a rating, never an opinion.** No "Enjoying it?" gate before Play's card (Google Play's policy). Rate opens Play's own review card in the app, or the store page when Play can't give one.
+- Put `KelvinReviewRequest` once inside the theme and the `KelvinProblemHost`, with the app's own code for the no-store failure, and pass `enabled = false` while first run, a paywall or another prompt owns the screen.
+
 ## Building with Kelvin
 
 - **Android**: the `studio72f.kelvin` Compose library, on AndroidX Compose foundation and UI plus Backdrop (Kyant) as the glass renderer, all Apache 2.0. Kelvin's look comes from its own shaders and components running on Backdrop's pipeline; no Material and no third-party UI kit. Wrap the app in `KelvinTheme(dark, accent, glass, reduceMotion)`; read tokens from `Kelvin.colors`, `Kelvin.space`, `Kelvin.shape`, `Kelvin.type`, `Kelvin.motion`. Put `Modifier.kelvinBackdrop(backdrop)` on the page and pass the same backdrop to the glass components over it (`KelvinDock`, `KelvinCompactBar`, `KelvinSheet`, `KelvinDialog`, `KelvinToast`, `KelvinTip`).
@@ -339,6 +359,55 @@ a form.
   drains. It sits in the result, never floating over other content.
 - **A failure is a row first.** The error panel (headline, what to try, the code, Email the logs) opens from the row
   that failed; it does not lead the sheet.
+
+## Landing pages (web)
+
+Each 72F app has a product site on its own subdomain (`tofu.72fstudio.in`), the page its store listing and links lead to. It sells the app; it is not a case study. A Kelvin app's page is built from `web/landing.css` and `web/landing.js` on `web/tokens.css`; `web/landing.html` shows every part. The page wears the app's accent (`data-accent`, from the dial) and Kelvin's signatures, scaled for a laptop at arm's length.
+
+- **Product first.** The app is on screen from the first glance and in every section after it. The story of how it was made lives on the portfolio, linked once from the footer ("How I designed Tofu"), never in the page body.
+- **Light only.** A landing page sets `data-theme="light"`. The app's own dark is OLED black, made for a phone in a dark room; on a product site it swallowed the app icon and the bands, and a grey dark scale read as a different product. The privacy band stays night, on purpose, as the one dark panel.
+- **The hero is split, and the app is alive in it.** The masthead (Onest Black, its words arriving once on load, the accent phrase in the accent's colour and nothing more; its weight never changes with scroll, since a heavier or lighter weight re-wraps the lines), the lede, the one accent action with its status beside it, and proof chips (plain facts as `lift` pills with an accent glyph: "No account", "Works offline") on one side. On the other, a phone that leans toward the pointer. For a chat-first app it is a `kl-chat`: real exchanges replayed live, the person's words typed into the composer, the app's answer and the entry it logged arriving after its typing dots, with "Try one" chips that replay an exchange. Otherwise it plays the app's screens with dots to pick one. Up to three glass notes float around it, each a value from a real screen. The phone advances on its own only while nobody has touched it and it is on screen; with reduced motion everything is shown whole and still. The whole phone fits beside the words on a laptop. The aurora sits behind the hero, its top-end light the visitor's hour.
+- **Only real exchanges.** A chat replays words and answers copied from the app's own screens, numbers included. Never write an answer the app does not give.
+- **Features are told big, in bands.** A `kl-band` is a rounded panel inset from the page with one large calm title (Onest 700), a line under it, and the app in it: a fan of phones running off the panel's foot (`kl-fan`), one phone beside points (`kl-split`), a tour (`kl-tour`, steps that swap the phone's screen; it may advance on its own while in view, the chosen card filling with the accent's wash as its countdown; it holds while someone points at it or focuses it and picks up again when they move on, and a pick restarts the countdown), or a drifting row of things people type, each with the log it became (`kl-says`, held on hover, still with reduced motion). Grounds: the accent's wash (lit from above), the group grey, and night (dark in both themes, the accent breathing behind it, for the privacy promise). Alternate them; never two of the same tone in a row.
+- **A watch app gets its own band.** `kl-watches` sets up to three round `kl-watch`es (the middle one largest) under the band's head, sliding together as the band arrives, with what the watch does as points in a row (`kl-points--row`).
+- **Motion with a job.** The fan opens as it arrives (scroll-driven), a split's phone drifts a little against the scroll, cards lift and light where the pointer is, the primary action catches a sheen on hover. Each says something about the thing it moves. None of it runs with reduced motion, and nothing fades up just for being scrolled to.
+- **The rest in a grid.** The smaller features as equal `kl-card`s with layered glass tiles in their topic's colour. Equal cards, never a bento.
+- **Say what is paid.** If the app sells anything, a `kl-plans` band sets Free beside the paid plans, each listing what it unlocks in the store listing's own words. Prices stay in the store, which shows them in the visitor's currency; the page says so.
+- **The close is the app's colour.** The closing band is the one place the accent fills a panel, lit with `glass-heat` from its foot, with the action turned over (white, accent words). On a laptop a store code (`kl-qr`) sits beside it, so the visitor can point their phone at the screen.
+- **The landing scale.** Display steps continue past 56 to 72 and 88, fluid with the window; reading text is 16, ledes 17 to 20. Everything inside a card keeps the system's sizes.
+- **Decoration budget.** The aurora behind the hero, the bar's glass and the hero's floating notes; elsewhere bands carry their grounds and no glass. No fade-up on scroll.
+- **One accent action.** The solid accent fill is only for the action that gets the app (its store link): in the bar, the hero and the close. With no store link yet, the bar shows the status instead and nothing pretends to install.
+- **No underlines.** Not on titles, not on links. A link is told by the accent's ink and a heavier weight.
+- **The bar names the maker.** The mark is the icon, the app's name, a hairline, then "by 72F Studio" (hidden on a phone).
+- **Contrast is AA.** Text under 24px reaches 4.5:1 and larger titles 3:1. The dial's accents are tuned for the app's large controls, so on the web white-on-accent fills and small accent text use the darker `--kl-action` and `--kl-accent-ink`; titles keep the accent itself.
+- **Copy.** First person from the studio, sentence case, no exclamation marks. Every number carries its source and date beside it; a claim the app cannot back is left out.
+- **Errors.** A landing page has no failures of its own; forms on it (a waitlist) follow the 72F error rule above.
+
+## Foldables, tablets and landscape
+
+A 72F app is one app at every size. Open folds, tablets and phones on their side are normal now, and on Android 16+
+a large screen ignores an app's orientation lock, so every app has a wide layout, portrait-only apps included.
+
+- **The dock stays at every width** (`LocalKelvinWindow`, provided by `KelvinTheme`, says how wide and tall the
+  window is). The floating `KelvinDock` sits centred at the foot of a fold, a tablet and a phone on its side, as
+  the phone-first apps on vivo, Oppo and iPad keep their bar: it is the app's signature and costs the page nothing.
+  Never a Material-style rail of icons over labels. An app with many places (a mail account's folders, a library's
+  shelves) will get a floating glass sidebar of icon-beside-name rows; until Kelvin has it, use the dock.
+- **A pane decides its content** from its own width (`BoxWithConstraints`), never the window's: a list beside a
+  detail is narrow even on a tablet.
+- **Grids keep their tile size** and gain columns (`KelvinWindow.columnsFor`); the person's column choice is what
+  they get on a phone, and the least they get anywhere.
+- **Reading is held to 640dp and centred** (`Modifier.kelvinReadingWidth`, or `KelvinReadingBox` for a lazy list so
+  the margins still scroll): settings, forms, first-run pages, articles.
+- **Use the room, do not stretch.** A wide window gets a layout of its own, not the phone's stretched: a flow page
+  (`KelvinFlowPage`) stands its header beside its content on a window wider than tall and keeps to a 560dp column on
+  an upright fold; a page that picks one of many things (a cloud, a folder, a setting) lists them on the left and
+  shows the chosen one on the right; search keeps its suggestions in a panel beside the results; an editor moves its
+  tools into a panel at the side so the picture keeps the window's height.
+- **A short window (under 480dp tall) shrinks openings**: `KelvinReachHeader` keeps under half the screen, and
+  nothing tall is pinned.
+- **Media takes the whole window** at every size. On a wide window a viewer's details open as a panel at the side
+  instead of a sheet over the photo, and the viewer's bars move clear of it.
 
 ## Pointer and keyboard (desktop, and tablets with a mouse)
 

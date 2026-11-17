@@ -330,6 +330,8 @@ fun KelvinTip(
                 TipPlacement.AboveNavigationBar -> Modifier.navigationBarsPadding().padding(bottom = 16.dp).padding(horizontal = 16.dp)
                 TipPlacement.Inline -> Modifier
             })
+            // Floating on a fold or a tablet, a tip is a card of its own size over the dock, not a strip across the window.
+            .then(if (placement != TipPlacement.Inline) Modifier.wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = TipMaxWidth) else Modifier)
             .then(
                 if (backdrop != null) Modifier.glass(backdrop, KelvinShapes.lg, GlassContent.Pane, elevated = true)
                 else Modifier.shadow(12.dp, KelvinShapes.lg, ambientColor = c.glassEdge, spotColor = c.glassEdge).background(c.raised, KelvinShapes.lg)
@@ -358,3 +360,6 @@ val KelvinDockClearance = 12.dp + DockHeight + 12.dp
 /** Fixed spacer that keeps list content clear of the floating dock. */
 @Composable
 fun KelvinDockSpacer() = Spacer(Modifier.navigationBarsPadding().height(DockHeight + 12.dp + 24.dp))
+
+/** The widest a floating [KelvinTip] runs, centred, on a wide window. */
+private val TipMaxWidth = 520.dp

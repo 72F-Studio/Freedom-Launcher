@@ -76,6 +76,14 @@ internal fun Tone.base(): Color {
     }
 }
 
+/**
+ * The tone's colour for a pastel card: its [base], except Caution, whose status amber goes a dull gold once it is
+ * darkened to read as text; a pastel card takes a brighter orange-amber that keeps its glow at 4.5:1.
+ */
+@Composable
+internal fun Tone.bright(): Color =
+    if (this == Tone.Caution) (if (Kelvin.dark) Color(0xFFFF8A1F) else Color(0xFFFF7A00)) else base()
+
 /** Small capsule naming a state. Always include the word; colour never carries meaning alone. */
 @Composable
 fun KelvinPill(text: String, modifier: Modifier = Modifier, tone: Tone = Tone.Neutral, icon: ImageVector? = null) {

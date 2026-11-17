@@ -130,6 +130,7 @@ fun KelvinTheme(
         LocalKelvinFinish provides finish,
         LocalKelvinShapes provides KelvinShapeScale.of(corners),
         LocalTextSelectionColors provides selection,
+        LocalKelvinWindow provides rememberKelvinWindow(),
         content = content,
     )
 }

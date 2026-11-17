@@ -261,6 +261,8 @@ object KelvinIcons {
     val Rosette by lazy { set("rosette-discount-check") }
     val Sleep by lazy { set("zzz") }
     val Speed by lazy { set("gauge") }
+    /** Layers one over another: several of a thing seen together, such as every account's inbox. */
+    val Stack by lazy { icon("stack-2", "M12 4l-8 4l8 4l8 -4l-8 -4", "M4 12l8 4l8 -4", "M4 16l8 4l8 -4") }
     val Queue by lazy { set("playlist") }
     val Grip by lazy { set("grip-vertical") }
     val ArrowDown by lazy { set("arrow-down") }

@@ -50,5 +50,6 @@ Every failure Eigen shows has its own stable code, defined in `ui/Problems.kt`. 
 | EIG-WID-01 | widgets:bind | The phone has no screen that lets Eigen ask for permission to show a widget. |
 | EIG-WID-02 | widgets:configure | A widget's own settings screen wouldn't start. |
 | EIG-WID-03 | widgets:place | A widget came back from its setup but its context was gone or already full. |
+| EIG-REV-01 | review:store | Rate was tapped on the review card, but neither Google Play's in-app review nor the store page (Play Store or a browser) would open. Worded by Kelvin. |
 
 Add a code here before using it, and never reuse one for a different stage.

@@ -325,7 +325,7 @@ internal fun Modifier.rowHeight(): Modifier = if (LocalEqualHeightRow.current) f
  * A tone on a card: a soft light of [color] in the card's top-end corner, fading out before the figure. The card
  * keeps its own surface, so a toned card and a plain one beside it are the same material and the same weight.
  */
-private fun Modifier.toneGlow(color: Color, shape: androidx.compose.ui.graphics.Shape, dark: Boolean): Modifier =
+internal fun Modifier.toneGlow(color: Color, shape: androidx.compose.ui.graphics.Shape, dark: Boolean): Modifier =
     clip(shape).drawBehind {
         val end = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) 0f else size.width
         val peak = if (dark) 0.34f else 0.26f
@@ -351,10 +351,10 @@ private const val GLOW_STEPS = 12
  * row's height, label at the top and detail pinned to the bottom, so neighbouring cards line up
  * at both edges. A [hero] value is set larger, its numbers warming into the accent.
  *
- * Given a [tone], the card keeps the plain card's surface and its figure the page's ink; the tone is
- * a soft light in the top corner and the colour of the small parts (the label, now an eyebrow, the
- * currency mark and the unit). For figures that are categories of their own (income and spending,
- * in and out) or that need the person (due soon), never just to decorate.
+ * Given a [tone], the card takes a pastel of the tone's bright colour, the way an offer notice does, with no
+ * outline; the figure stays the page's ink and the tone colours the small parts (the label, now an eyebrow,
+ * the currency mark and the unit), held to 4.5:1 on the pastel. For figures that are categories of their own
+ * (income and spending, in and out) or that need the person (due soon), never just to decorate.
  */
 @Composable
 fun KelvinStatCard(
@@ -370,13 +370,21 @@ fun KelvinStatCard(
     val onBackdrop = LocalKelvinOnBackdrop.current
     // On a coloured backdrop a card is the raised surface and written in full ink; the group grey and
     // grey text would sink into the colour behind.
-    val surface = if (onBackdrop) backdropSurface() else c.group
     val toned = tone != null && tone != Tone.Neutral
-    val toneInk = if (toned) tone!!.base().legibleOn(surface) else null
-    val quiet = if (onBackdrop) c.ink2.legibleOn(surface) else c.ink2
-    val glow = if (toned) Modifier.toneGlow(tone!!.base(), KelvinShapes.lg, Kelvin.dark) else Modifier
+    val plain = if (onBackdrop) backdropSurface() else c.group
+    val dark = Kelvin.dark
+    // A toned card is a pastel of the tone. In dark it is laid over the deeper group grey, not the lifted surface:
+    // red and amber mixed into a light grey go maroon and brown, over the deep grey they stay the tone.
+    val bright = if (toned) tone!!.bright() else null
+    val surface = remember(bright, plain, dark, c.group) {
+        if (bright == null) plain
+        else if (dark) bright.copy(alpha = 0.26f).compositeOver(c.group)
+        else bright.copy(alpha = 0.24f).compositeOver(plain)
+    }
+    val toneInk = bright?.legibleOn(surface)
+    val quiet = if (onBackdrop || toned) c.ink2.legibleOn(surface) else c.ink2
     Column(
-        modifier.rowHeight().background(surface, KelvinShapes.lg).then(glow).padding(16.dp),
+        modifier.rowHeight().background(surface, KelvinShapes.lg).padding(16.dp),
         // The label holds the top and the figure the foot, so figures line up across a row even when one label wraps.
         verticalArrangement = Arrangement.SpaceBetween,
     ) {

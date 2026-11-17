@@ -48,6 +48,14 @@ internal actual fun kelvinString(string: KelvinString): String = stringResource(
         KelvinString.PlayerPosition -> R.string.kelvin_player_position
         KelvinString.PlayerQueue -> R.string.kelvin_player_queue
         KelvinString.PageOf -> R.string.kelvin_page_of
+        KelvinString.ReviewTitle -> R.string.kelvin_review_title
+        KelvinString.ReviewMessage -> R.string.kelvin_review_message
+        KelvinString.ReviewRate -> R.string.kelvin_review_rate
+        KelvinString.ReviewLater -> R.string.kelvin_review_later
+        KelvinString.ReviewNever -> R.string.kelvin_review_never
+        KelvinString.ReviewNoStoreHeadline -> R.string.kelvin_review_no_store_headline
+        KelvinString.ReviewNoStoreDescription -> R.string.kelvin_review_no_store_description
+        KelvinString.ReviewNoStoreWhy -> R.string.kelvin_review_no_store_why
     },
 )
 
@@ -326,3 +334,6 @@ private class AndroidPebblePainter(agsl: String) : PebblePainter {
 @Composable
 internal actual fun KelvinBackHandler(enabled: Boolean, onBack: () -> Unit) =
     androidx.activity.compose.BackHandler(enabled, onBack)
+
+internal actual fun kelvinResizeCursor(): androidx.compose.ui.input.pointer.PointerIcon =
+    androidx.compose.ui.input.pointer.PointerIcon.Default

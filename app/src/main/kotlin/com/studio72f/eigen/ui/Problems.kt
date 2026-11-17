@@ -80,6 +80,8 @@ object Problems {
     const val WID_BIND = "EIG-WID-01"        // the phone has no screen to grant widget permission
     const val WID_CONFIGURE = "EIG-WID-02"   // a widget's settings screen wouldn't start
     const val WID_PLACE = "EIG-WID-03"       // a widget came back from setup with no room in its context
+    // Review (REV)
+    const val REV_NO_STORE = "EIG-REV-01"    // neither Play's review card nor the store page opened
 
     /** Builds a problem with a redacted report for [code] at [stage]. */
     @JvmStatic

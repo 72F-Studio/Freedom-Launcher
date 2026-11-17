@@ -462,7 +462,8 @@ fun <T> KelvinSelect(
     var open by remember { mutableStateOf(false) }
     val c = Kelvin.colors
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        KText(label, style = Kelvin.type.label, color = c.ink2)
+        // Labelled as a text field is, so a form of both reads as one.
+        KelvinEyebrow(label, Modifier.padding(start = 4.dp))
         Box {
             Row(
                 Modifier.fillMaxWidth().height(KelvinSizes.field).clip(KelvinShapes.md).background(c.sunken)

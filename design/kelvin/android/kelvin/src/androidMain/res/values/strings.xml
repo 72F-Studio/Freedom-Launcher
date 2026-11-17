@@ -27,4 +27,13 @@
     <string name="kelvin_player_queue">Queue</string>
     <!-- TalkBack for the page dots: "Page 2 of 5". -->
     <string name="kelvin_page_of">Page %1$d of %2$d</string>
+    <!-- The review card. %1$s is the app's name. Ask for a rating only, never whether they like the app. -->
+    <string name="kelvin_review_title">Rate %1$s on Google Play?</string>
+    <string name="kelvin_review_message">A short review helps other people find %1$s. It opens right here and takes a moment.</string>
+    <string name="kelvin_review_rate">Rate</string>
+    <string name="kelvin_review_later">Maybe next time</string>
+    <string name="kelvin_review_never">Don\'t show again</string>
+    <string name="kelvin_review_no_store_headline">Google Play didn\'t open</string>
+    <string name="kelvin_review_no_store_description">This phone has no Google Play or browser to rate in. Nothing else is affected.</string>
+    <string name="kelvin_review_no_store_why">The review card and the store page both need Google Play or a browser, and neither could be opened.</string>
 </resources>
